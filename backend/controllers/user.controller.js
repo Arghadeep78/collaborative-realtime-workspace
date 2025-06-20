@@ -1,8 +1,25 @@
 import userModel from "../models/user.model.js";
 import Whiteboard from "../models/whiteboard.model.js";
 import { OAuth2Client } from "google-auth-library";
+import { randomBytes } from "crypto";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
+import { APIError } from "../utils/APIError.js";
+import { sendResponse } from "../utils/sendResponse.js";
+
+// Redis client injected once from app.js after createRedisClients().
+// Kept module-level so controllers don't import Redis directly.
+/** @type {import('redis').RedisClientType | null} */
+let redis = null;
+
+/**
+ * Inject the Redis client used to store single-use WebSocket tickets.
+ * Call this once from app.js immediately after createRedisClients().
+ * @param {import('redis').RedisClientType} client
+ */
+export function setWsTicketRedis(client) {
+  redis = client;
+}
 
 // Generic reply shared by both forgot-password outcomes (found / not found) so
 // the endpoint never reveals whether an email is registered.
@@ -62,7 +79,7 @@ const backfillCollaboratorPhoto = (email, profilePicture) => {
   ).catch((err) => console.error('backfillCollaboratorPhoto error:', err));
 };
 
-const registerUser = async (req, res) => {
+const registerUser = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
     const user = await userModel.register(name, email, password, role);
@@ -73,8 +90,7 @@ const registerUser = async (req, res) => {
     const projects = await fetchProjectsForUser(user.email);
     backfillCollaboratorPhoto(user.email, user.profilePicture);
 
-    res.status(201).json({
-      message: "User registered successfully",
+    sendResponse(res, 201, "User registered successfully", {
       token,
       projects,
       user: {
@@ -84,13 +100,11 @@ const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(error.isOperational ? 400 : 500)
-      .json({ message: error.message });
+    next(error);
   }
 };
 
-const loginUser = async (req, res) => {
+const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const user = await userModel.login(email, password);
@@ -102,8 +116,7 @@ const loginUser = async (req, res) => {
     const projects = await fetchProjectsForUser(user.email);
     backfillCollaboratorPhoto(user.email, user.profilePicture);
 
-    res.status(200).json({
-      message: "User logged in successfully",
+    sendResponse(res, 200, "User logged in successfully", {
       token,
       projects,
       user: {
@@ -113,18 +126,16 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(error.isOperational ? (error.status ?? 401) : 500)
-      .json({ message: error.message });
+    next(error);
   }
 };
 
-const googleLogin = async (req, res) => {
+const googleLogin = async (req, res, next) => {
   try {
     const { credential } = req.body;
     // console.log(credential);
     if (!credential) {
-      return res.status(400).json({ message: "Google credential is required" });
+      throw new APIError(400, "Google credential is required");
     }
 
     // Verify the Google token
@@ -149,8 +160,7 @@ const googleLogin = async (req, res) => {
     const projects = await fetchProjectsForUser(user.email);
     backfillCollaboratorPhoto(user.email, user.profilePicture);
 
-    res.status(200).json({
-      message: "User logged in successfully",
+    sendResponse(res, 200, "User logged in successfully", {
       token,
       projects,
       user: {
@@ -162,20 +172,18 @@ const googleLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Google login error:", error);
-    res
-      .status(401)
-      .json({ message: error.message || "Google authentication failed" });
+    next(error);
   }
 };
 
 // Exchange the httpOnly refresh-token cookie for a fresh 15-min access token.
 // The refresh token is verified both cryptographically (signature + expiry) and
 // against the DB (so a revoked/logged-out token can't be replayed).
-const refreshAccessToken = async (req, res) => {
+const refreshAccessToken = async (req, res, next) => {
   try {
     const rawToken = req.cookies?.[REFRESH_COOKIE];
     if (!rawToken) {
-      return res.status(401).json({ message: "Refresh token is required" });
+      throw new APIError(401, "Refresh token is required");
     }
 
     // Signature + expiry check first — cheap, and rejects forged/expired tokens
@@ -185,23 +193,20 @@ const refreshAccessToken = async (req, res) => {
       verifyRefreshToken(rawToken);
     } catch {
       clearRefreshCookie(res);
-      return res.status(401).json({ message: "Invalid or expired refresh token" });
+      throw new APIError(401, "Invalid or expired refresh token");
     }
 
     // Must still be an active token for this user (not logged out / revoked).
     const user = await userModel.findByRefreshToken(rawToken);
     if (!user) {
       clearRefreshCookie(res);
-      return res.status(401).json({ message: "Refresh token no longer valid" });
+      throw new APIError(401, "Refresh token no longer valid");
     }
 
     const token = user.generateAccessToken();
-    res.status(200).json({
-      message: "Token refreshed successfully",
-      token,
-    });
+    sendResponse(res, 200, "Token refreshed successfully", { token });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
@@ -217,33 +222,32 @@ const logoutUser = async (req, res) => {
       await userModel.revokeRefreshToken(rawToken);
     }
     clearRefreshCookie(res);
-    res.status(200).json({ message: "Logged out successfully" });
+    sendResponse(res, 200, "Logged out successfully");
   } catch (error) {
     // Even on error, clear the cookie so the client isn't stuck logged in.
     clearRefreshCookie(res);
-    res.status(200).json({ message: "Logged out" });
+    sendResponse(res, 200, "Logged out");
   }
 };
 
-const getUserProfile = async (req, res) => {
+const getUserProfile = async (req, res, next) => {
   try {
     const userEmail = req.email;
-    // console.log("Fetching profile for user:", userEmail);
     const user = await userModel.getUser(userEmail);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      throw new APIError(404, "User not found");
     }
-    res.status(200).json({
+    sendResponse(res, 200, "Profile fetched", {
       name: user.name,
       profilePicture: user.profilePicture,
       authProvider: user.authProvider || 'local',
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
-const updateUserProfile = async (req, res) => {
+const updateUserProfile = async (req, res, next) => {
   try {
     const userEmail = req.email; // Assuming req.user is set by authMiddleware
     const { name, profilePicture } = req.body;
@@ -260,11 +264,10 @@ const updateUserProfile = async (req, res) => {
       { new: true } // return updated user
     );
     if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
+      throw new APIError(404, "User not found");
     }
 
-    res.status(200).json({
-      message: "Profile updated successfully",
+    sendResponse(res, 200, "Profile updated successfully", {
       user: {
         name: updatedUser.name,
         email: updatedUser.email,
@@ -273,29 +276,19 @@ const updateUserProfile = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
-const updatePassword = async (req, res) => {
+const updatePassword = async (req, res, next) => {
   try {
     const userEmail = req.email;
     const { oldPassword, newPassword } = req.body; // presence/length checked by validate middleware
 
-    const user = await userModel.updatenewPassword(
-      userEmail,
-      oldPassword,
-      newPassword
-    );
-    if (!user) {
-      return res.status(401).json({ message: "Old password is incorrect" });
-    }
-
-    res.status(200).json({ message: "Password updated successfully" });
+    await userModel.updatenewPassword(userEmail, oldPassword, newPassword);
+    sendResponse(res, 200, "Password updated successfully");
   } catch (error) {
-    res
-      .status(error.isOperational ? 400 : 500)
-      .json({ message: error.message });
+    next(error);
   }
 };
 
@@ -318,44 +311,62 @@ const forgotPassword = async (req, res) => {
       }
     }
 
-    res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
+    sendResponse(res, 200, FORGOT_PASSWORD_REPLY);
   } catch (error) {
     // Even on an unexpected error, keep the response generic.
     console.error("forgotPassword error:", error);
-    res.status(200).json({ message: FORGOT_PASSWORD_REPLY });
+    sendResponse(res, 200, FORGOT_PASSWORD_REPLY);
   }
 };
 
-const resetPassword = async (req, res) => {
+const resetPassword = async (req, res, next) => {
   try {
     const { token } = req.params;
     const { password } = req.body; // validated by validate middleware
 
     await userModel.resetPassword(token, password);
 
-    res.status(200).json({
-      message: "Password has been reset successfully. You can now log in.",
-    });
+    sendResponse(res, 200, "Password has been reset successfully. You can now log in.");
   } catch (error) {
-    // Surface validation / expiry errors to the user (these aren't sensitive).
-    res.status(400).json({ message: error.message });
+    next(error);
   }
 };
 
-const getBulkProfiles = async (req, res) => {
+/**
+ * Issue a single-use WebSocket ticket for the authenticated caller.
+ *
+ * The ticket (64 hex chars / 32 random bytes) is stored in Redis with a
+ * 30-second TTL. The frontend exchanges it for a WebSocket connection via
+ * `?ticket=<hex>` in the upgrade URL. The server's upgrade gate immediately
+ * DELetes it on first use, so each ticket is valid for exactly one connection.
+ * This prevents the JWT from ever appearing in a WS URL, server log, or proxy
+ * access log.
+ */
+const issueWsTicket = async (req, res, next) => {
+  try {
+    if (!redis) throw new APIError(503, 'Ticket service unavailable');
+    const ticket = randomBytes(32).toString('hex');
+    await redis.set(`ws:ticket:${ticket}`, req.email, { EX: 30 });
+    sendResponse(res, 200, 'Ticket issued', { ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getBulkProfiles = async (req, res, next) => {
   try {
     const emails = (req.query.emails || '').split(',').map(e => e.trim()).filter(Boolean);
-    if (!emails.length) return res.status(200).json([]);
+    if (!emails.length) return sendResponse(res, 200, 'Profiles fetched', []);
     const users = await userModel.find({ email: { $in: emails } })
       .select('email name profilePicture')
       .lean();
-    res.status(200).json(users.map(u => ({
+    sendResponse(res, 200, 'Profiles fetched', users.map(u => ({
       email: u.email,
       name: u.name,
       profilePicture: u.profilePicture || '',
     })));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
@@ -371,5 +382,6 @@ export {
   forgotPassword,
   resetPassword,
   getBulkProfiles,
+  issueWsTicket,
 };
 

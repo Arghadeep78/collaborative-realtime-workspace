@@ -263,11 +263,12 @@ export default function BoardRoom() {
       .then(async (r) => {
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
-          throw new Error(err.error || 'Project not found');
+          throw new Error(err.message || 'Project not found');
         }
         return r.json();
       })
-      .then((data) => {
+      .then((body) => {
+        const data = body.data;
         setBoard(data);
         setTitleInput(data.title || '');
 

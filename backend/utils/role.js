@@ -17,7 +17,11 @@
  *
  * Precedence (highest → lowest):
  *   owner → named collaborator → revoked (deny) → workspace member viewer
- *   → share-link role → public role → null (no access)
+ *   → share-link role (authenticated users only) → public role → null (no access)
+ *
+ * Security: unauthenticated users ('anonymous' / no email) are capped at 'viewer'
+ * even when a share token grants a higher role. Write access always requires a
+ * verified identity.
  *
  * @param {object} meta
  * @param {string|null} email
@@ -31,7 +35,12 @@ export function resolveRole(meta, email, shareRole = null) {
   if (collab) return collab.role || 'editor';
   if (email && (meta.revokedEmails || []).includes(email)) return null;
   if (email && (meta.workspaceMembers || []).includes(email)) return 'viewer';
-  if (shareRole) return shareRole;
+  // Anonymous (logged-off) users must never receive write access from a share token.
+  // A valid ?st=editor link is useful for authenticated users; without a verified
+  // identity we cap the granted role at 'viewer' so unauthenticated visitors can
+  // still read but cannot mutate the document.
+  const isAuthenticated = email && email !== 'anonymous';
+  if (shareRole) return isAuthenticated ? shareRole : 'viewer';
   if (meta.isPublic) return meta.publicRole || 'viewer';
   return null;
 }

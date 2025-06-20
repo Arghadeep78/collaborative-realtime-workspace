@@ -50,7 +50,7 @@ const Profile = () => {
                 if (!response.ok) {
                     throw new Error('Failed to fetch user profile.');
                 }
-                const data = await response.json();
+                const { data } = await response.json();
                 const normalizedData = {
                     ...data,
                     profilePic: data.profilePic ?? data.profilePicture ?? '',
@@ -126,7 +126,7 @@ const Profile = () => {
 
             if (!response.ok) throw new Error('Failed to update profile.');
 
-            const updatedUser = await response.json();
+            const { data: updatedUser } = await response.json();
             const normalizedUser = {
                 ...updatedUser.user,
                 profilePicture: updatedUser.user.profilePicture ?? '',

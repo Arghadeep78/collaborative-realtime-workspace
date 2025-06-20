@@ -49,8 +49,9 @@ const Login = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential: response.credential }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Google login failed');
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'Google login failed');
+      const data = body.data;
       localStorage.setItem('token', data.token);
       localStorage.setItem('userData', JSON.stringify({
         ...(data.user || {}),
@@ -123,11 +124,12 @@ const Login = () => {
         body: JSON.stringify({ email: formData.email, password : formData.password }),
       });
   
-      const data = await response.json();
+      const body = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        throw new Error(body.message || 'Login failed');
       }
-  
+      const data = body.data;
+
       if (!data.token) {
         throw new Error('No authentication token received');
       }

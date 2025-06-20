@@ -134,8 +134,8 @@ function App() {
           }
 
           try {
-            const data = await response.json();
-            if (data.token) {
+            const { data } = await response.json();
+            if (data?.token) {
               localStorage.setItem('token', data.token);
               scheduleTokenRenewal(data.token);
             } else {

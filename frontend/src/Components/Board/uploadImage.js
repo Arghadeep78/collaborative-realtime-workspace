@@ -19,7 +19,7 @@ export async function uploadImage(file) {
       body,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed');
+    if (!res.ok || !data.url) throw new Error(data.message || 'Upload failed');
     return data.url;
   } catch (err) {
     toast.error('Image upload failed');

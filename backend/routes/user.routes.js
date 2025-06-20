@@ -10,6 +10,7 @@ import {
   getUserProfile,
   updateUserProfile,
   getBulkProfiles,
+  issueWsTicket,
 } from "../controllers/user.controller.js";
 import express from "express";
 import authMiddleware from "../middleware/auth.middleware.js";
@@ -74,5 +75,10 @@ router.post(
   upload.single("file"),
   mediaUpload
 );
+
+// Issue a single-use WebSocket ticket for the authenticated user.
+// The ticket is stored in Redis (30s TTL) and consumed by the WS upgrade gate
+// so the JWT never appears in a WebSocket URL, server log, or proxy access log.
+router.post("/ws-ticket", authMiddleware, issueWsTicket);
 
 export default router;

@@ -43,9 +43,9 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
       const res = await fetch(`${BACKEND_URL}/workspaces/${workspaceId}/manage`, {
         headers: { Authorization: `Bearer ${token()}` },
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to load workspace');
-      setData(d);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || 'Failed to load workspace');
+      setData(body.data);
     } catch (e) {
       toast.error(e.message);
       onClose?.();
@@ -79,8 +79,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
         body: JSON.stringify({ email }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to share');
-      setData((prev) => ({ ...prev, workspace: d }));
+      if (!res.ok) throw new Error(d.message || 'Failed to share');
+      setData((prev) => ({ ...prev, workspace: d.data }));
       setShareEmail('');
       toast.success(`Shared with ${email}`);
       onChanged?.();
@@ -98,7 +98,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
         { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } }
       );
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to remove member');
+      if (!res.ok) throw new Error(d.message || 'Failed to remove member');
       await load();
       toast.success(`Removed ${email}`);
       onChanged?.();
@@ -119,8 +119,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
           body: JSON.stringify({ email }),
         });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
-        updateBoardCollabs(boardId, d.collaborators);
+        if (!res.ok) throw new Error(d.message);
+        updateBoardCollabs(boardId, d.data?.collaborators);
       } else {
         const res = await fetch(`${BACKEND_URL}/projects/share/${boardId}`, {
           method: 'PUT',
@@ -128,8 +128,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
           body: JSON.stringify({ email, role }),
         });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
-        updateBoardCollabs(boardId, d.collaborators);
+        if (!res.ok) throw new Error(d.message);
+        updateBoardCollabs(boardId, d.data?.collaborators);
       }
     } catch (e) {
       toast.error(e.message);
@@ -144,8 +144,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
         body: JSON.stringify({ email }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
-      updateBoardCollabs(boardId, d.collaborators);
+      if (!res.ok) throw new Error(d.message);
+      updateBoardCollabs(boardId, d.data?.collaborators);
       toast.success('Access updated');
     } catch (e) {
       toast.error(e.message);

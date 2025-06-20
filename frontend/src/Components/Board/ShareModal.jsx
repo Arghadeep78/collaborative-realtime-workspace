@@ -70,8 +70,9 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         const res = await fetch(`${BACKEND_URL}/workspaces/${workspace.id}/manage`, {
           headers: { Authorization: `Bearer ${token()}` },
         });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d.error || 'Failed to load access');
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message || 'Failed to load access');
+        const d = body.data || {};
         const ws = d.workspace || {};
         setOwner({ email: ws.owner, name: ws.ownerName || '', profilePicture: ws.ownerProfilePicture || '' });
         setMembers(ws.members || []);
@@ -82,8 +83,9 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         const res = await fetch(`${BACKEND_URL}/projects/${boardId}`, {
           headers: { Authorization: `Bearer ${token()}` },
         });
-        const b = await res.json();
-        if (!res.ok) throw new Error(b.error || 'Failed to load access');
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message || 'Failed to load access');
+        const b = body.data || {};
         if (Array.isArray(b.collaborators)) setCollabs(b.collaborators);
         if (typeof b.isPublic === 'boolean') setIsPublic(b.isPublic);
         if (b.publicRole) setPublicRole(b.publicRole);
@@ -128,8 +130,8 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
           body: JSON.stringify({ email }),
         });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
-        setCollabs(d.collaborators || []);
+        if (!res.ok) throw new Error(d.message);
+        setCollabs(d.data?.collaborators || []);
       } else {
         const res = await fetch(`${BACKEND_URL}/projects/share/${boardId}`, {
           method: 'PUT',
@@ -137,8 +139,8 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
           body: JSON.stringify({ email, role }),
         });
         const d = await res.json();
-        if (!res.ok) throw new Error(d.error);
-        setCollabs(d.collaborators || []);
+        if (!res.ok) throw new Error(d.message);
+        setCollabs(d.data?.collaborators || []);
       }
     } catch (e) {
       toast.error(e.message);
@@ -167,8 +169,8 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to share');
-      setCollabs(data.collaborators || []);
+      if (!res.ok) throw new Error(data.message || 'Failed to share');
+      setCollabs(data.data?.collaborators || []);
       setInviteEmail('');
       toast.success(`Invited ${inviteEmail}`);
     } catch (e) {
@@ -186,8 +188,8 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setCollabs(data.collaborators || []);
+      if (!res.ok) throw new Error(data.message);
+      setCollabs(data.data?.collaborators || []);
       toast.success(`Access removed for ${email}`);
     } catch (e) {
       toast.error(e.message);

@@ -70,7 +70,7 @@ export default function Dashboard({ logout }) {
     setLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/projects/list`, { headers: { Authorization: `Bearer ${token()}` } });
-      const data = await res.json();
+      const { data } = await res.json();
       setBoards(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
@@ -83,7 +83,7 @@ export default function Dashboard({ logout }) {
   const fetchWorkspaces = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/workspaces/list`, { headers: { Authorization: `Bearer ${token()}` } });
-      const data = await res.json();
+      const { data } = await res.json();
       const list = Array.isArray(data) ? data : [];
 
       if (list.length === 0) {
@@ -94,7 +94,7 @@ export default function Dashboard({ logout }) {
           headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ defaultName }),
         });
-        const ws = await cres.json();
+        const { data: ws } = await cres.json();
         setWorkspaces([ws]);
         setActiveWs(ws);
       } else {
@@ -151,8 +151,8 @@ export default function Dashboard({ logout }) {
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Untitled Project', thumbnail: randomThumbnail }),
       });
-      const data = await res.json();
-      if (data.id) {
+      const { data } = await res.json();
+      if (data?.id) {
         // Only the workspace owner can file boards into it; members are view-only.
         if (activeWorkspace?.id && activeWorkspace?.isOwner) {
           await fetch(`${BACKEND_URL}/workspaces/${activeWorkspace.id}/add-project`, {
@@ -179,7 +179,7 @@ export default function Dashboard({ logout }) {
         method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
+        const { message: error } = await res.json().catch(() => ({}));
         throw new Error(error || 'Failed to delete project');
       }
       setBoards(bs => bs.filter(b => b.id !== id));
@@ -195,7 +195,7 @@ export default function Dashboard({ logout }) {
         method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
+        const { message: error } = await res.json().catch(() => ({}));
         throw new Error(error || 'Failed to leave project');
       }
       setBoards(bs => bs.filter(b => b.id !== id));
@@ -247,7 +247,7 @@ export default function Dashboard({ logout }) {
       const res = await fetch(`${BACKEND_URL}/projects/favorite/${boardId}`, {
         method: 'PUT', headers: { Authorization: `Bearer ${token()}` },
       });
-      const data = await res.json();
+      const { data } = await res.json();
       setBoards(bs => bs.map(b => b.id === boardId ? { ...b, isFavorited: data.isFavorited } : b));
     } catch (e) {
       console.error(e);
@@ -262,7 +262,7 @@ export default function Dashboard({ logout }) {
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      const ws = await res.json();
+      const { data: ws } = await res.json();
       setWorkspaces(prev => [ws, ...prev]);
       setActiveWs(ws);
       setShowCreateWs(false);
@@ -280,7 +280,7 @@ export default function Dashboard({ logout }) {
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: wsRenameVal }),
       });
-      const ws = await res.json();
+      const { data: ws } = await res.json();
       setWorkspaces(prev => prev.map(w => w.id === ws.id ? ws : w));
       setActiveWs(ws);
       setRenamingWs(false);
@@ -295,7 +295,7 @@ export default function Dashboard({ logout }) {
         method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
+        const { message: error } = await res.json().catch(() => ({}));
         throw new Error(error || 'Failed to delete workspace');
       }
       const remaining = workspaces.filter((w) => w.id !== ws.id);
@@ -322,7 +322,7 @@ export default function Dashboard({ logout }) {
         method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
+        const { message: error } = await res.json().catch(() => ({}));
         throw new Error(error || 'Failed to leave workspace');
       }
       const remaining = workspaces.filter(w => w.id !== ws.id);
@@ -347,7 +347,7 @@ export default function Dashboard({ logout }) {
         body: JSON.stringify({ projectId: boardId }),
       });
       if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
+        const { message: error } = await res.json().catch(() => ({}));
         throw new Error(error || 'Failed to move board');
       }
       // Update local workspace state: remove from all workspaces, add to target

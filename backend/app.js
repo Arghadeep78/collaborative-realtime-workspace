@@ -14,10 +14,12 @@ import { startPersistenceWorker } from "./crdt/persistenceWorker.js";
 import { startPersistenceScheduler } from "./crdt/persistenceScheduler.js";
 import { createHealthRouter } from "./routes/health.routes.js";
 import { documentManager } from "./crdt/DocumentManager.js";
+import { setWsTicketRedis } from "./controllers/user.controller.js";
 import userRoute from "./routes/user.routes.js";
 import projectRoute from "./routes/project.routes.js";
 import publishRoute from "./routes/publish.routes.js";
 import workspaceRoute from "./routes/workspace.routes.js";
+import errorMiddleware from "./middleware/error.middleware.js";
 
 const REQUIRED_ENV = [
   'JWT_SECRET', 'JWT_REFRESH_SECRET',
@@ -44,6 +46,9 @@ export const buildApp = async () => {
 
   const { pubClient, subClient } = await createRedisClients();
   initProjectCache(pubClient);
+  // Inject the Redis client into the WS-ticket controller so it can store
+  // single-use tickets without importing Redis directly.
+  setWsTicketRedis(pubClient);
 
   const bullRedisOpts = parseRedisUrl(process.env.REDIS_URL);
   const persistWorker = startPersistenceWorker(bullRedisOpts);
@@ -69,6 +74,10 @@ export const buildApp = async () => {
   app.use("/projects",   apiLimiter,  projectRoute);
   app.use("/publish",    apiLimiter,  publishRoute);
   app.use("/workspaces", apiLimiter,  workspaceRoute);
+
+  // ── Error handling ────────────────────────────────────────────────────────────
+  // Must be registered after all routes so it catches errors forwarded via next(err).
+  app.use(errorMiddleware);
 
   // ── Shutdown ──────────────────────────────────────────────────────────────────
   registerShutdownHandlers({ server, pubClient, subClient, persistWorker, stopScheduler });

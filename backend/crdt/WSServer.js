@@ -147,15 +147,56 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
   };
 
   // ─── HTTP Upgrade routing ─────────────────────────────────────────────
-  httpServer.on('upgrade', (request, socket, head) => {
-    let pathname;
+  // The upgrade gate validates the one-time ticket (or the ?st= share token
+  // for anonymous visitors) *before* wss.handleUpgrade is called, so an
+  // invalid or expired credential results in a plain HTTP 401 — the WebSocket
+  // handshake never starts and the JWT never appears in any URL or log.
+  httpServer.on('upgrade', async (request, socket, head) => {
+    let url;
     try {
-      pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
+      url = new URL(request.url, `http://${request.headers.host}`);
     } catch {
       socket.destroy();
       return;
     }
-    if (!pathname.startsWith('/yjs/')) return; // let Socket.IO handle the rest
+    if (!url.pathname.startsWith('/yjs/')) return; // let Socket.IO handle the rest
+
+    const ticket    = url.searchParams.get('ticket');
+    const shareToken = url.searchParams.get('st');
+
+    if (ticket) {
+      // Validate and immediately consume the single-use ticket.
+      const redisKey = `ws:ticket:${ticket}`;
+      let email;
+      try {
+        email = await redisPub.get(redisKey);
+      } catch (err) {
+        console.error('[Yjs WS] Redis ticket lookup error:', err);
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      if (!email) {
+        // Ticket is missing, expired (>30s), or already consumed.
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      // Single-use: delete synchronously after reading so a concurrent second
+      // request with the same ticket finds nothing in Redis.
+      redisPub.del(redisKey).catch(() => {});
+      request.wsUserId = email;
+    } else if (shareToken) {
+      // Share-link visitor with no session — allow through as anonymous.
+      // resolveRole (role.js) caps anonymous users at viewer; the ?st= JWT is
+      // verified server-side in the connection handler below.
+      request.wsUserId = 'anonymous';
+    } else {
+      // Neither ticket nor share token — reject before the WS handshake.
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
@@ -178,7 +219,6 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       const url = new URL(request.url, `http://${request.headers.host}`);
       // Room name is the last path segment: /yjs/<projectId>
       projectId = url.pathname.split('/').filter(Boolean).pop();
-      const token = url.searchParams.get('token');
       const shareToken = url.searchParams.get('st');
 
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -193,16 +233,9 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       const meta = await getProjectMeta(projectId);
       if (!meta) { ws.close(4404, 'Project not found'); return; }
 
-      userEmail = 'anonymous';
-      if (token && token !== 'undefined' && token !== 'null') {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          userEmail = decoded.email;
-        } catch {
-          ws.close(4401, 'Invalid or expired token');
-          return;
-        }
-      }
+      // Identity was verified and set on the request in the upgrade gate.
+      // No JWT is ever passed through a WebSocket URL.
+      userEmail = request.wsUserId || 'anonymous';
 
       // A signed share token (`?st=`) raises a link visitor's role above the
       // public viewer baseline. Verify it here so editing actually works over

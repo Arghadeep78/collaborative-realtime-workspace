@@ -6,6 +6,7 @@
 // before the controller runs, so controllers can trust their input.
 
 import validator from "validator";
+import { APIError } from "../utils/APIError.js";
 
 // Both bounds use the trimmed length so whitespace padding doesn't affect limits.
 const isStr = (v, min = 1, max = 256) =>
@@ -20,7 +21,7 @@ export const validate = (rules) => (req, res, next) => {
     if (msg) errors.push(`${field}: ${msg}`);
   }
   if (errors.length) {
-    return res.status(400).json({ message: errors.join("; ") });
+    return next(new APIError(400, errors.join("; ")));
   }
   next();
 };

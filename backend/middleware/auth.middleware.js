@@ -1,18 +1,21 @@
 import { verifyToken } from '../utils/jwt.js';
+import { APIError } from '../utils/APIError.js';
 
 const authMiddleware = (req, res, next) => {
     try {
         const authHeader = req.header('Authorization');
         const token = authHeader ? authHeader.replace('Bearer ', '') : '';
         if (!token) {
-            return res.status(401).json({ error: 'Access Denied' });
+            return next(new APIError(401, 'Access Denied'));
         }
         const decoded = verifyToken(token);
         req.email = decoded.email;
         next();
     }
     catch (error) {
-        res.status(401).json({ error: 'Invalid Token' });
+        // Synchronous middleware: a bare throw is NOT auto-forwarded by Express 5
+        // (only async/promise rejections are), so hand the error to next() explicitly.
+        next(new APIError(401, 'Invalid Token'));
     }
 }
 

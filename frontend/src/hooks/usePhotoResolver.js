@@ -17,8 +17,9 @@ const fetchProfiles = (emails) => {
   return fetch(`${BACKEND_URL}/users/profiles?emails=${emails.map(encodeURIComponent).join(',')}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
-    .then((r) => (r.ok ? r.json() : []))
-    .then((profiles) => {
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((body) => {
+      const profiles = Array.isArray(body?.data) ? body.data : [];
       profiles.forEach((p) => cache.set(p.email, p.profilePicture || ''));
       // Mark any requested-but-unreturned emails as resolved-empty so we don't refetch forever.
       emails.forEach((e) => { if (!cache.has(e)) cache.set(e, ''); });

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import validator from "validator";
 import { signToken, signRefreshToken, getTokenExpiry } from "../utils/jwt.js";
+import { APIError } from "../utils/APIError.js";
 
 // How long a password-reset link stays valid.
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -18,21 +19,11 @@ const PASSWORD_POLICY =
 const hashToken = (rawToken) =>
   crypto.createHash("sha256").update(rawToken).digest("hex");
 
-// Errors we deliberately throw to inform the user (bad input, "already exists",
-// wrong password, …) are SAFE to surface. Mark them so the catch blocks below
-// can re-throw them untouched, while genericizing everything else.
-const operationalError = (message, status = null) => {
-  const err = new Error(message);
-  err.isOperational = true;
-  if (status) err.status = status;
-  return err;
-};
-
-// Use in a model catch block: pass through our intentional messages; for any
-// unexpected failure (DB/driver/bcrypt), log the real cause server-side and
-// throw a generic message so internals never reach the client.
+// Use in a model catch block: pass through intentional APIErrors untouched; for
+// any unexpected failure (DB/driver/bcrypt), log the real cause server-side and
+// throw a generic 500 message so internals never reach the client.
 const rethrow = (context, error) => {
-  if (error?.isOperational) throw error;
+  if (error instanceof APIError) throw error;
   console.error(`${context}:`, error);
   throw new Error(`${context}. Please try again.`);
 };
@@ -195,13 +186,14 @@ userSchema.statics.findByRefreshToken = async function (rawToken) {
 userSchema.statics.register = async function (name, email, password, role) {
   try {
     if (!validator.isEmail(email)) {
-      throw operationalError("Invalid email format.");
+      throw new APIError(400, "Invalid email format.");
     }
     if (role !== "admin" && role !== "user") {
-      throw operationalError("Invalid role. Role must be either 'admin' or 'user'.");
+      throw new APIError(400, "Invalid role. Role must be either 'admin' or 'user'.");
     }
     if (!PASSWORD_POLICY.test(password)) {
-      throw operationalError(
+      throw new APIError(
+        400,
         "Password must be at least 8 characters long and include one letter, one number, and one special character."
       );
     }
@@ -209,10 +201,11 @@ userSchema.statics.register = async function (name, email, password, role) {
     // An email is tied to exactly ONE auth method.
     const existingUser = await this.findOne({ email });
     if (existingUser && existingUser.password) {
-      throw operationalError("User already exists with this email.");
+      throw new APIError(409, "User already exists with this email.");
     }
     if (existingUser && existingUser.googleId) {
-      throw operationalError(
+      throw new APIError(
+        409,
         "This email is already registered with Google. Please sign in with Google instead."
       );
     }
@@ -239,19 +232,21 @@ userSchema.statics.updatenewPassword = async function (
   try {
     // Validate new password
     if (!PASSWORD_POLICY.test(newPassword)) {
-      throw operationalError(
+      throw new APIError(
+        400,
         "New password must be at least 8 characters long and include one letter, one number, and one special character."
       );
     }
 
     const user = await this.findOne({ email: userEmail });
     if (!user) {
-      throw operationalError("User not found.");
+      throw new APIError(404, "User not found.");
     }
 
     // If user registered with Google but trying to update password
     if (user.authProvider === "google" && !user.password) {
-      throw operationalError(
+      throw new APIError(
+        400,
         "This account is linked with Google. Please use Google Sign-in."
       );
     }
@@ -259,7 +254,7 @@ userSchema.statics.updatenewPassword = async function (
     // Check old password
     const isMatch = await user.comparePassword(oldPassword);
     if (!isMatch) {
-      throw operationalError("Old password is incorrect.");
+      throw new APIError(400, "Old password is incorrect.");
     }
 
     user.password = newPassword;
@@ -297,10 +292,11 @@ userSchema.statics.requestPasswordReset = async function (email) {
 // it can only ever be used once.
 userSchema.statics.resetPassword = async function (rawToken, newPassword) {
   if (!rawToken) {
-    throw new Error("Reset token is required.");
+    throw new APIError(400, "Reset token is required.");
   }
   if (!PASSWORD_POLICY.test(newPassword)) {
-    throw new Error(
+    throw new APIError(
+      400,
       "New password must be at least 8 characters long and include one letter, one number, and one special character."
     );
   }
@@ -312,7 +308,7 @@ userSchema.statics.resetPassword = async function (rawToken, newPassword) {
   }).select("+resetPasswordToken +resetPasswordExpires");
 
   if (!user) {
-    throw new Error("Password reset link is invalid or has expired.");
+    throw new APIError(400, "Password reset link is invalid or has expired.");
   }
 
   user.password = newPassword;
@@ -350,7 +346,8 @@ userSchema.statics.googleAuth = async function (
     // googleId lookup above, so they still log in fine.)
     user = await this.findOne({ email });
     if (user) {
-      throw operationalError(
+      throw new APIError(
+        409,
         "This email is already registered with a password. Please sign in with your email and password instead."
       );
     }
@@ -381,20 +378,20 @@ userSchema.statics.login = async function (email, password) {
   try {
     const user = await this.findOne({ email });
     if (!user) {
-      throw operationalError("Invalid email or password.");
+      throw new APIError(401, "Invalid email or password.");
     }
 
     // If user registered with Google but trying to login with password
     if (user.authProvider === "google" && !user.password) {
-      throw operationalError(
-        "This account is linked with Google. Please use Google Sign-in.",
-        400
+      throw new APIError(
+        400,
+        "This account is linked with Google. Please use Google Sign-in."
       );
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      throw operationalError("Invalid email or password.");
+      throw new APIError(401, "Invalid email or password.");
     }
 
     return user;
