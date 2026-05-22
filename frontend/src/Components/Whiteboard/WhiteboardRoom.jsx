@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Tldraw, track, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, useEditor } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
+import toast from 'react-hot-toast';
 
 const CustomGrid = track(() => {
   const editor = useEditor();
@@ -120,6 +121,8 @@ export default function WhiteboardRoom() {
   const editorRef                   = useRef(null);
   const storeRef                    = useRef(null);
   const bindingActiveRef            = useRef(false);
+  const bindingCleanupRef           = useRef(null);
+  const boundYdocRef                = useRef(null);
   const [showAI, setShowAI]       = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [role, setRole]           = useState('editor');
@@ -133,6 +136,14 @@ export default function WhiteboardRoom() {
   const [activeColor, setActiveColor] = useState('blue');
   const [activeTool, setActiveTool] = useState('draw');
   const [hoveredTool, setHoveredTool] = useState(null);
+  const [showTimerPicker, setShowTimerPicker] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isSpotlighting, setIsSpotlighting] = useState(false);
+  const [myVotes, setMyVotes] = useState({}); // { shapeId: true } for current user's votes
+  const spotlightTimerRef = useRef(null);
+  const spotlightIntervalRef = useRef(null);
+  const navigate = useNavigate();
+  const userData = JSON.parse(localStorage.getItem('userData') || '{}');
 
   const handleToolSelect = (tool) => {
     setActiveTool(tool);
@@ -211,10 +222,24 @@ export default function WhiteboardRoom() {
   }, [provider]);
 
   // ── Bind tldraw store ↔ Yjs Y.Map (incremental, debounced) ───────────────
-  // Called once the tldraw editor mounts and Y.Doc is ready
+  // Called once the tldraw editor mounts and Y.Doc is ready.
+  // Returns a cleanup function. We track it in bindingCleanupRef so we can
+  // tear down the old binding before creating a new one (e.g. after Tldraw
+  // remounts or ydoc changes).
   const bindStore = useCallback((editor) => {
-    if (!editor || !ydoc || bindingActiveRef.current) return;
+    if (!editor || !ydoc) return;
+
+    // If we're already bound to this exact editor+ydoc pair, skip.
+    if (bindingActiveRef.current && boundYdocRef.current === ydoc && editorRef.current === editor) return;
+
+    // Clean up any previous binding first (stale editor or different ydoc)
+    if (bindingCleanupRef.current) {
+      bindingCleanupRef.current();
+      bindingCleanupRef.current = null;
+    }
+
     bindingActiveRef.current = true;
+    boundYdocRef.current = ydoc;
     editorRef.current = editor;
 
     // We use a Y.Map keyed by record.id for incremental sync.
@@ -385,7 +410,8 @@ export default function WhiteboardRoom() {
     onVotesChange();
     onCommentsChange();
 
-    return () => {
+    // Store the cleanup function so it can be called on remount or ydoc change
+    const cleanup = () => {
       if (flushTimer) { clearTimeout(flushTimer); flushToYjs(); } // flush any pending
       unsubscribeTldraw();
       yRecords.unobserve(onYjsChange);
@@ -393,15 +419,30 @@ export default function WhiteboardRoom() {
       yVotes.unobserve(onVotesChange);
       yComments.unobserve(onCommentsChange);
       bindingActiveRef.current = false;
+      boundYdocRef.current = null;
     };
+
+    bindingCleanupRef.current = cleanup;
+    return cleanup;
   }, [ydoc]);
 
   // ── Re-bind when ydoc becomes available ──────────────────────────────────
   useEffect(() => {
     if (ydoc && editorRef.current) {
-      bindStore(editorRef.current);
+      const cleanup = bindStore(editorRef.current);
+      return cleanup;
     }
   }, [ydoc, bindStore]);
+
+  // ── Clean up binding on unmount ─────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (bindingCleanupRef.current) {
+        bindingCleanupRef.current();
+        bindingCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // ── Update board title ────────────────────────────────────────────────────
   const saveTitle = async () => {
@@ -452,12 +493,23 @@ export default function WhiteboardRoom() {
       endTime: Date.now() + minutes * 60000,
       duration: minutes
     });
+    setShowTimerPicker(false);
+  };
+
+  const cancelTimer = () => {
+    if (!ydoc) return;
+    const ySystem = ydoc.getMap('system');
+    ySystem.set('timer', null);
+    setTimer(null);
+    setTimeLeft(null);
   };
 
   const [timeLeft, setTimeLeft] = useState(null);
+  const [timerExpired, setTimerExpired] = useState(false);
   useEffect(() => {
     if (!timer || !timer.endTime) {
       setTimeLeft(null);
+      setTimerExpired(false);
       return;
     }
     const interval = setInterval(() => {
@@ -465,10 +517,18 @@ export default function WhiteboardRoom() {
       if (remaining === 0) {
         clearInterval(interval);
         setTimeLeft('00:00');
+        setTimerExpired(true);
+        // Auto-clear after 5 seconds
+        setTimeout(() => {
+          setTimerExpired(false);
+          setTimeLeft(null);
+          setTimer(null);
+        }, 5000);
       } else {
         const m = Math.floor(remaining / 60000).toString().padStart(2, '0');
         const s = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
         setTimeLeft(`${m}:${s}`);
+        setTimerExpired(false);
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -476,35 +536,86 @@ export default function WhiteboardRoom() {
 
   const handleSpotlight = () => {
     if (!provider || !editorRef.current) return;
-    provider.awareness.setLocalStateField('followMe', {
-      time: Date.now(),
-      camera: editorRef.current.getCamera()
-    });
-    // Let others follow for 5 seconds
-    setTimeout(() => {
+    
+    if (isSpotlighting) {
+      // Stop spotlight early
+      clearTimeout(spotlightTimerRef.current);
+      clearInterval(spotlightIntervalRef.current);
       provider.awareness.setLocalStateField('followMe', null);
-    }, 5000);
+      setIsSpotlighting(false);
+      return;
+    }
+
+    setIsSpotlighting(true);
+    
+    // Continuously broadcast camera position while spotlighting
+    const broadcastCamera = () => {
+      if (!editorRef.current) return;
+      provider.awareness.setLocalStateField('followMe', {
+        time: Date.now(),
+        camera: editorRef.current.getCamera()
+      });
+    };
+    
+    broadcastCamera();
+    spotlightIntervalRef.current = setInterval(broadcastCamera, 200);
+    
+    // Auto-stop after 30 seconds
+    spotlightTimerRef.current = setTimeout(() => {
+      clearInterval(spotlightIntervalRef.current);
+      provider.awareness.setLocalStateField('followMe', null);
+      setIsSpotlighting(false);
+    }, 30000);
   };
+
+  // Cleanup spotlight on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(spotlightTimerRef.current);
+      clearInterval(spotlightIntervalRef.current);
+    };
+  }, []);
 
   const handleVote = () => {
     if (!editorRef.current || !ydoc) return;
     const yVotes = ydoc.getMap('votes');
     const selected = editorRef.current.getSelectedShapeIds();
-    if (selected.length === 0) return alert('Select shapes to vote for them.');
+    if (selected.length === 0) {
+      toast('Select shapes to vote on them', { icon: '👆' });
+      return;
+    }
     
     ydoc.transact(() => {
+      const newMyVotes = { ...myVotes };
       selected.forEach(id => {
-        const current = yVotes.get(id) || 0;
-        yVotes.set(id, current + 1);
+        if (newMyVotes[id]) {
+          // Un-vote
+          const current = yVotes.get(id) || 0;
+          yVotes.set(id, Math.max(0, current - 1));
+          delete newMyVotes[id];
+        } else {
+          // Vote
+          const current = yVotes.get(id) || 0;
+          yVotes.set(id, current + 1);
+          newMyVotes[id] = true;
+        }
       });
+      setMyVotes(newMyVotes);
     });
   };
 
-  const handleCanvasClick = (e) => {
-    if (commenting && editorRef.current && !newCommentPos) {
-      const pt = editorRef.current.screenToPage({ x: e.clientX, y: e.clientY });
-      setNewCommentPos({ screenX: e.clientX, screenY: e.clientY, pageX: pt.x, pageY: pt.y });
-    }
+  const handleCanvasClick = () => {
+    // Close menus when clicking canvas
+    setShowTimerPicker(false);
+    setShowUserMenu(false);
+    setShowExport(false);
+  };
+
+  const handleCommentOverlayClick = (e) => {
+    if (!commenting || !editorRef.current || newCommentPos) return;
+    e.stopPropagation();
+    const pt = editorRef.current.screenToPage({ x: e.clientX, y: e.clientY });
+    setNewCommentPos({ screenX: e.clientX, screenY: e.clientY, pageX: pt.x, pageY: pt.y });
   };
 
   const submitComment = () => {
@@ -512,7 +623,6 @@ export default function WhiteboardRoom() {
       setNewCommentPos(null);
       return;
     }
-    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
     ydoc.getArray('comments').push([{
       x: newCommentPos.pageX,
       y: newCommentPos.pageY,
@@ -522,6 +632,31 @@ export default function WhiteboardRoom() {
     setNewCommentPos(null);
     setNewCommentText('');
     setCommenting(false);
+    toast.success('Comment added');
+  };
+
+  // Escape key to cancel comment mode
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (newCommentPos) {
+          setNewCommentPos(null);
+          setNewCommentText('');
+        } else if (commenting) {
+          setCommenting(false);
+        }
+        setShowTimerPicker(false);
+        setShowUserMenu(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [commenting, newCommentPos]);
+
+  const handleSignOut = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userData');
+    navigate('/login');
   };
 
   const applyEditorStyle = (prop, value) => {
@@ -710,35 +845,118 @@ export default function WhiteboardRoom() {
       </div>
 
       {/* ── Top Right Floating Box: Tools & Share ─────────────────────── */}
-      <div className={`absolute top-4 right-4 z-20 flex items-center gap-3 rounded-2xl pl-2 pr-1.5 py-1.5 ${UI.surface}`}>
+      <div className={`absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-2xl pl-2.5 pr-1.5 py-1.5 ${UI.surface}`}>
         
         {/* Tool buttons grouped */}
-        <div className="flex items-center gap-1 border-r border-gray-200 pr-2">
-          <button onClick={handleVote} className={`${UI.iconBtn} text-sm`} title="Upvote selected items">👍</button>
-          <button onClick={() => setCommenting(!commenting)} className={`${UI.iconBtn} text-sm ${commenting ? UI.iconBtnWarn : ''}`} title="Add a comment">💬</button>
+        <div className="flex items-center gap-1">
+          {/* Vote button */}
+          <button 
+            onClick={handleVote} 
+            className={`${UI.iconBtn} group relative`} 
+            title="Vote on selected shapes (toggle)"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+            </svg>
+            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Vote</span>
+          </button>
 
-          {role === 'editor' && !timeLeft && (
-            <button onClick={() => startTimer(5)} className={`${UI.iconBtn} text-sm`} title="Start 5 min timer">⏱️</button>
-          )}
-          {timeLeft && (
-            <div className={`${UI.timer} font-mono ${timeLeft === '00:00' ? `${UI.timerExpired} animate-pulse` : ''}`}>{timeLeft}</div>
-          )}
+          {/* Comment button */}
+          <button 
+            onClick={() => setCommenting(!commenting)} 
+            className={`${UI.iconBtn} group relative ${commenting ? 'bg-amber-100 text-amber-700 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : ''}`}
+            title="Add a comment pin"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{commenting ? 'Cancel' : 'Comment'}</span>
+          </button>
 
+          {/* Timer */}
+          <div className="relative">
+            {timeLeft ? (
+              <div className="flex items-center gap-1">
+                <div className={`${UI.timer} font-mono flex items-center gap-1.5 ${timerExpired ? `${UI.timerExpired} animate-pulse` : ''}`}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                  </svg>
+                  {timeLeft}
+                </div>
+                {role === 'editor' && (
+                  <button 
+                    onClick={cancelTimer} 
+                    className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 transition-colors"
+                    title="Cancel timer"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            ) : role === 'editor' ? (
+              <button 
+                onClick={() => setShowTimerPicker(!showTimerPicker)} 
+                className={`${UI.iconBtn} group relative ${showTimerPicker ? UI.iconBtnActive : ''}`}
+                title="Set a timer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                </svg>
+                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Timer</span>
+              </button>
+            ) : null}
+
+            {/* Timer duration picker dropdown */}
+            {showTimerPicker && (
+              <div className={`absolute right-0 top-full mt-2 w-36 rounded-xl py-1.5 z-50 ${UI.surfaceSolid}`}>
+                <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Set Timer</p>
+                {[1, 3, 5, 10, 15, 30].map(m => (
+                  <button 
+                    key={m} 
+                    onClick={() => startTimer(m)} 
+                    className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                  >
+                    {m} minute{m > 1 ? 's' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Spotlight / Follow Me */}
           {role === 'editor' && (
-            <button onClick={handleSpotlight} className={`${UI.iconBtn} text-sm`} title="Force others to follow your view for 5s">👁️</button>
+            <button 
+              onClick={handleSpotlight} 
+              className={`${UI.iconBtn} group relative ${isSpotlighting ? 'bg-red-100 text-red-600 border-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]' : ''}`}
+              title={isSpotlighting ? 'Stop presenting (click to stop)' : 'Present — others follow your view'}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+              </svg>
+              {isSpotlighting && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+              )}
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{isSpotlighting ? 'Stop' : 'Present'}</span>
+            </button>
           )}
 
+          {/* AI button — unchanged per user request */}
           <button id="ai-panel-btn" onClick={() => setShowAI(v => !v)} className={`${UI.iconBtn} text-sm ${showAI ? UI.iconBtnActive : ''}`} title="AI Assistant">✨</button>
         </div>
 
+        <div className="h-6 w-px bg-slate-200/80 mx-0.5"></div>
+
         {/* Peer presence avatars */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center -space-x-1">
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center -space-x-1.5">
             {peers.slice(0, window.innerWidth < 640 ? 2 : peers.length).map(peer => (
               <div
                 key={peer.clientId}
                 title={peer.name}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow-sm"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white shadow-sm transition-transform hover:scale-110 hover:z-10"
                 style={{ backgroundColor: peer.color }}
               >
                 {peer.name?.[0]?.toUpperCase() || '?'}
@@ -746,26 +964,66 @@ export default function WhiteboardRoom() {
             ))}
           </div>
 
-          <div className="flex items-center gap-1 bg-emerald-50/80 pl-1.5 pr-1 py-1 rounded-full border border-emerald-100/80 shadow-sm cursor-pointer hover:bg-emerald-50 transition-colors ml-1">
-            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white">
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" /></svg>
-            </div>
-            <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          {/* Current user avatar with dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowUserMenu(!showUserMenu)} 
+              className="flex items-center gap-1 bg-emerald-50/80 pl-1.5 pr-1 py-1 rounded-full border border-emerald-100/80 shadow-sm cursor-pointer hover:bg-emerald-100/80 transition-colors"
+            >
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
+                {userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'}
+              </div>
+              <svg className={`w-3 h-3 text-slate-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+
+            {/* User menu dropdown */}
+            {showUserMenu && (
+              <div className={`absolute right-0 top-full mt-2 w-56 rounded-xl py-2 z-50 ${UI.surfaceSolid}`}>
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{userData.name || 'User'}</p>
+                  <p className="text-xs text-slate-500 truncate">{userData.email || ''}</p>
+                </div>
+                <button 
+                  onClick={() => { setShowUserMenu(false); navigate('/dashboard'); }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                  Dashboard
+                </button>
+                <button 
+                  onClick={() => { setShowUserMenu(false); navigate('/profile'); }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  Profile
+                </button>
+                <div className="border-t border-slate-100 my-1"></div>
+                <button 
+                  onClick={handleSignOut}
+                  className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Share button */}
         <button
           onClick={() => setShowShare(true)}
-          className={`ml-1 ${UI.primaryBtn} text-sm font-medium px-4 py-1.5 rounded-full`}
+          className={`ml-1 ${UI.primaryBtn} text-sm font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5`}
         >
-          Share board
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+          Share
         </button>
       </div>
 
       {/* ── tldraw canvas (full screen) ─────────── */}
-      <div className={tldrawHostClass} onClick={handleCanvasClick} style={{ cursor: commenting ? 'crosshair' : 'default' }}>
+      <div className={tldrawHostClass} onClick={handleCanvasClick}>
         <Tldraw
+          key={ydoc ? 'tldraw-bound' : 'tldraw-init'}
           onMount={(editor) => {
             editorRef.current = editor;
             setZoom(editor.getCamera().z);
@@ -787,6 +1045,20 @@ export default function WhiteboardRoom() {
           <Overlays editor={editorRef.current} votes={votes} comments={comments} />
         </Tldraw>
       </div>
+
+      {/* Comment mode overlay — sits above tldraw to intercept clicks */}
+      {commenting && !newCommentPos && (
+        <div 
+          className="absolute inset-0 z-25 cursor-crosshair" 
+          onClick={handleCommentOverlayClick}
+          style={{ background: 'rgba(245, 158, 11, 0.03)' }}
+        >
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-medium shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+            Click anywhere to place a comment · Press Esc to cancel
+          </div>
+        </div>
+      )}
 
       {/* Custom Left Toolbar */}
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">

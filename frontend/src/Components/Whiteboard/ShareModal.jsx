@@ -69,7 +69,11 @@ export default function ShareModal({ boardId, board, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to publish');
-      setShareUrl(window.location.href);
+      // Backend returns 202 with shareUrl path — construct full URL
+      const fullUrl = data.shareUrl 
+        ? `${window.location.origin}${data.shareUrl}` 
+        : window.location.href;
+      setShareUrl(fullUrl);
       setSuccess('Board is now public!');
     } catch (e) {
       setError(e.message);
