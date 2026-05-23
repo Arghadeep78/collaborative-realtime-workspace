@@ -1,5 +1,7 @@
 # Collaborative Whiteboard Platform
 
+<img width="1470" height="833" alt="image" src="https://github.com/user-attachments/assets/a2ef5d47-9451-43d9-9345-0830f16b55ba" />
+
 A full-stack, real-time collaborative whiteboard platform built with React, Tldraw, and Yjs. Features an infinite canvas, real-time collaboration, AI-powered brainstorming, role-based access control, and board publishing.
 
 ---
