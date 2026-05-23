@@ -62,26 +62,30 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       boardId = url.pathname.split('/').filter(Boolean).pop();
       const token = url.searchParams.get('token');
 
-      if (!boardId || !token) {
-        ws.close(4401, 'Missing boardId or token');
+      if (!boardId) {
+        ws.close(4401, 'Missing boardId');
         return;
       }
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      userEmail = decoded.email;
 
       const board = await Whiteboard.findOne({ id: boardId }).lean();
       if (!board) { ws.close(4404, 'Board not found'); return; }
 
+      userEmail = 'anonymous';
+      if (token && token !== 'undefined' && token !== 'null') {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        userEmail = decoded.email;
+      }
+
       const hasAccess =
         board.owner === userEmail ||
-        board.collaborators.some(u => u.email === userEmail) ||
+        (board.collaborators && board.collaborators.some(u => u.email === userEmail)) ||
         board.isPublic;
       if (!hasAccess) { ws.close(4403, 'Access denied'); return; }
 
       // Reuse the already-fetched board doc to avoid a second MongoDB query
       cachedBoard = board;
-    } catch {
+    } catch (err) {
+      console.error('[Yjs WS] Auth error:', err);
       ws.close(4401, 'Authentication failed');
       return;
     }
