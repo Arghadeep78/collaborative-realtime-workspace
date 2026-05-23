@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tldraw, track, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, useEditor } from '@tldraw/tldraw';
+import { Tldraw, track, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, useEditor, exportAs } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import toast from 'react-hot-toast';
 
@@ -48,33 +48,58 @@ const UI = {
   lite: "bg-amber-200/60 text-amber-950 border border-amber-300/70 rounded-full text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5",
 };
 
-const boardShellClass = "relative w-full h-full bg-slate-50 [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)]";
-const tldrawHostClass = "w-full h-full [&_[title*='license']]:hidden [&_[aria-label*='license']]:hidden [&_[href*='license']]:hidden";
+const boardShellClass = "fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] [&_button]:cursor-pointer";
+const tldrawHostClass = "absolute inset-0 overflow-hidden [&_[title*='license']]:hidden [&_[aria-label*='license']]:hidden [&_[href*='license']]:hidden";
 
 const GRID_COLORS = [
-  { id: 'light-yellow', hex: '#FFF29B', tl: 'yellow' },
-  { id: 'yellow', hex: '#FFE054', tl: 'yellow' },
-  { id: 'light-orange', hex: '#FFB870', tl: 'orange' },
-  { id: 'pink', hex: '#FF9494', tl: 'light-red' },
-  { id: 'light-pink', hex: '#FFC4E8', tl: 'light-red' },
-  { id: 'hot-pink', hex: '#FF8ADB', tl: 'red' },
-  { id: 'light-blue', hex: '#A3C8FF', tl: 'light-blue' },
-  { id: 'purple', hex: '#B8A6FF', tl: 'violet' },
-  { id: 'cyan', hex: '#87E5FF', tl: 'light-blue' },
-  { id: 'blue', hex: '#6D9EF0', tl: 'blue' },
-  { id: 'teal', hex: '#77E0C9', tl: 'green' },
-  { id: 'green', hex: '#63D979', tl: 'green' },
-  { id: 'lime', hex: '#CDEDA4', tl: 'light-green' },
-  { id: 'lime-green', hex: '#BDE459', tl: 'light-green' },
-  { id: 'white', hex: '#FFFFFF', tl: 'white' },
-  { id: 'black', hex: '#1E1E1E', tl: 'black' },
+  { id: 'black', hex: '#1d1d1d', tl: 'black' },
+  { id: 'grey', hex: '#9d9d9d', tl: 'grey' },
+  { id: 'violet', hex: '#b15eff', tl: 'violet' },
+  { id: 'light-violet', hex: '#e1c4ff', tl: 'light-violet' },
+  { id: 'blue', hex: '#3b82f6', tl: 'blue' },
+  { id: 'light-blue', hex: '#c4e2ff', tl: 'light-blue' },
+  { id: 'yellow', hex: '#ffc600', tl: 'yellow' },
+  { id: 'orange', hex: '#ff9900', tl: 'orange' },
+  { id: 'green', hex: '#22c55e', tl: 'green' },
+  { id: 'light-green', hex: '#c4ffc4', tl: 'light-green' },
+  { id: 'red', hex: '#ef4444', tl: 'red' },
+  { id: 'light-red', hex: '#ffc4c4', tl: 'light-red' },
 ];
 
+const hexToRgb = (hex) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+};
+
+const getClosestTldrawColor = (hex) => {
+  const target = hexToRgb(hex);
+  if (!target) return GRID_COLORS[0];
+  let closest = GRID_COLORS[0];
+  let minDistance = Infinity;
+  for (const c of GRID_COLORS) {
+    const rgb = hexToRgb(c.hex);
+    if (!rgb) continue;
+    const dist = Math.sqrt(Math.pow(target.r - rgb.r, 2) + Math.pow(target.g - rgb.g, 2) + Math.pow(target.b - rgb.b, 2));
+    if (dist < minDistance) {
+      minDistance = dist;
+      closest = c;
+    }
+  }
+  return closest;
+};
+
+const ZOOM_MIN = 0.05;
+const ZOOM_MAX = 4;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-const Overlays = track(({ editor, votes, comments }) => {
+const Overlays = track(({ editor, votes, comments, peers = [], presenceTick, myVotes, onToggleVote, onDeleteComment }) => {
   if (!editor) return null;
   const shapes = editor.getCurrentPageShapes();
+  const viewport = editor.getViewportScreenBounds();
+  const now = presenceTick || Date.now();
+  const center = { x: viewport.w / 2, y: viewport.h / 2 };
+  const edgePadding = 18;
+
   return (
     <div className="absolute inset-0 pointer-events-none z-20">
       {/* Votes Overlay */}
@@ -84,8 +109,15 @@ const Overlays = track(({ editor, votes, comments }) => {
          const bounds = editor.getShapePageBounds(s);
          if (!bounds) return null;
          const pt = editor.pageToViewport({ x: bounds.maxX, y: bounds.minY });
+         const isMyVote = myVotes?.[s.id];
          return (
-           <div key={`vote-${s.id}`} className="absolute bg-indigo-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 shadow-md" style={{ transform: `translate(${pt.x - 10}px, ${pt.y - 10}px)` }}>
+           <div 
+             key={`vote-${s.id}`} 
+             onClick={() => onToggleVote && onToggleVote(s.id)}
+             className={`absolute pointer-events-auto cursor-pointer transition-transform hover:scale-110 text-[10px] font-bold rounded-full px-1.5 py-0.5 shadow-md ${isMyVote ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-indigo-200'}`} 
+             style={{ transform: `translate(${pt.x - 10}px, ${pt.y - 10}px)` }}
+             title={isMyVote ? "Click to unvote" : "Click to vote"}
+           >
              👍 {count}
            </div>
          );
@@ -100,8 +132,78 @@ const Overlays = track(({ editor, votes, comments }) => {
               💬
             </div>
             <div className="hidden group-hover:block absolute top-4 left-4 bg-white text-gray-900 text-xs p-2 rounded shadow-xl border border-gray-200 w-48 whitespace-pre-wrap">
-              <span className="font-bold text-[10px] text-gray-500 block">{c.user}</span>
+              <div className="flex justify-between items-start mb-1">
+                <span className="font-bold text-[10px] text-gray-500">{c.user}</span>
+                {onDeleteComment && (
+                  <button 
+                    onClick={() => onDeleteComment(i)} 
+                    className="text-gray-400 hover:text-rose-500 transition-colors p-0.5 rounded"
+                    title="Delete comment"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
               {c.text}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Live Cursors + Off-screen Indicators */}
+      {peers.map(peer => {
+        if (!peer.cursor) return null;
+        const idleMs = now - (peer.cursor.lastMove || 0);
+        if (idleMs > 30000) return null;
+        const opacity = idleMs > 5000 ? 0.3 : 1;
+        const pt = editor.pageToViewport({ x: peer.cursor.x, y: peer.cursor.y });
+        const inView = pt.x >= 0 && pt.x <= viewport.w && pt.y >= 0 && pt.y <= viewport.h;
+        const label = peer.name || 'Guest';
+
+        if (inView) {
+          return (
+            <div
+              key={`cursor-${peer.clientId}`}
+              className="absolute pointer-events-none"
+              style={{ transform: `translate(${pt.x}px, ${pt.y}px)`, opacity }}
+            >
+              <div 
+                className="absolute w-2.5 h-2.5 rounded-full shadow" 
+                style={{ backgroundColor: peer.color, transform: 'translate(-50%, -50%)' }} 
+              />
+              <div 
+                className="absolute top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] rounded bg-white/90 border border-black/10 text-slate-800 shadow whitespace-nowrap"
+              >
+                {label}
+              </div>
+            </div>
+          );
+        }
+
+        const dx = pt.x - center.x;
+        const dy = pt.y - center.y;
+        const angle = Math.atan2(dy, dx);
+        const radiusX = Math.max(0, center.x - edgePadding);
+        const radiusY = Math.max(0, center.y - edgePadding);
+        const edgeX = center.x + Math.cos(angle) * radiusX;
+        const edgeY = center.y + Math.sin(angle) * radiusY;
+
+        return (
+          <div
+            key={`cursor-off-${peer.clientId}`}
+            className="absolute pointer-events-none"
+            style={{ transform: `translate(${edgeX}px, ${edgeY}px)`, opacity }}
+          >
+            <div className="absolute" style={{ transform: 'translate(-50%, -50%)' }}>
+              <div className="relative">
+                <div className="w-7 h-7 rounded-full border-2 border-white shadow text-[10px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: peer.color }}>
+                  {label[0]?.toUpperCase() || '?'}
+                </div>
+                <div
+                  className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-x-[4px] border-x-transparent border-b-[6px]"
+                  style={{ borderBottomColor: peer.color, transform: `translate(-50%, -50%) rotate(${angle * 57.2958 + 90}deg)` }}
+                />
+              </div>
             </div>
           </div>
         );
@@ -135,19 +237,56 @@ export default function WhiteboardRoom() {
   const [newCommentText, setNewCommentText] = useState('');
   const [activeColor, setActiveColor] = useState('blue');
   const [activeTool, setActiveTool] = useState('draw');
+  const [penPresets, setPenPresets] = useState([
+    { id: 'blue', tl: 'blue', hex: '#3b82f6' },
+    { id: 'red', tl: 'red', hex: '#ef4444' },
+    { id: 'green', tl: 'green', hex: '#22c55e' }
+  ]);
+  const presetRefs = useRef([]);
   const [hoveredTool, setHoveredTool] = useState(null);
   const [showTimerPicker, setShowTimerPicker] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isSpotlighting, setIsSpotlighting] = useState(false);
   const [myVotes, setMyVotes] = useState({}); // { shapeId: true } for current user's votes
+  const [followUserId, setFollowUserId] = useState(null);
+  const [presenceTick, setPresenceTick] = useState(Date.now());
+  const [editorReady, setEditorReady] = useState(false);
   const spotlightTimerRef = useRef(null);
   const spotlightIntervalRef = useRef(null);
+  const followUserIdRef = useRef(null);
+  const isApplyingFollowRef = useRef(false);
+  const cursorRafRef = useRef(null);
+  const lastPointerRef = useRef({ screenX: 0, screenY: 0, viewportX: 0, viewportY: 0, active: false });
+  const cameraBroadcastRef = useRef(null);
+  const toolbarRef = useRef(null);
   const navigate = useNavigate();
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+
+  useEffect(() => {
+    followUserIdRef.current = followUserId;
+  }, [followUserId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setPresenceTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target)) {
+        setHoveredTool(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleToolSelect = (tool) => {
     setActiveTool(tool);
     if (editorRef.current) {
+      if (tool !== 'select' && tool !== 'eraser' && tool !== 'hand') {
+        editorRef.current.selectNone();
+      }
       editorRef.current.setCurrentTool(tool);
       editorRef.current.updateInstanceState({ isToolLocked: true });
     }
@@ -156,17 +295,44 @@ export default function WhiteboardRoom() {
   const handleUndo = () => editorRef.current?.undo();
   const handleRedo = () => editorRef.current?.redo();
   const [zoom, setZoom] = useState(1);
+  const canEdit = role === 'editor';
+  const canComment = role !== 'viewer';
+  const cameraStorageKey = boardId ? `board-camera:${boardId}` : null;
 
   // ── Fetch board metadata (title, isPublic, etc.) ─────────────────────────
   useEffect(() => {
     if (!boardId) return;
     fetch(`${BACKEND_URL}/boards/${boardId}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) {
+          const errData = await r.json().catch(() => ({}));
+          throw new Error(errData.error || 'Board not found');
+        }
+        return r.json();
+      })
       .then(data => {
         setBoard(data);
         setTitleInput(data.title || '');
+        const token = localStorage.getItem('token');
         const userData = JSON.parse(localStorage.getItem('userData') || '{}');
         const email = userData.email;
+
+        // If private, check access immediately before rendering
+        if (!data.isPublic) {
+          if (!token) {
+            toast.error("Please login to access this board.");
+            navigate('/login');
+            return;
+          }
+          const isOwner = data.owner === email;
+          const isCollab = data.collaborators?.some(c => c.email === email);
+          if (!isOwner && !isCollab) {
+            toast.error("You don't have access to this private board.");
+            navigate('/dashboard');
+            return;
+          }
+        }
+
         if (data.owner === email) {
           setRole('editor');
         } else {
@@ -178,8 +344,91 @@ export default function WhiteboardRoom() {
           }
         }
       })
-      .catch(console.error);
-  }, [boardId]);
+      .catch(err => {
+        console.error(err);
+        toast.error(err.message || "Board not found");
+        navigate('/dashboard');
+      });
+  }, [boardId, navigate]);
+
+  const persistCamera = useCallback((camera) => {
+    if (!cameraStorageKey || !camera) return;
+    try {
+      localStorage.setItem(cameraStorageKey, JSON.stringify(camera));
+    } catch (_) {
+      // Ignore storage failures (private mode, quota, etc.)
+    }
+  }, [cameraStorageKey]);
+
+  const restoreCamera = useCallback((editor) => {
+    if (!cameraStorageKey || !editor) return;
+    const raw = localStorage.getItem(cameraStorageKey);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw);
+      if (typeof saved?.x === 'number' && typeof saved?.y === 'number' && typeof saved?.z === 'number') {
+        editor.setCamera(saved, { immediate: true });
+        setZoom(saved.z);
+      }
+    } catch (_) {
+      // Ignore invalid data
+    }
+  }, [cameraStorageKey]);
+
+  const stopFollowing = useCallback(() => {
+    setFollowUserId(null);
+    if (editorRef.current) {
+      editorRef.current.setCameraOptions({ isLocked: false });
+    }
+  }, []);
+
+  const toggleFollow = useCallback((clientId) => {
+    setFollowUserId(prev => prev === clientId ? null : clientId);
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const viewport = editor.getViewportScreenBounds();
+    lastPointerRef.current = {
+      screenX: e.clientX,
+      screenY: e.clientY,
+      viewportX: e.clientX - viewport.x,
+      viewportY: e.clientY - viewport.y,
+      active: true,
+    };
+
+    if (!provider) return;
+    if (cursorRafRef.current) return;
+    cursorRafRef.current = requestAnimationFrame(() => {
+      cursorRafRef.current = null;
+      if (!editorRef.current) return;
+      const pt = editorRef.current.screenToPage({ x: lastPointerRef.current.screenX, y: lastPointerRef.current.screenY });
+      provider.awareness.setLocalStateField('cursor', {
+        x: pt.x,
+        y: pt.y,
+        lastMove: Date.now(),
+      });
+    });
+  }, [provider]);
+
+  const handlePointerLeave = useCallback(() => {
+    lastPointerRef.current.active = false;
+    if (provider) provider.awareness.setLocalStateField('cursor', null);
+  }, [provider]);
+
+  const handleLocalInteraction = useCallback(() => {
+    if (followUserIdRef.current) stopFollowing();
+  }, [stopFollowing]);
+
+  const getZoomPoint = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return null;
+    if (lastPointerRef.current.active) {
+      return { x: lastPointerRef.current.viewportX, y: lastPointerRef.current.viewportY };
+    }
+    return editor.getViewportScreenCenter();
+  }, []);
 
   // ── Presence: read awareness states → peers list ─────────────────────────
   useEffect(() => {
@@ -197,7 +446,12 @@ export default function WhiteboardRoom() {
       let shouldFollow = null;
       provider.awareness.getStates().forEach((state, clientId) => {
         if (clientId !== provider.awareness.clientID && state?.user) {
-          states.push({ clientId, ...state.user });
+          states.push({
+            clientId,
+            ...state.user,
+            cursor: state.cursor,
+            camera: state.camera
+          });
         }
         if (clientId !== provider.awareness.clientID && state?.followMe) {
           if (!shouldFollow || state.followMe.time > shouldFollow.time) {
@@ -206,20 +460,130 @@ export default function WhiteboardRoom() {
         }
       });
       setPeers(states);
-
-      if (shouldFollow && Date.now() - shouldFollow.time < 5000) {
+      // If a presenter is broadcasting via followMe, apply presenter camera (transient)
+      if (shouldFollow) {
+        if (followUserIdRef.current) setFollowUserId(null);
         if (editorRef.current && shouldFollow.camera) {
           editorRef.current.setCameraOptions({ isLocked: true });
-          editorRef.current.setCamera(shouldFollow.camera);
+          editorRef.current.setCamera(shouldFollow.camera, { animation: { duration: 200 } });
         }
-      } else if (editorRef.current) {
+        return;
+      }
+
+      // If we're actively following a specific peer (clicked avatar), track their camera
+      if (followUserIdRef.current && editorRef.current) {
+        const target = states.find(s => s.clientId === followUserIdRef.current);
+        if (target && target.camera) {
+          const age = Date.now() - (target.camera.time || 0);
+          // Only apply recent camera updates (10s window)
+          if (age < 10000) {
+            try {
+              isApplyingFollowRef.current = true;
+              editorRef.current.setCameraOptions({ isLocked: true });
+              editorRef.current.setCamera(target.camera);
+              setZoom(editorRef.current.getCamera().z);
+            } finally {
+              isApplyingFollowRef.current = false;
+            }
+            return;
+          }
+        }
+        // If no recent camera updates from the followed peer, keep the camera locked
+        // until they broadcast again or the user cancels following.
+        return;
+      }
+
+      // Default: unlock camera for local control when nobody is being followed
+      if (editorRef.current && !followUserIdRef.current) {
         editorRef.current.setCameraOptions({ isLocked: false });
       }
     };
 
     provider.awareness.on('change', updatePeers);
     return () => provider.awareness.off('change', updatePeers);
+  }, [provider, role]);
+
+  useEffect(() => {
+    if (!provider) return;
+    const handleVisibility = () => {
+      if (document.hidden) {
+        provider.awareness.setLocalStateField('cursor', null);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [provider]);
+
+  useEffect(() => {
+    if (!followUserId || !editorRef.current) return;
+    const target = peers.find(p => p.clientId === followUserId);
+    if (!target || !target.camera) {
+      stopFollowing();
+      return;
+    }
+
+    const editor = editorRef.current;
+    isApplyingFollowRef.current = true;
+    editor.setCameraOptions({ isLocked: true });
+    editor.setCamera({ x: target.camera.x, y: target.camera.y, z: target.camera.z }, { immediate: true });
+    setZoom(editor.getCamera().z);
+    isApplyingFollowRef.current = false;
+  }, [followUserId, peers, stopFollowing]);
+
+  useEffect(() => {
+    if (!editorReady || !provider || !editorRef.current) return;
+    const editor = editorRef.current;
+
+    const pushCamera = () => {
+      if (!provider || !editorRef.current) return;
+      const cam = editorRef.current.getCamera();
+      provider.awareness.setLocalStateField('camera', {
+        x: cam.x,
+        y: cam.y,
+        z: cam.z,
+        time: Date.now(),
+      });
+    };
+
+    const startBroadcast = () => {
+      if (cameraBroadcastRef.current) return;
+      pushCamera();
+      cameraBroadcastRef.current = setInterval(pushCamera, 200);
+    };
+
+    const stopBroadcast = () => {
+      if (cameraBroadcastRef.current) {
+        clearInterval(cameraBroadcastRef.current);
+        cameraBroadcastRef.current = null;
+      }
+    };
+
+    const handleCameraStart = () => {
+      if (isApplyingFollowRef.current || followUserIdRef.current) return;
+      startBroadcast();
+    };
+
+    const handleCameraEnd = () => {
+      if (isApplyingFollowRef.current || followUserIdRef.current) return;
+      stopBroadcast();
+      const cam = editor.getCamera();
+      persistCamera(cam);
+      setZoom(cam.z);
+      pushCamera();
+    };
+
+    const unsubStart = editor.performance.on('camera-start', handleCameraStart);
+    const unsubEnd = editor.performance.on('camera-end', handleCameraEnd);
+
+    pushCamera();
+    persistCamera(editor.getCamera());
+
+    return () => {
+      unsubStart();
+      unsubEnd();
+      stopBroadcast();
+    };
+  }, [editorReady, provider, persistCamera]);
 
   // ── Bind tldraw store ↔ Yjs Y.Map (incremental, debounced) ───────────────
   // Called once the tldraw editor mounts and Y.Doc is ready.
@@ -463,26 +827,47 @@ export default function WhiteboardRoom() {
     const shapeIds = editor.getSelectedShapeIds().length > 0 
       ? editor.getSelectedShapeIds() 
       : Array.from(editor.getCurrentPageShapeIds());
-    if (shapeIds.length === 0) return alert('No shapes to export');
+    if (shapeIds.length === 0) {
+      toast.error('No shapes to export');
+      return;
+    }
 
     try {
-      import('@tldraw/tldraw').then(async ({ exportToBlob }) => {
-        const blob = await exportToBlob({
-          editor,
-          ids: shapeIds,
-          format: format,
-          opts: { background: true }
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `board-export.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setShowExport(false);
+      const toastId = toast.loading(`Exporting as ${format.toUpperCase()}...`);
+      await exportAs(editor, shapeIds, {
+        format,
+        name: board?.title || 'board-export',
       });
+      toast.dismiss(toastId);
+      toast.success(`Exported as ${format.toUpperCase()}`);
+      setShowExport(false);
     } catch (err) {
       console.error('Export failed', err);
+      toast.error('Export failed — ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current;
+    const shapeIds = Array.from(editor.getCurrentPageShapeIds());
+    if (shapeIds.length === 0) {
+      toast.error('No shapes to save');
+      return;
+    }
+
+    try {
+      const toastId = toast.loading('Saving snapshot...');
+      await exportAs(editor, shapeIds, {
+        format: 'png',
+        name: `${board?.title || 'board'}-snapshot-${new Date().toISOString().slice(0,10)}`,
+      });
+      toast.dismiss(toastId);
+      toast.success('Snapshot saved!');
+      setShowExport(false);
+    } catch (err) {
+      console.error('Snapshot failed', err);
+      toast.error('Snapshot failed — ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -604,6 +989,30 @@ export default function WhiteboardRoom() {
     });
   };
 
+  const toggleVoteDirectly = useCallback((id) => {
+    if (!ydoc) return;
+    const yVotes = ydoc.getMap('votes');
+    ydoc.transact(() => {
+      const newMyVotes = { ...myVotes };
+      if (newMyVotes[id]) {
+        const current = yVotes.get(id) || 0;
+        yVotes.set(id, Math.max(0, current - 1));
+        delete newMyVotes[id];
+      } else {
+        const current = yVotes.get(id) || 0;
+        yVotes.set(id, current + 1);
+        newMyVotes[id] = true;
+      }
+      setMyVotes(newMyVotes);
+    });
+  }, [ydoc, myVotes]);
+
+  const deleteComment = useCallback((index) => {
+    if (!ydoc) return;
+    const yComments = ydoc.getArray('comments');
+    yComments.delete(index, 1);
+  }, [ydoc]);
+
   const handleCanvasClick = () => {
     // Close menus when clicking canvas
     setShowTimerPicker(false);
@@ -612,14 +1021,14 @@ export default function WhiteboardRoom() {
   };
 
   const handleCommentOverlayClick = (e) => {
-    if (!commenting || !editorRef.current || newCommentPos) return;
+    if (!canComment || !commenting || !editorRef.current || newCommentPos) return;
     e.stopPropagation();
     const pt = editorRef.current.screenToPage({ x: e.clientX, y: e.clientY });
     setNewCommentPos({ screenX: e.clientX, screenY: e.clientY, pageX: pt.x, pageY: pt.y });
   };
 
   const submitComment = () => {
-    if (!newCommentText.trim() || !ydoc || !newCommentPos) {
+    if (!canComment || !newCommentText.trim() || !ydoc || !newCommentPos) {
       setNewCommentPos(null);
       return;
     }
@@ -634,6 +1043,14 @@ export default function WhiteboardRoom() {
     setCommenting(false);
     toast.success('Comment added');
   };
+
+  useEffect(() => {
+    if (!canComment && commenting) {
+      setCommenting(false);
+      setNewCommentPos(null);
+      setNewCommentText('');
+    }
+  }, [canComment, commenting]);
 
   // Escape key to cancel comment mode
   useEffect(() => {
@@ -663,10 +1080,8 @@ export default function WhiteboardRoom() {
     const editor = editorRef.current;
     if (!editor) return;
     if (prop === 'color') {
-      editor.setStyleForSelectedShapes(DefaultColorStyle, value);
       editor.setStyleForNextShapes(DefaultColorStyle, value);
     } else if (prop === 'size') {
-      editor.setStyleForSelectedShapes(DefaultSizeStyle, value);
       editor.setStyleForNextShapes(DefaultSizeStyle, value);
     }
   };
@@ -680,7 +1095,6 @@ export default function WhiteboardRoom() {
     handleToolSelect('geo');
     const editor = editorRef.current;
     if (!editor) return;
-    editor.setStyleForSelectedShapes(GeoShapeGeoStyle, type);
     editor.setStyleForNextShapes(GeoShapeGeoStyle, type);
   };
 
@@ -688,7 +1102,7 @@ export default function WhiteboardRoom() {
     const editor = editorRef.current;
     if (!editor) return;
     const camera = editor.getCamera();
-    const clamped = clamp(nextZoom, 0.2, 4);
+    const clamped = clamp(nextZoom, ZOOM_MIN, ZOOM_MAX);
     editor.setCamera({ ...camera, z: clamped });
     setZoom(clamped);
   };
@@ -696,13 +1110,32 @@ export default function WhiteboardRoom() {
   const handleZoomIn = () => {
     const editor = editorRef.current;
     if (!editor) return;
-    setZoomLevel(editor.getCamera().z * 1.1);
+    const point = getZoomPoint();
+    if (point) editor.zoomIn(point);
+    setZoom(editor.getCamera().z);
   };
 
   const handleZoomOut = () => {
     const editor = editorRef.current;
     if (!editor) return;
-    setZoomLevel(editor.getCamera().z * 0.9);
+    const point = getZoomPoint();
+    if (point) editor.zoomOut(point);
+    setZoom(editor.getCamera().z);
+  };
+
+  const handleResetZoom = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const point = getZoomPoint();
+    if (point) editor.resetZoom(point);
+    setZoom(editor.getCamera().z);
+  };
+
+  const handleZoomToFit = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.zoomToFit({ animation: { duration: 180 } });
+    setZoom(editor.getCamera().z);
   };
 
   const renderColorFlyout = () => (
@@ -718,16 +1151,6 @@ export default function WhiteboardRoom() {
             />
           ))}
         </div>
-        <button className="flex items-center justify-center gap-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-medium rounded-lg">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M8 20h12V8"/></svg>
-          Stack
-        </button>
-        <button className="flex items-center justify-center w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-medium rounded-lg">
-          Templates
-        </button>
-        <button className="flex items-center justify-center w-full py-1 text-slate-800 hover:text-slate-900 text-sm font-medium bg-transparent">
-          Bulk mode
-        </button>
       </div>
     </div>
   );
@@ -794,6 +1217,20 @@ export default function WhiteboardRoom() {
     <div className={boardShellClass}>
       {/* ── Top Center Floating Box: Logo, Export & Title ─────────────────────── */}
       <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-2xl px-3 py-2 ${UI.surface}`}>
+        {/* Home / Back to Dashboard button */}
+        <button
+          onClick={() => navigate('/dashboard')}
+          className={`${UI.iconBtn} group relative`}
+          title="Back to Dashboard"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Home</span>
+        </button>
+
+        <div className="h-5 w-px bg-gray-200"></div>
+
         <div className="flex items-center gap-2">
           <span className={UI.logo}>board</span>
           <span className={UI.lite}>lite</span>
@@ -812,7 +1249,7 @@ export default function WhiteboardRoom() {
               <button onClick={() => handleExport('png')} className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-black/5">Export as PNG</button>
               <button onClick={() => handleExport('svg')} className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-black/5">Export as SVG</button>
               <div className="border-t border-gray-200 my-1"></div>
-              <button onClick={() => { alert('Snapshot saved (Mock)'); setShowExport(false); }} className="w-full text-left px-4 py-2 text-xs text-blue-600 hover:bg-black/5">Save Snapshot</button>
+              <button onClick={handleSaveSnapshot} className="w-full text-left px-4 py-2 text-xs text-blue-600 hover:bg-black/5">Save Snapshot</button>
             </div>
           )}
         </div>
@@ -862,16 +1299,18 @@ export default function WhiteboardRoom() {
           </button>
 
           {/* Comment button */}
-          <button 
-            onClick={() => setCommenting(!commenting)} 
-            className={`${UI.iconBtn} group relative ${commenting ? 'bg-amber-100 text-amber-700 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : ''}`}
-            title="Add a comment pin"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{commenting ? 'Cancel' : 'Comment'}</span>
-          </button>
+          {canComment && (
+            <button 
+              onClick={() => setCommenting(!commenting)} 
+              className={`${UI.iconBtn} group relative ${commenting ? 'bg-amber-100 text-amber-700 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : ''}`}
+              title="Add a comment pin"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{commenting ? 'Cancel' : 'Comment'}</span>
+            </button>
+          )}
 
           {/* Timer */}
           <div className="relative">
@@ -953,14 +1392,15 @@ export default function WhiteboardRoom() {
         <div className="flex items-center gap-1.5">
           <div className="flex items-center -space-x-1.5">
             {peers.slice(0, window.innerWidth < 640 ? 2 : peers.length).map(peer => (
-              <div
+              <button
                 key={peer.clientId}
-                title={peer.name}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white shadow-sm transition-transform hover:scale-110 hover:z-10"
+                title={followUserId === peer.clientId ? `Following ${peer.name}` : `Follow ${peer.name}`}
+                onClick={() => toggleFollow(peer.clientId)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white shadow-sm transition-transform hover:scale-110 hover:z-10 ${followUserId === peer.clientId ? 'ring-2 ring-blue-400' : ''}`}
                 style={{ backgroundColor: peer.color }}
               >
                 {peer.name?.[0]?.toUpperCase() || '?'}
-              </div>
+              </button>
             ))}
           </div>
 
@@ -1021,28 +1461,46 @@ export default function WhiteboardRoom() {
       </div>
 
       {/* ── tldraw canvas (full screen) ─────────── */}
-      <div className={tldrawHostClass} onClick={handleCanvasClick}>
+      <style>{`
+        .tlui-layout__right {
+          top: 80px !important;
+          right: 50% !important;
+          transform: translateX(50%) !important;
+          bottom: auto !important;
+          height: max-content !important;
+          z-index: 50 !important;
+        }
+      `}</style>
+      <div
+        className={tldrawHostClass}
+        onClick={handleCanvasClick}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handleLocalInteraction}
+        onWheel={handleLocalInteraction}
+      >
         <Tldraw
           key={ydoc ? 'tldraw-bound' : 'tldraw-init'}
           onMount={(editor) => {
             editorRef.current = editor;
+            editor.setCameraOptions({
+              zoomSteps: [ZOOM_MIN, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, ZOOM_MAX],
+            });
+            editor.setCamera(editor.getCamera());
+            restoreCamera(editor);
             setZoom(editor.getCamera().z);
             bindStore(editor);
             editor.updateInstanceState({ isGridMode: true });
+            setEditorReady(true);
           }}
-          isReadonly={role === 'viewer'}
+          isReadonly={!canEdit}
           components={{
             Grid: CustomGrid,
-            PageMenu: () => null,
-            ZoomMenu: () => null,
-            NavigationPanel: () => null,
-            HelpMenu: () => null,
-            StylePanel: () => null,
             Toolbar: () => null,
             QuickActions: () => null,
           }}
         >
-          <Overlays editor={editorRef.current} votes={votes} comments={comments} />
+          <Overlays editor={editorRef.current} votes={votes} comments={comments} peers={peers} presenceTick={presenceTick} myVotes={myVotes} onToggleVote={toggleVoteDirectly} onDeleteComment={deleteComment} />
         </Tldraw>
       </div>
 
@@ -1061,59 +1519,124 @@ export default function WhiteboardRoom() {
       )}
 
       {/* Custom Left Toolbar */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">
+      <div ref={toolbarRef} className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">
         {/* Main Tools Box */}
         <div className={`rounded-[20px] p-2 flex flex-col gap-2 ${UI.surfaceSolid}`}>
           
-          {/* Pen Tool */}
-          <div 
-            className="relative group"
-            onMouseEnter={() => setHoveredTool('pen')}
-            onMouseLeave={() => setHoveredTool(null)}
+          {/* Select Tool */}
+          <button 
+            onClick={() => { handleToolSelect('select'); setHoveredTool(null); }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'select' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Select (Escape)"
           >
+             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>
+          </button>
+
+          {/* Hand Tool */}
+          <button 
+            onClick={() => { handleToolSelect('hand'); setHoveredTool(null); }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'hand' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Hand (Space)"
+          >
+             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M18 11v5a8 8 0 0 1-16 0v-5a2 2 0 0 1 2-2v0a2 2 0 0 1 2 2v0"/><path d="M6 14v-1a2 2 0 0 1 2-2v0a2 2 0 0 1 2 2v0"/></svg>
+          </button>
+
+          {/* Pen Tool */}
+          <div className="relative group">
             <button 
-              onClick={() => handleToolSelect('draw')}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'draw' || activeTool === 'highlight' || activeTool === 'eraser' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => {
+                handleToolSelect('draw');
+                setHoveredTool(prev => prev === 'pen' ? null : 'pen');
+              }}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'draw' || activeTool === 'highlight' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+              title="Pen (P)"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
             </button>
             {hoveredTool === 'pen' && (
               <div className="absolute left-full top-0 pl-3 z-50">
-                <div className={`rounded-[20px] p-2 flex flex-col gap-2 ${UI.surfaceSolid} w-14 items-center shadow-xl`}>
-                  <button onClick={() => handleToolSelect('draw')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeTool === 'draw' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                  </button>
-                  <button onClick={() => handleToolSelect('highlight')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeTool === 'highlight' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path></svg>
-                  </button>
-                  <button onClick={() => handleToolSelect('eraser')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeTool === 'eraser' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}>
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20H20V20Z"></path></svg>
-                  </button>
-                  <button onClick={() => handleToolSelect('select')} className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeTool === 'select' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}>
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4"><circle cx="12" cy="12" r="10"/></svg>
-                  </button>
-                  <div className="w-8 h-px bg-slate-200 my-1" />
-                  <button onClick={() => applyEditorStyle('size', 's')} className="w-10 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg"><div className="w-1.5 h-1.5 rounded-full bg-slate-800" /></button>
-                  <button onClick={() => applyEditorStyle('size', 'm')} className="w-10 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg"><div className="w-2.5 h-2.5 rounded-full bg-slate-800" /></button>
-                  <button onClick={() => applyEditorStyle('size', 'l')} className="w-10 h-8 flex items-center justify-center hover:bg-slate-100 rounded-lg"><div className="w-4 h-4 rounded-full bg-slate-800" /></button>
-                  <div className="w-8 h-px bg-slate-200 my-1" />
-                  <button onClick={() => handleColorSelect({ id: 'blue', tl: 'blue' })} className="w-8 h-8 rounded-full border-2 border-indigo-500 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500" /></button>
-                  <button onClick={() => handleColorSelect({ id: 'red', tl: 'red' })} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center mt-1 hover:border-slate-400 transition-colors"><div className="w-2 h-2 rounded-full bg-red-400" /></button>
-                  <button onClick={() => handleColorSelect({ id: 'green', tl: 'green' })} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center mt-1 hover:border-slate-400 transition-colors"><div className="w-4 h-4 rounded-full bg-green-500" /></button>
+                <div className={`rounded-[20px] py-4 px-2 flex flex-col gap-3 ${UI.surfaceSolid} w-14 items-center shadow-xl border border-slate-100`}>
+                  {/* Sizes */}
+                  <div className="flex flex-col gap-3 items-center">
+                    <button onClick={() => applyEditorStyle('size', 's')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-1.5 h-1.5 rounded-full bg-slate-800" /></button>
+                    <button onClick={() => applyEditorStyle('size', 'm')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-2.5 h-2.5 rounded-full bg-slate-800" /></button>
+                    <button onClick={() => applyEditorStyle('size', 'l')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-4 h-4 rounded-full bg-slate-800" /></button>
+                  </div>
+                  
+                  <div className="w-6 h-px bg-slate-200/60 my-1" />
+                  
+                  {/* Colors */}
+                  <div className="flex flex-col gap-2 items-center">
+                    {penPresets.map((c, i) => (
+                      <div key={c.id + i} className="relative">
+                        <button 
+                          onClick={() => handleColorSelect(c)} 
+                          onDoubleClick={() => presetRefs.current[i]?.click()}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 border-2 ${activeColor === c.id ? 'border-blue-500' : 'border-transparent'}`}
+                          style={{ borderColor: activeColor === c.id ? c.hex : 'transparent' }}
+                          title={`${c.tl} (Double-click to change)`}
+                        >
+                           <div className="w-6 h-6 rounded-full" style={{ backgroundColor: c.hex }} />
+                        </button>
+                        <input 
+                          type="color" 
+                          ref={el => presetRefs.current[i] = el}
+                          className="opacity-0 w-0 h-0 absolute"
+                          onChange={(e) => {
+                             const hex = e.target.value;
+                             const closest = getClosestTldrawColor(hex);
+                             const newPresets = [...penPresets];
+                             newPresets[i] = closest;
+                             setPenPresets(newPresets);
+                             handleColorSelect(closest);
+                          }}
+                        />
+                      </div>
+                    ))}
+                    
+                    {/* Rainbow Canva-style color picker button */}
+                    <label 
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 shadow-sm border border-white mt-1 relative"
+                      style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }}
+                      title="Custom Color (Snaps to nearest valid)"
+                    >
+                      <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-inner">
+                        <svg className="w-3.5 h-3.5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                      </div>
+                      {!penPresets.some(p => p.id === activeColor) && (
+                        <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: GRID_COLORS.find(c => c.id === activeColor)?.hex || '#000' }} />
+                      )}
+                      <input 
+                        type="color" 
+                        className="opacity-0 w-0 h-0 absolute"
+                        onChange={(e) => {
+                           const hex = e.target.value;
+                           const closest = getClosestTldrawColor(hex);
+                           handleColorSelect(closest);
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Shapes Tool */}
-          <div 
-            className="relative group"
-            onMouseEnter={() => setHoveredTool('shapes')}
-            onMouseLeave={() => setHoveredTool(null)}
+          {/* Eraser Tool */}
+          <button 
+            onClick={() => { handleToolSelect('eraser'); setHoveredTool(null); }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'eraser' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Eraser (E)"
           >
+             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20H20V20Z"></path></svg>
+          </button>
+
+          {/* Shapes Tool */}
+          <div className="relative group">
             <button 
-              onClick={() => handleToolSelect('geo')}
+              onClick={() => { handleToolSelect('geo'); setHoveredTool(prev => prev === 'shapes' ? null : 'shapes'); }}
               className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(activeTool === 'geo' || activeTool === 'line' || activeTool === 'arrow') ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+              title="Shapes"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><circle cx="17.5" cy="6.5" r="3.5"/><polygon points="6.5,14 10,21 3,21" strokeLinejoin="round"/><path d="M14 14l6 6m0-6v6h-6"/></svg>
             </button>
@@ -1121,14 +1644,11 @@ export default function WhiteboardRoom() {
           </div>
 
           {/* Sticky Note */}
-          <div 
-            className="relative group"
-            onMouseEnter={() => setHoveredTool('note')}
-            onMouseLeave={() => setHoveredTool(null)}
-          >
+          <div className="relative group">
             <button 
-              onClick={() => handleToolSelect('note')}
+              onClick={() => { handleToolSelect('note'); setHoveredTool(prev => prev === 'note' ? null : 'note'); }}
               className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'note' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+              title="Sticky Note"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 15l-6 6H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10z"/><path d="M19 15l-6 6v-6h6z"/></svg>
             </button>
@@ -1137,18 +1657,13 @@ export default function WhiteboardRoom() {
 
           {/* Text Tool */}
           <button 
-            onClick={() => handleToolSelect('text')}
+            onClick={() => { handleToolSelect('text'); setHoveredTool(null); }}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${activeTool === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
+            title="Text (T)"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>
           </button>
 
-
-
-          {/* More */}
-          <button className={`w-10 h-10 mt-1 rounded-xl flex items-center justify-center transition-all text-slate-700 hover:bg-slate-100`}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 13l5 5 5-5"/><path d="M7 6l5 5 5-5"/></svg>
-          </button>
         </div>
 
         {/* Undo/Redo Box */}
