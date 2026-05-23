@@ -236,6 +236,7 @@ export default function WhiteboardRoom() {
   const [newCommentPos, setNewCommentPos] = useState(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [activeColor, setActiveColor] = useState('blue');
+  const [activeSize, setActiveSize] = useState('m');
   const [activeTool, setActiveTool] = useState('draw');
   const [penPresets, setPenPresets] = useState([
     { id: 'blue', tl: 'blue', hex: '#3b82f6' },
@@ -244,6 +245,7 @@ export default function WhiteboardRoom() {
   ]);
   const presetRefs = useRef([]);
   const [hoveredTool, setHoveredTool] = useState(null);
+  const [showFullPalette, setShowFullPalette] = useState(false);
   const [showTimerPicker, setShowTimerPicker] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isSpotlighting, setIsSpotlighting] = useState(false);
@@ -1081,14 +1083,21 @@ export default function WhiteboardRoom() {
     if (!editor) return;
     if (prop === 'color') {
       editor.setStyleForNextShapes(DefaultColorStyle, value);
+      editor.setStyleForSelectedShapes(DefaultColorStyle, value);
     } else if (prop === 'size') {
       editor.setStyleForNextShapes(DefaultSizeStyle, value);
+      editor.setStyleForSelectedShapes(DefaultSizeStyle, value);
     }
   };
 
   const handleColorSelect = (swatch) => {
     setActiveColor(swatch.id);
     applyEditorStyle('color', swatch.tl);
+  };
+
+  const handleSizeSelect = (size) => {
+    setActiveSize(size);
+    applyEditorStyle('size', size);
   };
 
   const handleShapeSelect = (type) => {
@@ -1283,71 +1292,64 @@ export default function WhiteboardRoom() {
 
       {/* ── Top Right Floating Box: Tools & Share ─────────────────────── */}
       <div className={`absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-2xl pl-2.5 pr-1.5 py-1.5 ${UI.surface}`}>
-        
         {/* Tool buttons grouped */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {/* Vote button */}
           <button 
             onClick={handleVote} 
-            className={`${UI.iconBtn} group relative`} 
-            title="Vote on selected shapes (toggle)"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all text-slate-700 hover:bg-slate-100`} 
+            title="Vote on selected shapes"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
             </svg>
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Vote</span>
           </button>
 
           {/* Comment button */}
           {canComment && (
             <button 
               onClick={() => setCommenting(!commenting)} 
-              className={`${UI.iconBtn} group relative ${commenting ? 'bg-amber-100 text-amber-700 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : ''}`}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${commenting ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'text-slate-700 hover:bg-slate-100'}`}
               title="Add a comment pin"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{commenting ? 'Cancel' : 'Comment'}</span>
             </button>
           )}
 
           {/* Timer */}
           <div className="relative">
             {timeLeft ? (
-              <div className="flex items-center gap-1">
-                <div className={`${UI.timer} font-mono flex items-center gap-1.5 ${timerExpired ? `${UI.timerExpired} animate-pulse` : ''}`}>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-                  </svg>
+              <div className="w-9 h-9 flex flex-col items-center justify-center relative bg-indigo-50 rounded-xl">
+                <div className={`text-[9px] font-mono font-bold ${timerExpired ? 'text-rose-600 animate-pulse' : 'text-indigo-700'}`}>
                   {timeLeft}
                 </div>
                 {role === 'editor' && (
                   <button 
                     onClick={cancelTimer} 
-                    className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200 transition-colors"
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center hover:bg-rose-200"
                     title="Cancel timer"
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
                   </button>
                 )}
               </div>
             ) : role === 'editor' ? (
               <button 
                 onClick={() => setShowTimerPicker(!showTimerPicker)} 
-                className={`${UI.iconBtn} group relative ${showTimerPicker ? UI.iconBtnActive : ''}`}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${showTimerPicker ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`}
                 title="Set a timer"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                 </svg>
-                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Timer</span>
               </button>
             ) : null}
 
             {/* Timer duration picker dropdown */}
             {showTimerPicker && (
-              <div className={`absolute right-0 top-full mt-2 w-36 rounded-xl py-1.5 z-50 ${UI.surfaceSolid}`}>
+              <div className={`absolute right-0 top-full mt-2 w-36 rounded-xl py-1.5 z-50 ${UI.surfaceSolid} border border-slate-100 shadow-xl`}>
                 <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Set Timer</p>
                 {[1, 3, 5, 10, 15, 30].map(m => (
                   <button 
@@ -1366,24 +1368,30 @@ export default function WhiteboardRoom() {
           {role === 'editor' && (
             <button 
               onClick={handleSpotlight} 
-              className={`${UI.iconBtn} group relative ${isSpotlighting ? 'bg-red-100 text-red-600 border-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]' : ''}`}
-              title={isSpotlighting ? 'Stop presenting (click to stop)' : 'Present — others follow your view'}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all relative ${isSpotlighting ? 'bg-red-100 text-red-600 border border-red-200' : 'text-slate-700 hover:bg-slate-100'}`}
+              title={isSpotlighting ? 'Stop presenting' : 'Present — others follow your view'}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
               </svg>
               {isSpotlighting && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="absolute top-0.5 right-0.5 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                 </span>
               )}
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">{isSpotlighting ? 'Stop' : 'Present'}</span>
             </button>
           )}
 
-          {/* AI button — unchanged per user request */}
-          <button id="ai-panel-btn" onClick={() => setShowAI(v => !v)} className={`${UI.iconBtn} text-sm ${showAI ? UI.iconBtnActive : ''}`} title="AI Assistant">✨</button>
+          {/* AI button */}
+          <button 
+            id="ai-panel-btn" 
+            onClick={() => setShowAI(v => !v)} 
+            className={`w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all ${showAI ? 'bg-indigo-100 text-indigo-600' : 'text-slate-700 hover:bg-slate-100'}`} 
+            title="AI Assistant"
+          >
+            ✨
+          </button>
         </div>
 
         <div className="h-6 w-px bg-slate-200/80 mx-0.5"></div>
@@ -1520,6 +1528,7 @@ export default function WhiteboardRoom() {
 
       {/* Custom Left Toolbar */}
       <div ref={toolbarRef} className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">
+
         {/* Main Tools Box */}
         <div className={`rounded-[20px] p-2 flex flex-col gap-2 ${UI.surfaceSolid}`}>
           
@@ -1555,67 +1564,66 @@ export default function WhiteboardRoom() {
             </button>
             {hoveredTool === 'pen' && (
               <div className="absolute left-full top-0 pl-3 z-50">
-                <div className={`rounded-[20px] py-4 px-2 flex flex-col gap-3 ${UI.surfaceSolid} w-14 items-center shadow-xl border border-slate-100`}>
+                <div className={`rounded-[20px] p-3 flex gap-3 items-center ${UI.surfaceSolid} w-max shadow-xl border border-slate-100`}>
                   {/* Sizes */}
-                  <div className="flex flex-col gap-3 items-center">
-                    <button onClick={() => applyEditorStyle('size', 's')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-1.5 h-1.5 rounded-full bg-slate-800" /></button>
-                    <button onClick={() => applyEditorStyle('size', 'm')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-2.5 h-2.5 rounded-full bg-slate-800" /></button>
-                    <button onClick={() => applyEditorStyle('size', 'l')} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-colors"><div className="w-4 h-4 rounded-full bg-slate-800" /></button>
+                  <div className="flex gap-1 items-center px-1">
+                    <button onClick={() => handleSizeSelect('s')} className={`w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-all ${activeSize === 's' ? 'bg-slate-100 shadow-inner ring-1 ring-slate-200' : ''}`} title="Small (2px)"><div className="w-[2px] h-[2px] rounded-full bg-slate-800" /></button>
+                    <button onClick={() => handleSizeSelect('m')} className={`w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-all ${activeSize === 'm' ? 'bg-slate-100 shadow-inner ring-1 ring-slate-200' : ''}`} title="Medium (3px)"><div className="w-[3px] h-[3px] rounded-full bg-slate-800" /></button>
+                    <button onClick={() => handleSizeSelect('l')} className={`w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-all ${activeSize === 'l' ? 'bg-slate-100 shadow-inner ring-1 ring-slate-200' : ''}`} title="Large (5px)"><div className="w-[5px] h-[5px] rounded-full bg-slate-800" /></button>
+                    <button onClick={() => handleSizeSelect('xl')} className={`w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-full transition-all ${activeSize === 'xl' ? 'bg-slate-100 shadow-inner ring-1 ring-slate-200' : ''}`} title="Extra Large (8px)"><div className="w-[8px] h-[8px] rounded-full bg-slate-800" /></button>
                   </div>
                   
-                  <div className="w-6 h-px bg-slate-200/60 my-1" />
+                  <div className="w-px h-6 bg-slate-200/60" />
                   
                   {/* Colors */}
-                  <div className="flex flex-col gap-2 items-center">
+                  <div className="flex gap-2 items-center relative">
                     {penPresets.map((c, i) => (
                       <div key={c.id + i} className="relative">
                         <button 
-                          onClick={() => handleColorSelect(c)} 
-                          onDoubleClick={() => presetRefs.current[i]?.click()}
+                          onClick={() => { handleColorSelect(c); setShowFullPalette(false); }} 
                           className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 border-2 ${activeColor === c.id ? 'border-blue-500' : 'border-transparent'}`}
                           style={{ borderColor: activeColor === c.id ? c.hex : 'transparent' }}
-                          title={`${c.tl} (Double-click to change)`}
+                          title={c.tl}
                         >
                            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: c.hex }} />
                         </button>
-                        <input 
-                          type="color" 
-                          ref={el => presetRefs.current[i] = el}
-                          className="opacity-0 w-0 h-0 absolute"
-                          onChange={(e) => {
-                             const hex = e.target.value;
-                             const closest = getClosestTldrawColor(hex);
-                             const newPresets = [...penPresets];
-                             newPresets[i] = closest;
-                             setPenPresets(newPresets);
-                             handleColorSelect(closest);
-                          }}
-                        />
                       </div>
                     ))}
                     
-                    {/* Rainbow Canva-style color picker button */}
-                    <label 
-                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 shadow-sm border border-white mt-1 relative"
-                      style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }}
-                      title="Custom Color (Snaps to nearest valid)"
+                    {/* Arrow Button */}
+                    <button 
+                      onClick={() => setShowFullPalette(p => !p)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer transition-all hover:bg-slate-100 text-slate-400"
+                      title="More Colors"
                     >
-                      <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-inner">
-                        <svg className="w-3.5 h-3.5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                      <svg className={`w-4 h-4 transition-transform duration-200 ${showFullPalette ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+
+                    {showFullPalette && (
+                      <div className="absolute left-1/2 top-full -translate-x-1/2 mt-4 z-50">
+                        <div className={`rounded-[20px] p-3 grid grid-cols-4 gap-2 ${UI.surfaceSolid} w-[140px] shadow-xl border border-slate-100`}>
+                          {GRID_COLORS.map(c => (
+                            <button 
+                              key={c.id} 
+                              onClick={() => {
+                                handleColorSelect(c);
+                                const idx = penPresets.findIndex(p => p.id === activeColor);
+                                const newPresets = [...penPresets];
+                                if (idx !== -1) newPresets[idx] = c;
+                                else newPresets[0] = c;
+                                setPenPresets(newPresets);
+                                setShowFullPalette(false);
+                              }} 
+                              className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center transition-transform hover:scale-110 border-2 ${activeColor === c.id ? 'shadow-sm' : 'border-transparent'}`}
+                              style={{ borderColor: activeColor === c.id ? c.hex : 'transparent' }}
+                              title={c.tl}
+                            >
+                               <div className="w-4 h-4 rounded-full" style={{ backgroundColor: c.hex }} />
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      {!penPresets.some(p => p.id === activeColor) && (
-                        <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: GRID_COLORS.find(c => c.id === activeColor)?.hex || '#000' }} />
-                      )}
-                      <input 
-                        type="color" 
-                        className="opacity-0 w-0 h-0 absolute"
-                        onChange={(e) => {
-                           const hex = e.target.value;
-                           const closest = getClosestTldrawColor(hex);
-                           handleColorSelect(closest);
-                        }}
-                      />
-                    </label>
+                    )}
                   </div>
                 </div>
               </div>
