@@ -2,6 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../constants/apiConfig';
+import { useTheme } from '../../contexts/ThemeContext.jsx';
+
+const SunIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+);
+const MoonIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+);
+const LogoIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 4H9L12 20H8L5 4Z" fill="#F59E0B"/>
+    <path d="M11 4H15L18 20H14L11 4Z" fill="#F97316"/>
+    <path d="M17 4H21L24 20H20L17 4Z" fill="#EA580C"/>
+  </svg>
+);
 
 const Login = () => {
   const navigate = useNavigate();
@@ -15,6 +30,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [gsiReady, setGsiReady] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -131,18 +147,27 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
+      {/* Theme Toggle */}
+      <button 
+        onClick={toggleTheme}
+        className="absolute top-6 right-6 p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-full transition-colors"
+        title="Toggle theme"
+      >
+        {isDark ? <SunIcon /> : <MoonIcon />}
+      </button>
+
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex w-12 h-12 rounded-2xl bg-indigo-600 items-center justify-center text-white font-bold text-xl mb-3">C</div>
-          <h1 className="text-white text-2xl font-bold">CollabBoard</h1>
-          <p className="text-gray-500 text-sm mt-1">Real-time collaborative whiteboards</p>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="mb-3"><LogoIcon /></div>
+          <h1 className="text-gray-900 dark:text-white text-2xl font-bold tracking-tight">CollabBoard</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Real-time collaborative whiteboards</p>
         </div>
 
         {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
-          <h2 className="text-white font-semibold text-lg mb-5">Sign in</h2>
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 shadow-xl transition-colors duration-300">
+          <h2 className="text-gray-900 dark:text-white font-semibold text-lg mb-5 text-center">Sign in</h2>
 
           {/* Google OAuth button */}
           <button
@@ -150,7 +175,7 @@ const Login = () => {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleLoading || !gsiReady}
-            className="w-full flex items-center justify-center gap-3 py-2.5 bg-white hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed text-gray-800 font-medium text-sm rounded-xl transition-colors mb-4"
+            className="w-full flex items-center justify-center gap-3 py-2.5 bg-white border border-gray-200 dark:border-transparent dark:bg-white hover:bg-gray-50 dark:hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed text-gray-800 font-medium text-sm rounded-xl transition-colors mb-4"
           >
             {googleLoading ? (
               <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -168,27 +193,27 @@ const Login = () => {
           <div id="g_id_hidden_container" style={{ display: 'none' }} />
 
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-gray-800" />
-            <span className="text-gray-600 text-xs">or</span>
-            <div className="flex-1 h-px bg-gray-800" />
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+            <span className="text-gray-400 dark:text-gray-600 text-xs">or</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
           </div>
 
           {/* Email/password form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Email</label>
+              <label className="text-gray-600 dark:text-gray-400 text-xs mb-1 block font-medium">Email</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
                 required
-                className="w-full bg-gray-800 text-white text-sm px-3 py-2.5 rounded-xl border border-gray-700 outline-none focus:border-indigo-500 transition-colors"
+                className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
                 placeholder="you@example.com"
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Password</label>
+              <label className="text-gray-600 dark:text-gray-400 text-xs mb-1 block font-medium">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -196,13 +221,13 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  className="w-full bg-gray-800 text-white text-sm px-3 py-2.5 rounded-xl border border-gray-700 outline-none focus:border-indigo-500 transition-colors pr-10"
+                  className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-10 placeholder:text-gray-400"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -210,7 +235,7 @@ const Login = () => {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800 text-red-400 text-sm px-3 py-2 rounded-lg rb-anim-fade">
+              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-3 py-2 rounded-lg rb-anim-fade">
                 <span>⚠</span> {error}
               </div>
             )}
@@ -218,16 +243,16 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 text-white font-medium text-sm rounded-xl transition-colors mt-1 flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium text-sm rounded-xl transition-all mt-1 flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none"
             >
-              {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              {loading && <div className="w-4 h-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />}
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="text-center text-gray-500 text-sm mt-4">
+          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-5">
             No account?{' '}
-            <button type="button" onClick={navigateToRegister} className="text-indigo-400 hover:text-indigo-300 transition-colors">Create one</button>
+            <button type="button" onClick={navigateToRegister} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium transition-colors">Create one</button>
           </p>
         </div>
       </div>

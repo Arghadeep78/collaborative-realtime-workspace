@@ -9,6 +9,7 @@ import Dashboard from './Components/Dashboard/dashboard.jsx';
 import { BACKEND_URL } from './constants/apiConfig.js';
 import Profile from './Components/Profile/Profile.jsx';
 import WhiteboardRoom from './Components/Whiteboard/WhiteboardRoom.jsx';
+import { ThemeProvider } from './contexts/ThemeContext.jsx';
 
 // Logout function
 const logout = () => {
@@ -115,7 +116,8 @@ function App() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
       <Routes>
         {/* Default route redirects to auth or dashboard */}
         <Route path="/" element={
@@ -170,32 +172,30 @@ function App() {
         gutter={8}
         toastOptions={{
           duration: 3000,
+          className: 'dark:bg-[#1e293b] dark:text-[#f1f5f9] bg-white text-gray-900 border border-gray-200 dark:border-white/10 shadow-lg',
           style: {
-            background: '#1e293b',
-            color: '#f1f5f9',
             fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
             fontSize: '14px',
             fontWeight: 500,
             padding: '10px 14px',
             borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5)',
             maxWidth: '420px',
           },
           success: {
             duration: 2500,
-            iconTheme: { primary: '#10b981', secondary: '#1e293b' },
+            iconTheme: { primary: '#10b981', secondary: 'currentColor' },
           },
           error: {
             duration: 4000,
-            iconTheme: { primary: '#ef4444', secondary: '#1e293b' },
+            iconTheme: { primary: '#ef4444', secondary: 'currentColor' },
           },
           loading: {
-            iconTheme: { primary: '#6366f1', secondary: '#1e293b' },
+            iconTheme: { primary: '#6366f1', secondary: 'currentColor' },
           },
         }}
       />
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
