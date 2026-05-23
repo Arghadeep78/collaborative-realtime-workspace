@@ -25,6 +25,16 @@ class DocumentManager {
     /** @type {((boardId: string) => void) | null} - Called when a doc is evicted from memory */
     this.onDocEvicted = null;
     this.GC_DELAY_MS = 5 * 60 * 1000;
+
+    // Compaction thresholds. Yjs docs grow monotonically: every erased shape
+    // leaves a tombstone, and the 50ms-throttled record writes during a drag
+    // leave a long per-key history chain. encodeStateAsUpdate serialises all of
+    // it, so yjsState keeps growing even when the shape count is constant.
+    // On cold load we rebuild a fresh doc from the current logical values to
+    // drop that history — but only when it's big enough to matter and the
+    // rebuild actually saves space, to avoid churning small/healthy docs.
+    this.COMPACT_MIN_BYTES = 64 * 1024;
+    this.COMPACT_SAVE_RATIO = 0.8;
   }
 
   /**
@@ -61,7 +71,73 @@ class DocumentManager {
     if (board?.yjsState?.buffer) {
       Y.applyUpdate(ydoc, new Uint8Array(board.yjsState.buffer));
     }
-    return ydoc;
+
+    // Compact synchronously (no await before this, so no cross-instance Redis
+    // update can interleave and be lost). Safe here because no WS peer is
+    // attached to this freshly-loaded doc yet — the swap is invisible to
+    // clients, who adopt the compacted state via the normal sync handshake.
+    const compacted = this._compact(boardId, ydoc);
+    if (compacted !== ydoc) {
+      this.docs.set(boardId, compacted);
+      ydoc.destroy();
+    }
+    return this.docs.get(boardId);
+  }
+
+  /**
+   * Rebuild a fresh Y.Doc from the current logical values of every top-level
+   * shared type, discarding accumulated CRDT history (tombstones, GC structs,
+   * per-key write chains). Returns the original doc unchanged when it's too
+   * small to bother with or when the rebuild wouldn't save enough space.
+   *
+   * Assumes top-level types hold plain JSON-safe values (no nested Yjs types),
+   * which holds for this app's schema: tldraw_records / tldraw / system / votes
+   * are Y.Maps of strings/numbers/plain objects, comments is a Y.Array of
+   * plain objects.
+   *
+   * @param {string} boardId @param {Y.Doc} ydoc @returns {Y.Doc}
+   */
+  _compact(boardId, ydoc) {
+    let originalSize;
+    try {
+      originalSize = Y.encodeStateAsUpdate(ydoc).byteLength;
+    } catch {
+      return ydoc;
+    }
+    if (originalSize < this.COMPACT_MIN_BYTES) return ydoc;
+
+    const clone = (v) => (v instanceof Y.AbstractType ? v.toJSON() : v);
+    const fresh = new Y.Doc();
+    try {
+      fresh.transact(() => {
+        ydoc.share.forEach((type, name) => {
+          if (type instanceof Y.Map) {
+            const dst = fresh.getMap(name);
+            type.forEach((value, key) => dst.set(key, clone(value)));
+          } else if (type instanceof Y.Array) {
+            fresh.getArray(name).push(type.toArray().map(clone));
+          } else if (type instanceof Y.Text) {
+            fresh.getText(name).insert(0, type.toString());
+          }
+        });
+      });
+    } catch (err) {
+      console.error(`[DocumentManager] compaction failed for ${boardId}:`, err);
+      fresh.destroy();
+      return ydoc;
+    }
+
+    const compactedSize = Y.encodeStateAsUpdate(fresh).byteLength;
+    if (compactedSize >= originalSize * this.COMPACT_SAVE_RATIO) {
+      fresh.destroy(); // not worth the swap
+      return ydoc;
+    }
+
+    // Persist the slimmer state so MongoDB shrinks too — otherwise we'd
+    // recompact this same bloat on every cold load.
+    this.markDirty(boardId);
+    console.log(`[DocumentManager] compacted ${boardId}: ${originalSize}B → ${compactedSize}B`);
+    return fresh;
   }
 
   /** @param {string} boardId @param {WebSocket} ws */

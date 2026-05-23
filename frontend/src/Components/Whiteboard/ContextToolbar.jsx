@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { DefaultFontStyle, DefaultTextAlignStyle } from '@tldraw/tlschema';
-import { UI, GRID_COLORS, ERASER_SIZES } from './whiteboardConstants.js';
+import { UI, GRID_COLORS } from './whiteboardConstants.js';
 
 // Which control groups appear for each tool
 const TOOL_CAPS = {
@@ -11,7 +11,6 @@ const TOOL_CAPS = {
   arrow:   { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false },
   text:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: true,  textSize: true,  align: true  },
   note:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: false, textSize: false, align: false },
-  eraser:  { color: false, weight: false, stroke: false, shapes: false, fill: false, font: false, textSize: false, align: false, eraser: true },
 };
 
 const SHAPES = [
@@ -66,7 +65,7 @@ const ALIGN_OPTIONS = [
 ];
 
 function VDiv() {
-  return <div className="w-px self-stretch bg-slate-200 mx-1 my-1" />;
+  return <div className="w-px self-stretch bg-slate-200 dark:bg-slate-700 mx-1 my-1" />;
 }
 
 function Btn({ active, onClick, title, children }) {
@@ -76,8 +75,8 @@ function Btn({ active, onClick, title, children }) {
       title={title}
       className={`h-8 min-w-[32px] px-1.5 rounded-lg flex items-center justify-center transition-all shrink-0
         ${active
-          ? 'bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-200'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 ring-1 ring-inset ring-indigo-200 dark:ring-indigo-700/50'
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
         }`}
     >
       {children}
@@ -122,7 +121,7 @@ function ColorPicker({ activeColor, handleColorSelect }) {
       {open && coords && createPortal(
         <div
           ref={popRef}
-          className="fixed p-2 rounded-xl bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200 grid grid-cols-4 gap-1.5 z-[100]"
+          className="fixed p-2 rounded-xl bg-white dark:bg-slate-800 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200 dark:border-slate-700 grid grid-cols-4 gap-1.5 z-[100]"
           style={{ top: coords.top, left: coords.left }}
         >
           {GRID_COLORS.map(c => (
@@ -150,13 +149,11 @@ export default function ContextToolbar({
   activeShape,
   activeTextFont,
   activeTextAlign,
-  activeEraserSize,
   handleColorSelect,
   handleSizeSelect,
   handleDashSelect,
   handleFillSelect,
   handleShapeSelect,
-  handleEraserSizeSelect,
   setActiveTextFont,
   setActiveTextAlign,
   editorRef,
@@ -185,18 +182,6 @@ export default function ContextToolbar({
       className={`absolute top-4 left-20 z-20 flex items-center rounded-2xl px-2 py-1.5 gap-0.5 ${UI.surface}`}
       style={{ maxWidth: 'calc(100vw - 100px)', overflowX: 'auto' }}
     >
-      {/* Eraser size (eraser only) */}
-      {caps.eraser && (
-        <div className="flex items-center gap-0.5">
-          <span className="text-[11px] font-semibold text-slate-400 px-1.5 select-none">Size</span>
-          {ERASER_SIZES.map(({ id, dot }) => (
-            <Btn key={id} active={activeEraserSize === id} onClick={() => handleEraserSizeSelect(id)} title={`Eraser: ${id.toUpperCase()}`}>
-              <div className="rounded-full border border-current" style={{ width: dot, height: dot }} />
-            </Btn>
-          ))}
-        </div>
-      )}
-
       {/* Color — present when the color cap is on */}
       {caps.color && <ColorPicker activeColor={activeColor} handleColorSelect={handleColorSelect} />}
 

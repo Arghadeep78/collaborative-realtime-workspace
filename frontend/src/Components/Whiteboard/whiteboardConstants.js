@@ -2,21 +2,21 @@ export const USER_COLORS = ['#e03', '#06d', '#0a0', '#f80', '#90f', '#0cc'];
 export const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 
 export const UI = {
-  surface: "bg-white/90 border border-slate-200/80 shadow-[0_16px_40px_rgba(12,18,36,0.12)] backdrop-blur-xl",
-  surfaceSolid: "bg-white/95 border border-slate-200/80 shadow-[0_16px_40px_rgba(12,18,36,0.12)]",
-  iconBtn: "inline-flex items-center justify-center w-8 h-8 rounded-[10px] border border-slate-900/10 bg-slate-900/5 text-slate-500 transition hover:bg-white hover:text-slate-900 hover:shadow-[0_10px_20px_rgba(12,18,36,0.12)]",
+  surface: "bg-white/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/60 shadow-[0_16px_40px_rgba(12,18,36,0.12)] backdrop-blur-xl",
+  surfaceSolid: "bg-white/95 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 shadow-[0_16px_40px_rgba(12,18,36,0.12)]",
+  iconBtn: "inline-flex items-center justify-center w-8 h-8 rounded-[10px] border border-slate-900/10 dark:border-white/10 bg-slate-900/5 dark:bg-white/5 text-slate-500 dark:text-slate-400 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-[0_10px_20px_rgba(12,18,36,0.12)]",
   iconBtnWarn: "bg-amber-400/20 text-amber-900 border-amber-300/70",
   iconBtnActive: "bg-blue-500/15 text-blue-700 border-blue-400/50",
   primaryBtn: "bg-gradient-to-br from-[#4262ff] to-[#2f49e7] text-white border border-blue-400/40 shadow-[0_12px_28px_rgba(66,98,255,0.28)] hover:brightness-95 hover:-translate-y-0.5 transition",
-  input: "bg-slate-50/90 border border-slate-900/10 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500/70 focus:ring-4 focus:ring-blue-500/15 transition",
-  chip: "bg-slate-900/5 border border-slate-900/10 text-slate-500 text-[10px] font-bold tracking-[0.16em] uppercase rounded-full px-2 py-0.5",
-  timer: "bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 text-[11px] font-bold tracking-[0.08em] rounded-full px-2 py-0.5",
-  timerExpired: "bg-rose-500/15 border-rose-400/50 text-rose-700",
-  logo: "font-bold text-[1.05rem] tracking-[-0.03em] text-slate-900",
-  lite: "bg-amber-200/60 text-amber-950 border border-amber-300/70 rounded-full text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5",
+  input: "bg-slate-50/90 dark:bg-slate-700/80 border border-slate-900/10 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500/70 focus:ring-4 focus:ring-blue-500/15 transition",
+  chip: "bg-slate-900/5 dark:bg-white/10 border border-slate-900/10 dark:border-white/10 text-slate-500 dark:text-slate-400 text-[10px] font-bold tracking-[0.16em] uppercase rounded-full px-2 py-0.5",
+  timer: "bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold tracking-[0.08em] rounded-full px-2 py-0.5",
+  timerExpired: "bg-rose-500/15 border-rose-400/50 text-rose-700 dark:text-rose-400",
+  logo: "font-bold text-[1.05rem] tracking-[-0.03em] text-slate-900 dark:text-slate-100",
+  lite: "bg-amber-200/60 dark:bg-amber-900/40 text-amber-950 dark:text-amber-300 border border-amber-300/70 dark:border-amber-700/60 rounded-full text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5",
 };
 
-export const boardShellClass = "fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] [&_button]:cursor-pointer";
+export const boardShellClass = "fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] dark:[background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.12),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.08),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.08),transparent_65%),#0f172a] [&_button]:cursor-pointer";
 export const tldrawHostClass = "absolute inset-0 overflow-hidden [&_[title*='license']]:hidden [&_[aria-label*='license']]:hidden [&_[href*='license']]:hidden";
 
 export const GRID_COLORS = [
@@ -59,13 +59,3 @@ export const getClosestTldrawColor = (hex) => {
 export const ZOOM_MIN = 0.05;
 export const ZOOM_MAX = 4;
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-// Eraser sizes — `dot` is the swatch size shown in the toolbar (px),
-// `radius` is the erase/cursor radius in page units.
-export const ERASER_SIZES = [
-  { id: 's', dot: 8, radius: 10 },
-  { id: 'm', dot: 12, radius: 20 },
-  { id: 'l', dot: 18, radius: 34 },
-  { id: 'xl', dot: 24, radius: 52 },
-];
-export const ERASER_RADII = Object.fromEntries(ERASER_SIZES.map(s => [s.id, s.radius]));

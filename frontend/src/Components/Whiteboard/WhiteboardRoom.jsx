@@ -14,13 +14,17 @@ import LeftToolbar from './LeftToolbar.jsx';
 import ContextToolbar from './ContextToolbar.jsx';
 import TopBar from './TopBar.jsx';
 import { useWhiteboardSync } from './useWhiteboardSync.js';
-import { UI, myColor, ZOOM_MIN, ZOOM_MAX, clamp, boardShellClass, tldrawHostClass, ERASER_RADII } from './whiteboardConstants.js';
+import { UI, myColor, ZOOM_MIN, ZOOM_MAX, clamp, boardShellClass, tldrawHostClass } from './whiteboardConstants.js';
 
 export default function WhiteboardRoom() {
   const { id: boardId } = useParams();
   const { ydoc, provider, synced } = useYjsBoard(boardId);
   const navigate = useNavigate();
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+  const isDarkRef = useRef(isDark);
 
   // ── Board / role ──────────────────────────────────────────────────────────
   const [board, setBoard] = useState(null);
@@ -55,14 +59,7 @@ export default function WhiteboardRoom() {
   const [activeShape, setActiveShape] = useState('rectangle');
   const [activeTextFont, setActiveTextFont] = useState('sans');
   const [activeTextAlign, setActiveTextAlign] = useState('start');
-  const [activeEraserSize, setActiveEraserSize] = useState('m');
   const toolbarRef = useRef(null);
-
-  // ── Eraser refs ───────────────────────────────────────────────────────────
-  const activeToolRef = useRef(activeTool);
-  const eraserRadiusRef = useRef(ERASER_RADII.m);
-  const erasingRef = useRef(false);
-  const eraserCursorRef = useRef(null);
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
   const [zoom, setZoom] = useState(1);
@@ -98,9 +95,18 @@ export default function WhiteboardRoom() {
   // ── Keep followUserIdRef in sync ──────────────────────────────────────────
   useEffect(() => { followUserIdRef.current = followUserId; }, [followUserId]);
 
-  // ── Keep eraser refs in sync ──────────────────────────────────────────────
-  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
-  useEffect(() => { eraserRadiusRef.current = ERASER_RADII[activeEraserSize] ?? ERASER_RADII.m; }, [activeEraserSize]);
+  // ── Theme: sync isDark → document class + localStorage + tldraw ──────────
+  useEffect(() => {
+    isDarkRef.current = isDark;
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    if (editorRef.current) {
+      editorRef.current.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark(d => !d);
 
   // ── Presence tick (cursor staleness) ──────────────────────────────────────
   useEffect(() => {
@@ -177,35 +183,6 @@ export default function WhiteboardRoom() {
     setFollowUserId(prev => prev === clientId ? null : clientId);
   }, []);
 
-  // ── Eraser: delete shapes within the eraser radius of a screen point ──────
-  const eraseAtScreen = useCallback((screenX, screenY) => {
-    const editor = editorRef.current;
-    if (!editor || role !== 'editor') return;
-    const page = editor.screenToPage({ x: screenX, y: screenY });
-    const r = eraserRadiusRef.current;
-    const r2 = r * r;
-    const ids = [];
-    for (const shape of editor.getCurrentPageShapes()) {
-      const b = editor.getShapePageBounds(shape);
-      if (!b) continue;
-      const dx = Math.max(b.minX - page.x, 0, page.x - b.maxX);
-      const dy = Math.max(b.minY - page.y, 0, page.y - b.maxY);
-      if (dx * dx + dy * dy <= r2) ids.push(shape.id);
-    }
-    if (ids.length) editor.deleteShapes(ids);
-  }, [role]);
-
-  // ── Eraser: keep the visual circle following the cursor ───────────────────
-  const moveEraserCursor = useCallback((screenX, screenY) => {
-    const el = eraserCursorRef.current;
-    const editor = editorRef.current;
-    if (!el || !editor) return;
-    const d = 2 * eraserRadiusRef.current * editor.getCamera().z;
-    el.style.width = `${d}px`;
-    el.style.height = `${d}px`;
-    el.style.transform = `translate(${screenX - d / 2}px, ${screenY - d / 2}px)`;
-  }, []);
-
   // ── Pointer tracking ──────────────────────────────────────────────────────
   const handlePointerMove = useCallback((e) => {
     const editor = editorRef.current;
@@ -225,26 +202,8 @@ export default function WhiteboardRoom() {
 
   const handlePointerLeave = useCallback(() => {
     lastPointerRef.current.active = false;
-    erasingRef.current = false;
-    if (eraserCursorRef.current) eraserCursorRef.current.style.transform = 'translate(-9999px,-9999px)';
     if (provider) provider.awareness.setLocalStateField('cursor', null);
   }, [provider]);
-
-  const handleErasePointerDown = useCallback((e) => {
-    if (followUserIdRef.current) stopFollowing();
-    if (role !== 'editor') return;
-    erasingRef.current = true;
-    editorRef.current?.markHistoryStoppingPoint?.('erase');
-    eraseAtScreen(e.clientX, e.clientY);
-  }, [stopFollowing, eraseAtScreen, role]);
-
-  const handleErasePointerMove = useCallback((e) => {
-    moveEraserCursor(e.clientX, e.clientY);
-    if (erasingRef.current) eraseAtScreen(e.clientX, e.clientY);
-    handlePointerMove(e);
-  }, [moveEraserCursor, eraseAtScreen, handlePointerMove]);
-
-  const handleErasePointerUp = useCallback(() => { erasingRef.current = false; }, []);
 
   const handleLocalInteraction = useCallback(() => {
     if (followUserIdRef.current) stopFollowing();
@@ -449,13 +408,6 @@ export default function WhiteboardRoom() {
   };
 
   const handleColorSelect = (swatch) => { setActiveColor(swatch.id); applyEditorStyle('color', swatch.tl); };
-  const handleEraserSizeSelect = (id) => {
-    setActiveEraserSize(id);
-    if (lastPointerRef.current.active) {
-      eraserRadiusRef.current = ERASER_RADII[id] ?? ERASER_RADII.m;
-      moveEraserCursor(lastPointerRef.current.screenX, lastPointerRef.current.screenY);
-    }
-  };
   const handleSizeSelect = (size) => { setActiveSize(size); applyEditorStyle('size', size); };
   const handleDashSelect = (dash) => { setActiveDash(dash); applyEditorStyle('dash', dash); };
   const handleFillSelect = (fill) => { setActiveFill(fill); applyEditorStyle('fill', fill); };
@@ -697,6 +649,8 @@ export default function WhiteboardRoom() {
         navigate={navigate}
         handleSignOut={handleSignOut}
         setShowShare={setShowShare}
+        isDark={isDark}
+        toggleTheme={toggleTheme}
       />
 
       {/* tldraw canvas */}
@@ -720,6 +674,7 @@ export default function WhiteboardRoom() {
             setZoom(editor.getCamera().z);
             bindStore(editor);
             editor.updateInstanceState({ isGridMode: true });
+            editor.user.updateUserPreferences({ colorScheme: isDarkRef.current ? 'dark' : 'light' });
             setEditorReady(true);
           }}
           isReadonly={!canEdit}
@@ -767,24 +722,6 @@ export default function WhiteboardRoom() {
         </div>
       )}
 
-      {/* Eraser: blocking layer (owns erasing) + visual circle cursor */}
-      {activeTool === 'eraser' && canEdit && (
-        <div
-          className="absolute inset-0 z-10"
-          style={{ cursor: 'none', touchAction: 'none' }}
-          onPointerDown={handleErasePointerDown}
-          onPointerMove={handleErasePointerMove}
-          onPointerUp={handleErasePointerUp}
-          onPointerLeave={handlePointerLeave}
-        >
-          <div
-            ref={eraserCursorRef}
-            className="pointer-events-none absolute top-0 left-0 rounded-full border-2 border-rose-400/80 bg-rose-300/15"
-            style={{ width: 0, height: 0, transform: 'translate(-9999px,-9999px)' }}
-          />
-        </div>
-      )}
-
       <LeftToolbar
         toolbarRef={toolbarRef}
         activeTool={activeTool}
@@ -803,13 +740,11 @@ export default function WhiteboardRoom() {
         activeShape={activeShape}
         activeTextFont={activeTextFont}
         activeTextAlign={activeTextAlign}
-        activeEraserSize={activeEraserSize}
         handleColorSelect={handleColorSelect}
         handleSizeSelect={handleSizeSelect}
         handleDashSelect={handleDashSelect}
         handleFillSelect={handleFillSelect}
         handleShapeSelect={handleShapeSelect}
-        handleEraserSizeSelect={handleEraserSizeSelect}
         setActiveTextFont={setActiveTextFont}
         setActiveTextAlign={setActiveTextAlign}
         editorRef={editorRef}

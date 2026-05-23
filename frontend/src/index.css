@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode (add/remove "dark" class on <html>) */
+@variant dark (&:where(.dark, .dark *));
+
 /*
  * Lightweight enter animations.
  *
