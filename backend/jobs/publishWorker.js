@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
 import Whiteboard from '../models/whiteboardModel.js';
+import { invalidateBoardMeta } from '../cache/boardCache.js';
 
 const log  = (...a) => console.log('\x1b[35m[Publish Worker]\x1b[0m', ...a);
 const lerr = (...a) => console.error('\x1b[35m[Publish Worker]\x1b[0m', ...a);
@@ -17,6 +18,7 @@ export function startPublishWorker(redisOpts) {
       board.isPublic = true;
       if (role) board.publicRole = role;
       await board.save();
+      await invalidateBoardMeta(boardId);
 
       log(`Job ${job.id} completed — boardId: ${boardId} is now public`);
       return { shareUrl: `/board/${boardId}` };

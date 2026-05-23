@@ -1,5 +1,5 @@
 import Whiteboard from '../models/whiteboardModel.js';
-import { Queue } from 'bullmq';
+import { invalidateBoardMeta } from '../cache/boardCache.js';
 
 // ── createBoard ───────────────────────────────────────────────────────────────
 export const createBoard = async (req, res) => {
@@ -58,6 +58,7 @@ export const deleteBoard = async (req, res) => {
     if (board.owner !== req.email) return res.status(403).json({ error: 'Only the owner can delete this board' });
 
     await board.deleteOne();
+    await invalidateBoardMeta(board.id);
     return res.status(200).json({ message: 'Board deleted' });
   } catch (err) {
     console.error('deleteBoard error:', err);
@@ -81,6 +82,7 @@ export const shareBoard = async (req, res) => {
       board.collaborators.push({ email, name: name || email, role });
     }
     await board.save();
+    await invalidateBoardMeta(board.id);
     return res.status(200).json({ message: 'Board shared', collaborators: board.collaborators });
   } catch (err) {
     console.error('shareBoard error:', err);
@@ -99,6 +101,7 @@ export const unshareBoard = async (req, res) => {
 
     board.collaborators = board.collaborators.filter(c => c.email !== email);
     await board.save();
+    await invalidateBoardMeta(board.id);
     return res.status(200).json({ message: 'Access revoked', collaborators: board.collaborators });
   } catch (err) {
     console.error('unshareBoard error:', err);

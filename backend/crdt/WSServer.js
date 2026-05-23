@@ -6,8 +6,8 @@ import * as encoding from 'lib0/encoding.js';
 import * as decoding from 'lib0/decoding.js';
 import jwt from 'jsonwebtoken';
 import { URL } from 'url';
-import Whiteboard from '../models/whiteboardModel.js';
 import { documentManager } from './DocumentManager.js';
+import { getBoardMeta, resolveRole } from '../cache/boardCache.js';
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -46,7 +46,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
   // ─── Connection handler ───────────────────────────────────────────────
   wss.on('connection', async (ws, request) => {
-    let boardId, userEmail, cachedBoard;
+    let boardId, userEmail, userRole;
 
     // Buffer messages that arrive while we're doing async auth / doc load.
     // The client's y-websocket WebsocketProvider sends SyncStep1 the instant
@@ -67,8 +67,11 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         return;
       }
 
-      const board = await Whiteboard.findOne({ id: boardId }).lean();
-      if (!board) { ws.close(4404, 'Board not found'); return; }
+      // Access metadata is served from Redis (60s TTL) when warm, falling back
+      // to a lean MongoDB query. The full board (incl. yjsState) is loaded
+      // lazily by DocumentManager only when the Y.Doc is cold.
+      const meta = await getBoardMeta(boardId);
+      if (!meta) { ws.close(4404, 'Board not found'); return; }
 
       userEmail = 'anonymous';
       if (token && token !== 'undefined' && token !== 'null') {
@@ -76,14 +79,9 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         userEmail = decoded.email;
       }
 
-      const hasAccess =
-        board.owner === userEmail ||
-        (board.collaborators && board.collaborators.some(u => u.email === userEmail)) ||
-        board.isPublic;
-      if (!hasAccess) { ws.close(4403, 'Access denied'); return; }
-
-      // Reuse the already-fetched board doc to avoid a second MongoDB query
-      cachedBoard = board;
+      // Authorization: resolve the user's effective role. `null` => no access.
+      userRole = resolveRole(meta, userEmail);
+      if (!userRole) { ws.close(4403, 'Access denied'); return; }
     } catch (err) {
       console.error('[Yjs WS] Auth error:', err);
       ws.close(4401, 'Authentication failed');
@@ -91,10 +89,17 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     }
 
     // ── Load / get Y.Doc ────────────────────────────────────────────────
-    const ydoc = await documentManager.getDoc(boardId, cachedBoard);
+    // No board is passed: DocumentManager fetches the full doc (with yjsState)
+    // itself, but only on a cold load — warm rooms skip the query entirely.
+    const ydoc = await documentManager.getDoc(boardId);
     documentManager.addConnection(boardId, ws);
+
+    // A viewer may read the board (sync down) but must not mutate it. commenter
+    // and editor are write-capable. Enforced per-message in the MSG_SYNC handler.
+    const canWrite = userRole !== 'viewer';
+
     const peerCountAfterConnect = documentManager.getConnections(boardId).size;
-    console.log(`[Yjs WS] ✓ ${userEmail} connected to room ${boardId} (${peerCountAfterConnect} peer${peerCountAfterConnect !== 1 ? 's' : ''} now in room)`);
+    console.log(`[Yjs WS] ✓ ${userEmail} (${userRole}) connected to room ${boardId} (${peerCountAfterConnect} peer${peerCountAfterConnect !== 1 ? 's' : ''} now in room)`);
 
     // ── Awareness ───────────────────────────────────────────────────────
     if (!awarenessMap.has(boardId)) {
@@ -202,9 +207,31 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
         switch (messageType) {
           case MSG_SYNC: {
+            // Dispatch on the sync sub-message type ourselves (instead of
+            // syncProtocol.readSyncMessage) so we can enforce RBAC: reads are
+            // always allowed, writes only for write-capable roles.
+            const syncMessageType = decoding.readVarUint(decoder);
             const respEncoder = encoding.createEncoder();
             encoding.writeVarUint(respEncoder, MSG_SYNC);
-            syncProtocol.readSyncMessage(decoder, respEncoder, ydoc, ws);
+
+            if (syncMessageType === syncProtocol.messageYjsSyncStep1) {
+              // Read request: client asks for the doc state. Always permitted —
+              // even viewers need the current board to render it.
+              syncProtocol.readSyncStep1(decoder, respEncoder, ydoc);
+            } else if (canWrite) {
+              // Write paths (SyncStep2 / Update) apply the client's changes.
+              if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
+                syncProtocol.readSyncStep2(decoder, ydoc, ws);
+              } else if (syncMessageType === syncProtocol.messageYjsUpdate) {
+                syncProtocol.readUpdate(decoder, ydoc, ws);
+              }
+            } else {
+              // Viewer attempting a mutation — discard the update without
+              // applying it. authentication ≠ authorization: a connected,
+              // authenticated viewer is still not allowed to write.
+              console.warn(`[Yjs WS] Rejected write from viewer ${userEmail} on board ${boardId}`);
+            }
+
             if (encoding.length(respEncoder) > 1) {
               ws.send(encoding.toUint8Array(respEncoder));
             }

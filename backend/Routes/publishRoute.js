@@ -2,6 +2,7 @@ import express from 'express';
 import authMiddleware from '../middleware/AuthenticationMIddleware.js';
 import Whiteboard from '../models/whiteboardModel.js';
 import { getPublishQueue } from '../jobs/publishQueue.js';
+import { invalidateBoardMeta } from '../cache/boardCache.js';
 
 const router = express.Router();
 
@@ -41,6 +42,7 @@ router.delete('/:boardId', authMiddleware, async (req, res) => {
 
     board.isPublic = false;
     await board.save();
+    await invalidateBoardMeta(boardId);
 
     return res.status(200).json({ message: 'Board is now private' });
   } catch (err) {

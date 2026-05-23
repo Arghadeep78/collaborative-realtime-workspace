@@ -17,6 +17,9 @@ import { startPersistenceScheduler } from "./crdt/persistenceScheduler.js";
 import publishRoute from "./Routes/publishRoute.js";
 import { startPublishWorker } from "./jobs/publishWorker.js";
 import { initPublishQueue } from "./jobs/publishQueue.js";
+import { initBoardCache } from "./cache/boardCache.js";
+import { createRateLimiters } from "./middleware/rateLimiters.js";
+import { createHealthRouter } from "./Routes/healthRoutes.js";
 
 const PORT = process.env.PORT || 3030;
 
@@ -66,6 +69,9 @@ async function ensureRedisNoEviction(client) {
 
 const startServer = async () => {
   const app = express();
+  // Trust the first proxy hop (load balancer) so req.ip reflects the real
+  // client address — required for correct per-client rate limiting behind an LB.
+  app.set('trust proxy', 1);
   const server = createServer(app);
 
   const allowedOrigins = parseAllowedOrigins();
@@ -79,6 +85,12 @@ const startServer = async () => {
   // Connect to Redis before starting the server
   await Promise.all([pubClient.connect(), subClient.connect()]);
   await ensureRedisNoEviction(pubClient);
+
+  // Share the Redis client with the board-metadata cache (board:meta:* keys).
+  initBoardCache(pubClient);
+
+  // Distributed (Redis-backed) rate limiters — shared counters across instances.
+  const { authLimiter, aiLimiter, apiLimiter } = createRateLimiters(pubClient);
 
   const io = new Server(server, {
     cors: {
@@ -125,10 +137,10 @@ const startServer = async () => {
     next();
   });
 
-  app.use("/users", userRoute);
-  app.use("/boards", boardRoute);
-  app.use("/ai", aiRoutes);
-  app.use("/publish", publishRoute);
+  app.use("/users", authLimiter, userRoute);
+  app.use("/boards", apiLimiter, boardRoute);
+  app.use("/ai", aiLimiter, aiRoutes);
+  app.use("/publish", apiLimiter, publishRoute);
   // Socket.io middleware for authentication (kept for future use / presence)
   io.use(socketAuth);
 
@@ -149,6 +161,14 @@ const startServer = async () => {
   const publishQueue = initPublishQueue(bullRedisOpts);
   const publishWorker = startPublishWorker(bullRedisOpts);
   console.log("✅ BullMQ publish worker started.");
+
+  // ─── Health & readiness probes (mounted after workers exist) ───────────
+  app.use(
+    createHealthRouter({
+      redisClient: pubClient,
+      getWorkers: () => [persistWorker, publishWorker],
+    })
+  );
 
   // Graceful shutdown
   const shutdown = async (signal) => {

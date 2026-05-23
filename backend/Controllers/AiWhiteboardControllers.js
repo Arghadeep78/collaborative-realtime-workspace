@@ -1,21 +1,49 @@
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import Whiteboard from '../models/whiteboardModel.js';
+import { CircuitBreaker, retry, withTimeout } from '../utils/resilience.js';
 
 dotenv.config();
 const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
-const generateAIContent = async (prompt) => {
-  let raw = '';
+const GEMINI_TIMEOUT_MS = 10_000;
+
+// One breaker shared across all AI endpoints — they all depend on the same
+// Gemini backend, so a Gemini outage should trip the circuit for everyone.
+const geminiBreaker = new CircuitBreaker({
+  failureThreshold: 5,
+  cooldownMs: 30_000,
+  name: 'Gemini API',
+});
+
+// Single Gemini call: 10s timeout + JSON extraction. A bad-JSON response is a
+// non-transient error (the retry layer won't retry it), surfaced as such.
+const callGemini = async (prompt) => {
+  const resp = await withTimeout(
+    ai.models.generateContent({ model: 'gemini-2.0-flash', contents: prompt }),
+    GEMINI_TIMEOUT_MS
+  );
+  let raw = resp.text.trim();
+  if (raw.startsWith('```')) raw = raw.replace(/^```(?:json)?\s*|```$/g, '').trim();
   try {
-    const resp = await ai.models.generateContent({ model: 'gemini-2.0-flash', contents: prompt });
-    raw = resp.text.trim();
-    if (raw.startsWith('```')) raw = raw.replace(/^```(?:json)?\s*|```$/g, '').trim();
     return JSON.parse(raw);
   } catch (e) {
     console.error('Gemini parse error:', e, '\nRaw:', raw);
     throw new Error('AI returned invalid JSON');
   }
+};
+
+// Compose: circuit breaker → retry (exp backoff, transient-only) → timed call.
+const generateAIContent = (prompt) =>
+  geminiBreaker.exec(() => retry(() => callGemini(prompt), { attempts: 3, baseDelayMs: 300 }));
+
+// Map an internal error to an HTTP status + message. An open circuit means the
+// dependency is down — surface 503 (Service Unavailable) so clients can back off.
+const aiErrorResponse = (res, err, fallbackMessage) => {
+  if (err?.code === 'CIRCUIT_OPEN') {
+    return res.status(503).json({ error: 'AI service temporarily unavailable, please retry shortly.' });
+  }
+  return res.status(500).json({ error: fallbackMessage });
 };
 
 // POST /ai/expand  — Body: { text: string }  — Response: { ideas: [string, string, string] }
@@ -30,7 +58,7 @@ export const expandIdea = async (req, res) => {
     );
     return res.status(200).json({ ideas: result.ideas ?? [] });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to expand idea' });
+    return aiErrorResponse(res, err, 'Failed to expand idea');
   }
 };
 
@@ -47,7 +75,7 @@ export const generateIdeas = async (req, res) => {
     );
     return res.status(200).json({ ideas: result.ideas ?? [] });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to generate ideas' });
+    return aiErrorResponse(res, err, 'Failed to generate ideas');
   }
 };
 
@@ -66,6 +94,6 @@ export const summarizeBoard = async (req, res) => {
     );
     return res.status(200).json({ themes: result.themes ?? [], summary: result.summary ?? '' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to summarize board' });
+    return aiErrorResponse(res, err, 'Failed to summarize board');
   }
 };
