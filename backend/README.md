@@ -11,6 +11,7 @@ The backend for the real-time collaborative whiteboard platform, built with Node
 - **Asynchronous Publishing Pipeline:** BullMQ-powered job queues for publishing boards to public URLs.
 - **AI Integration:** Secure endpoints communicating with the Google Gemini API for AI-powered whiteboard brainstorming.
 - **Robust Authentication:** Email/password and Google OAuth 2.0 flows, protected with JWT access and refresh tokens.
+- **Comments & Voting:** API endpoints and real-time sync for threaded element comments and upvote/downvote voting.
 - **Role-Based Access Control:** Middleware to enforce granular permissions (Viewer, Commenter, Editor) on document access and modifications.
 
 ---

@@ -13,6 +13,7 @@ A full-stack, real-time collaborative whiteboard platform built with React, Tldr
 | **Role-Based Access** | Granular permissions with Viewer, Commenter, and Editor roles for shared boards. |
 | **AI Brainstorming** | Integrated AI Panel powered by Google Gemini to generate ideas, structures, and content directly on the board. |
 | **Board Publishing** | Asynchronous "Publish Board" workflow to share boards publicly with a read-only view. |
+| **Comments & Voting** | Leave threaded comments on any board element and upvote/downvote ideas for async decision-making. |
 | **Export & Tools** | Export boards to images, countdown timers for facilitation, and "Follow Me" spotlighting for presentations. |
 | **Secure Authentication** | Sign in securely using Google OAuth or email and password. |
 

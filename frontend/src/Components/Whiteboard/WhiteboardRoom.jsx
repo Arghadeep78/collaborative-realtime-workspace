@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tldraw, DefaultColorStyle, DefaultSizeStyle, DefaultDashStyle, DefaultFillStyle, GeoShapeGeoStyle, exportAs } from '@tldraw/tldraw';
+import { FixedNoteShapeUtil } from './FixedNoteShapeUtil.js';
 import '@tldraw/tldraw/tldraw.css';
 import toast from 'react-hot-toast';
 import { useYjsBoard } from '../../crdt/useYjsBoard.js';
@@ -645,6 +646,7 @@ export default function WhiteboardRoom() {
       >
         <Tldraw
           key={ydoc ? 'tldraw-bound' : 'tldraw-init'}
+          shapeUtils={[FixedNoteShapeUtil]}
           onMount={(editor) => {
             editorRef.current = editor;
             editor.setCameraOptions({ zoomSteps: [ZOOM_MIN, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, ZOOM_MAX] });
@@ -662,6 +664,15 @@ export default function WhiteboardRoom() {
             QuickActions: () => null,
             StylePanel: () => null,
             NavigationPanel: () => null,
+            PageMenu: () => null,
+            ActionsMenu: () => null,
+            HelpMenu: () => null,
+            ZoomMenu: () => null,
+            MainMenu: () => null,
+            MenuPanel: () => null,
+            TopPanel: () => null,
+            SharePanel: () => null,
+            PeopleMenu: () => null,
           }}
         >
           <Overlays
