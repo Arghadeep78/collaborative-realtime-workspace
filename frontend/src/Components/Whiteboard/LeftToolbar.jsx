@@ -1,7 +1,7 @@
 import { DefaultFontStyle, DefaultTextAlignStyle } from '@tldraw/tlschema';
 import { UI, GRID_COLORS } from './whiteboardConstants.js';
 
-function ColorFlyout({ activeColor, handleColorSelect }) {
+function ColorFlyout({ handleColorSelect }) {
   return (
     <div className="absolute left-full top-0 pl-3 z-50">
       <div className={`rounded-[20px] p-3 flex flex-col gap-3 ${UI.surfaceSolid} w-[140px] shadow-xl`}>
@@ -373,7 +373,7 @@ export default function LeftToolbar({
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 15l-6 6H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10z" /><path d="M19 15l-6 6v-6h6z" /></svg>
           </button>
           {hoveredTool === 'note' && (
-            <ColorFlyout activeColor={activeColor} handleColorSelect={handleColorSelect} />
+            <ColorFlyout handleColorSelect={handleColorSelect} />
           )}
         </div>
 

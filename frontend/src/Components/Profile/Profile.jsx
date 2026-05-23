@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, Edit3, Save, X, Camera, Loader, Home } from 'lucide-react';
 import { BACKEND_URL } from '../../constants/apiConfig';
-import {showSuccess, showError, showWarning, showInfo} from '../../utils/toast.jsx';
+import toast from 'react-hot-toast';
+import Loading from '../Loading/Loading.jsx';
 
 
 const Profile = () => {
@@ -87,13 +88,13 @@ const Profile = () => {
 
             const updatedUser = await response.json();
             setUserData(updatedUser.user);
-            setEditedData(updatedUser);
+            setEditedData(updatedUser.user);
             setIsEditing(false);
-            showSuccess('Profile updated successfully!');
+            toast.success('Profile updated successfully!');
 
         } catch (err) {
             setError(err.message);
-            showError(err.message);
+            toast.error(err.message);
             setEditedData({ ...userData });
         } finally {
             setIsUpdating(false);
@@ -129,10 +130,10 @@ const Profile = () => {
 
             const data = await response.json();
             handleInputChange('profilePic', data.url);
-            showSuccess('Profile picture updated!');
+            toast.success('Profile picture updated!');
         } catch (error) {
             console.error('Error uploading profile picture:', error);
-            showError(error.message);
+            toast.error(error.message);
             setEditedData(prev => ({ ...prev, profilePic: userData.profilePic }));
         }
     };
@@ -147,7 +148,7 @@ const Profile = () => {
             return;
         }
         if( oldPassword === newPassword) {
-            showError("New password cannot be the same as old password.");
+            toast.error("New password cannot be the same as old password.");
             return;
         }
         
@@ -169,7 +170,7 @@ const Profile = () => {
                 throw new Error(errorData.message || 'Failed to update password.');
             }
             
-            showSuccess("Password updated successfully.");
+            toast.success("Password updated successfully.");
             setOldPassword('');
             setNewPassword('');
             setIsChangingPassword(false);
@@ -182,11 +183,7 @@ const Profile = () => {
     };
 
     if (loading) {
-        return (
-            <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-950">
-                <Loader className="animate-spin text-indigo-500" size={48} />
-            </div>
-        );
+        return <Loading message="Loading profile…" />;
     }
     
     if (error && !userData.name) {

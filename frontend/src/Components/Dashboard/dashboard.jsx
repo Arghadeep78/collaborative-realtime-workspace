@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 
@@ -57,6 +57,14 @@ export default function Dashboard({ logout }) {
 
   useEffect(() => { fetchBoards(); }, []);
 
+  // Close the open card menu when clicking anywhere outside it
+  useEffect(() => {
+    if (!openMenu) return;
+    const close = () => setOpenMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openMenu]);
+
   const createBoard = async () => {
     setCreating(true);
     try {
@@ -112,7 +120,7 @@ export default function Dashboard({ logout }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#ededed] font-sans selection:bg-white/20">
+    <div className="h-full overflow-y-auto bg-[#0a0a0a] text-[#ededed] font-sans selection:bg-white/20">
       {/* ── Nav ───────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-30 flex items-center justify-between px-8 py-5 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/[0.08]">
         <div className="flex items-center gap-3 cursor-pointer select-none">
@@ -140,7 +148,7 @@ export default function Dashboard({ logout }) {
       </nav>
 
       {/* ── Main ──────────────────────────────────────────────────── */}
-      <main className="max-w-7xl mx-auto px-8 py-12 animate-in fade-in duration-500">
+      <main className="max-w-7xl mx-auto px-8 py-12 rb-anim-fade">
         {/* Header section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
           <div>
@@ -203,7 +211,7 @@ export default function Dashboard({ logout }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((board, i) => (
+            {filtered.map((board) => (
               <div
                 key={board.id}
                 className="group relative bg-white/[0.02] border border-white/[0.08] hover:border-white/20 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 flex flex-col h-full"
@@ -261,7 +269,7 @@ export default function Dashboard({ logout }) {
                         <MoreIcon />
                       </button>
                       {openMenu === board.id && (
-                        <div className="absolute right-0 top-8 w-40 bg-[#121212] border border-white/10 rounded-lg shadow-2xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-150 py-1">
+                        <div className="absolute right-0 top-8 w-40 bg-[#121212] border border-white/10 rounded-lg shadow-2xl overflow-hidden z-20 rb-anim-pop py-1">
                           <button onClick={() => startRename(board)}
                             className="w-full text-left px-3 py-2 text-sm text-white/80 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5">
                             <EditIcon />

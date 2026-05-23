@@ -702,7 +702,7 @@ export default function WhiteboardRoom() {
           onClick={handleCommentOverlayClick}
           style={{ background: 'rgba(245, 158, 11, 0.03)' }}
         >
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-medium shadow-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-full text-amber-800 text-xs font-medium shadow-lg flex items-center gap-2 rb-anim-slide-down">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
             Click anywhere to place a comment · Press Esc to cancel
           </div>
@@ -765,7 +765,7 @@ export default function WhiteboardRoom() {
         </div>
       )}
 
-      {showAI && <AIPanel editor={editorRef.current} boardId={boardId} onClose={() => setShowAI(false)} />}
+      {showAI && <AIPanel editor={editorRef.current} onClose={() => setShowAI(false)} />}
       {showShare && <ShareModal boardId={boardId} board={board} onClose={() => setShowShare(false)} />}
     </div>
   );

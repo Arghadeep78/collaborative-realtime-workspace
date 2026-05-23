@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+/*
+ * Lightweight enter animations.
+ *
+ * The components previously used `animate-in fade-in zoom-in-95 ...` style
+ * classes, which come from the `tailwindcss-animate` plugin that is not
+ * installed — so those animations silently did nothing. These self-contained
+ * utilities replace them with no extra dependency.
+ */
+@keyframes rb-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes rb-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes rb-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.rb-anim-fade       { animation: rb-fade 0.25s ease-out both; }
+.rb-anim-pop        { animation: rb-pop 0.15s ease-out both; }
+.rb-anim-slide-down { animation: rb-slide-down 0.2s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-anim-fade,
+  .rb-anim-pop,
+  .rb-anim-slide-down {
+    animation: none;
+  }
+}

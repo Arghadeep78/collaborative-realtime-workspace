@@ -2,9 +2,9 @@ import { useState, useRef } from 'react';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 
 /**
- * @param {{ editor: import('@tldraw/tldraw').Editor|null, boardId: string, onClose: () => void }} props
+ * @param {{ editor: import('@tldraw/tldraw').Editor|null, onClose: () => void }} props
  */
-export default function AIPanel({ editor, boardId, onClose }) {
+export default function AIPanel({ editor, onClose }) {
   const [topic, setTopic]     = useState('');
   const [count, setCount]     = useState(5);
   const [loading, setLoading] = useState(false);

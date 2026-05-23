@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, UserCheck } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { BACKEND_URL, GOOGLE_CLIENT_ID } from '../../constants/apiConfig';
 
 const Register = () => {
@@ -226,26 +226,8 @@ const Register = () => {
                 </button>
               </div>
             </div>
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">Role</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  <UserCheck size={16} />
-                </div>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-800 text-white text-sm pl-9 pr-3 py-2.5 rounded-xl border border-gray-700 outline-none focus:border-indigo-500 transition-colors appearance-none"
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-            </div>
-
             {error && (
-              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800 text-red-400 text-sm px-3 py-2 rounded-lg animate-[fadeIn_0.2s_ease-out]">
+              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800 text-red-400 text-sm px-3 py-2 rounded-lg rb-anim-fade">
                 <span>⚠</span> {error}
               </div>
             )}

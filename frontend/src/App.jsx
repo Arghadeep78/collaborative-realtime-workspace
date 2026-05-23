@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { Toaster } from 'react-hot-toast';
 
-import { ThemeProvider } from './context/ThemeContext.jsx';
 import Register from './Components/AuthPages/Register.jsx';
 import Login from './Components/AuthPages/Login.jsx';
 import Dashboard from './Components/Dashboard/dashboard.jsx';
@@ -34,7 +33,7 @@ const ProtectedRoute = ({ children }) => {
       logout(); // Token expired
       return null;
     }
-  } catch (err) {
+  } catch {
     logout(); // Invalid token
     return null;
   }
@@ -53,7 +52,7 @@ const PublicRoute = ({ children }) => {
       if (decoded.exp >= currentTime) {
         return <Navigate to="/dashboard" replace />;
       }
-    } catch (err) {
+    } catch {
       // Invalid token, allow access to public route
     }
   }
@@ -116,7 +115,6 @@ function App() {
   }, []);
 
   return (
-    <ThemeProvider>
     <BrowserRouter>
       <Routes>
         {/* Default route redirects to auth or dashboard */}
@@ -166,43 +164,38 @@ function App() {
         } />
       </Routes>
       
-      {/* Toast Container - positioned at top right */}
+      {/* Single source of truth for all toast styling across the app */}
       <Toaster
         position="top-center"
-        reverseOrder={false}
         gutter={8}
-        containerClassName=""
-        containerStyle={{}}
         toastOptions={{
-          // Define default options
-          className: '',
-          duration: 4000,
+          duration: 3000,
           style: {
-            background: '#363636',
-            color: '#fff',
+            background: '#1e293b',
+            color: '#f1f5f9',
+            fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+            fontSize: '14px',
+            fontWeight: 500,
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5)',
+            maxWidth: '420px',
           },
-          // Default options for specific types
           success: {
             duration: 2500,
-            theme: {
-              primary: 'green',
-              secondary: 'black',
-            },
+            iconTheme: { primary: '#10b981', secondary: '#1e293b' },
           },
           error: {
             duration: 4000,
-            style: {
-              background: '#ff4444',
-              color: 'white',
-            },
+            iconTheme: { primary: '#ef4444', secondary: '#1e293b' },
           },
           loading: {
-            duration: Infinity,
+            iconTheme: { primary: '#6366f1', secondary: '#1e293b' },
           },
         }}
       />
     </BrowserRouter>
-    </ThemeProvider>
   );
 }
 

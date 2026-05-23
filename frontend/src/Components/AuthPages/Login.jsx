@@ -210,7 +210,7 @@ const Login = () => {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800 text-red-400 text-sm px-3 py-2 rounded-lg animate-[fadeIn_0.2s_ease-out]">
+              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800 text-red-400 text-sm px-3 py-2 rounded-lg rb-anim-fade">
                 <span>⚠</span> {error}
               </div>
             )}
