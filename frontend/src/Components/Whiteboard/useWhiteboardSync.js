@@ -161,7 +161,7 @@ export function useWhiteboardSync({ ydoc, editorRef, setTimer, setVotes, setComm
       const currentTimer = ySystem.get('timer');
       if (currentTimer) setTimer(currentTimer);
     };
-    const onVotesChange = () => setVotes(yVotes.toJSON());
+    const onVotesChange = () => { setVotes(yVotes.toJSON()); };
     const onCommentsChange = () => setComments(yComments.toArray());
 
     ySystem.observe(onSystemChange);

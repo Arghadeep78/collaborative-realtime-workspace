@@ -57,20 +57,24 @@ const LogoIcon = () => (
   </svg>
 );
 
-// ── Preset thumbnails ─────────────────────────────────────────────────────────
-const PRESETS = [
-  { id: 'p1',  label: 'Ocean',     value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-  { id: 'p2',  label: 'Sunset',    value: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-  { id: 'p3',  label: 'Forest',    value: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-  { id: 'p4',  label: 'Mint',      value: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
-  { id: 'p5',  label: 'Blaze',     value: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-  { id: 'p6',  label: 'Night',     value: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)' },
-  { id: 'p7',  label: 'Peach',     value: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' },
-  { id: 'p8',  label: 'Indigo',    value: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)' },
-  { id: 'p9',  label: 'Lava',      value: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)' },
-  { id: 'p10', label: 'Sky',       value: 'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)' },
-  { id: 'p11', label: 'Slate',     value: 'linear-gradient(135deg, #434343 0%, #000000 100%)' },
-  { id: 'p12', label: 'Emerald',   value: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
+// ── Cute Illustration Generators ──────────────────────────────────────────────
+const CUTE_THUMBNAILS = [
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Felix&backgroundColor=ffdfbf',
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Aneka&backgroundColor=c0aede',
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Oliver&backgroundColor=d1d4f9',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=Sam&backgroundColor=b6e3f4',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=Mia&backgroundColor=ffd5dc',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=Buster&backgroundColor=c2e8c2',
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Bella&backgroundColor=e6e6fa',
+  'https://api.dicebear.com/8.x/lorelei/svg?seed=Lily&backgroundColor=c0aede',
+  'https://api.dicebear.com/8.x/lorelei/svg?seed=Oscar&backgroundColor=ffd5dc',
+  'https://api.dicebear.com/8.x/lorelei/svg?seed=George&backgroundColor=e6e6fa',
+  'https://api.dicebear.com/8.x/micah/svg?seed=Leo&backgroundColor=ffeeb5',
+  'https://api.dicebear.com/8.x/micah/svg?seed=Max&backgroundColor=b6e3f4',
+  'https://api.dicebear.com/8.x/micah/svg?seed=Charlie&backgroundColor=d1d4f9',
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Jack&backgroundColor=c2e8c2',
+  'https://api.dicebear.com/8.x/fun-emoji/svg?seed=Nala&backgroundColor=ffeeb5',
+  'https://api.dicebear.com/8.x/bottts/svg?seed=Milo&backgroundColor=ffdfbf'
 ];
 
 // ── ThumbnailPicker modal ─────────────────────────────────────────────────────
@@ -108,24 +112,24 @@ function ThumbnailPicker({ currentThumbnail, onSelect, onClose }) {
           </button>
         </div>
 
-        {/* Presets grid */}
-        <p className="text-gray-500 dark:text-white/40 text-xs font-medium uppercase tracking-widest mb-3">Gradients</p>
+        {/* Illustrations grid */}
+        <p className="text-gray-500 dark:text-white/40 text-xs font-medium uppercase tracking-widest mb-3">Cute Faces</p>
         <div className="grid grid-cols-4 gap-2 mb-5">
-          {PRESETS.map(p => {
-            const active = currentThumbnail === p.value;
+          {CUTE_THUMBNAILS.map((url, i) => {
+            const active = currentThumbnail === url;
             return (
               <button
-                key={p.id}
-                title={p.label}
-                onClick={() => onSelect(p.value)}
+                key={`cute-${i}`}
+                title={`Cute Face ${i+1}`}
+                onClick={() => onSelect(url)}
                 className="relative h-14 rounded-lg overflow-hidden ring-2 transition-all hover:ring-gray-300 dark:hover:ring-white/40 focus:outline-none"
                 style={{
-                  background: p.value,
                   ringColor: active ? (document.documentElement.classList.contains('dark') ? 'white' : '#4f46e5') : 'transparent',
                   outline: active ? '2px solid currentColor' : '2px solid transparent',
                   outlineOffset: '2px',
                 }}
               >
+                <img src={url} alt="" className="w-full h-full object-cover" />
                 {active && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
                     <CheckIcon />
@@ -182,11 +186,11 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
 
   return (
     <div
-      className="group relative bg-white dark:bg-[#111111] border border-gray-200 dark:border-white/[0.07] hover:shadow-lg dark:hover:border-white/[0.18] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 flex flex-col"
+      className="group relative bg-white dark:bg-[#2c2c2c] border border-gray-200 dark:border-white/[0.07] hover:shadow-lg dark:hover:border-white/[0.18] rounded-xl cursor-pointer transition-all duration-200 flex flex-col"
       onClick={() => onNavigate(board.id)}
     >
       {/* Thumbnail */}
-      <div className="h-40 relative overflow-hidden flex items-center justify-center bg-gray-50 dark:bg-[#1a1a1a]">
+      <div className="h-40 relative overflow-hidden flex items-center justify-center bg-gray-50 dark:bg-[#333333] rounded-t-[11px]">
         {board.thumbnail ? (
           isGradient(board.thumbnail) ? (
             <div className="absolute inset-0" style={{ background: board.thumbnail }} />
@@ -203,7 +207,7 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
       </div>
 
       {/* Card body */}
-      <div className="px-4 py-3.5 flex items-start justify-between gap-3 bg-white dark:bg-[#111111]">
+      <div className="px-4 py-3.5 flex items-start justify-between gap-3 bg-white dark:bg-[#2c2c2c] rounded-b-[11px]">
         <div className="flex-1 min-w-0">
           {renamingId === board.id ? (
             <input
@@ -318,10 +322,16 @@ export default function Dashboard({ logout }) {
   const createBoard = async () => {
     setCreating(true);
     try {
+      // Pick a random cute thumbnail
+      const randomThumbnail = CUTE_THUMBNAILS[Math.floor(Math.random() * CUTE_THUMBNAILS.length)];
+
       const res  = await fetch(`${BACKEND_URL}/boards/create`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Untitled Board' }),
+        body: JSON.stringify({ 
+          title: 'Untitled Board',
+          thumbnail: randomThumbnail
+        }),
       });
       const data = await res.json();
       if (data.id) navigate(`/board/${data.id}`);
@@ -369,10 +379,10 @@ export default function Dashboard({ logout }) {
   const filtered = boards.filter(b => b.title?.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#0d0d0d] text-gray-900 dark:text-[#ededed] font-sans overflow-hidden selection:bg-indigo-500/30 dark:selection:bg-white/20">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#212121] text-gray-900 dark:text-[#ededed] font-sans overflow-hidden selection:bg-indigo-500/30 dark:selection:bg-white/20">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className="w-[240px] flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d0d] py-5 px-4 shadow-sm z-10">
+      <aside className="w-[240px] flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#212121] py-5 px-4 shadow-sm z-10">
         {/* Logo */}
         <div className="flex items-center gap-3 px-2 mb-8 cursor-pointer select-none">
           <LogoIcon />
@@ -419,9 +429,9 @@ export default function Dashboard({ logout }) {
       </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-[#0d0d0d]">
+      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-[#212121]">
         {/* Top bar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-8 py-4 bg-white dark:bg-[#0d0d0d] border-b border-gray-200 dark:border-white/[0.07] z-0">
+        <header className="flex-shrink-0 flex items-center justify-between px-8 py-4 bg-white dark:bg-[#212121] border-b border-gray-200 dark:border-white/[0.07] z-0">
           <div className="relative group w-96">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-white/30 group-focus-within:text-indigo-500 dark:group-focus-within:text-white/60 transition-colors">
               <SearchIcon />

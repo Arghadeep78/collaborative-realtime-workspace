@@ -110,7 +110,7 @@ export default function WhiteboardRoom() {
 
   // ── Presence tick (cursor staleness) ──────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => setPresenceTick(Date.now()), 1000);
+    const interval = setInterval(() => { setPresenceTick(Date.now()); if (ydoc) { setVotes(ydoc.getMap('votes').toJSON()); setComments(ydoc.getArray('comments').toArray()); } }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -133,10 +133,10 @@ export default function WhiteboardRoom() {
         const email = localUser.email;
 
         if (!data.isPublic) {
-          if (!token) { toast.error("Please login to access this board."); navigate('/login'); return; }
+          if (!token) { toast.error("Please login to access this board.", { id: 'auth-toast' }); navigate('/login'); return; }
           const isOwner = data.owner === email;
           const isCollab = data.collaborators?.some(c => c.email === email);
-          if (!isOwner && !isCollab) { toast.error("You don't have access to this private board."); navigate('/dashboard'); return; }
+          if (!isOwner && !isCollab) { toast.error("You don't have access to this private board.", { id: 'auth-toast' }); navigate('/dashboard'); return; }
         }
 
         if (data.owner === email) {
@@ -149,7 +149,7 @@ export default function WhiteboardRoom() {
       })
       .catch(err => {
         console.error(err);
-        toast.error(err.message || "Board not found");
+        toast.error(err.message || "Board not found", { id: 'board-error-toast' });
         navigate('/dashboard');
       });
   }, [boardId, navigate]);

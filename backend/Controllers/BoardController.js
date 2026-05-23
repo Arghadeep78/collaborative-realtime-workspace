@@ -4,13 +4,17 @@ import { invalidateBoardMeta } from '../cache/boardCache.js';
 // ── createBoard ───────────────────────────────────────────────────────────────
 export const createBoard = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, thumbnail } = req.body;
     const owner = req.email; // set by authMiddleware
 
-    const board = new Whiteboard({ title: title || 'Untitled Board', owner });
+    const board = new Whiteboard({ 
+      title: title || 'Untitled Board', 
+      owner,
+      thumbnail: thumbnail || null
+    });
     await board.save();
 
-    return res.status(201).json({ id: board.id, title: board.title, createdAt: board.createdAt });
+    return res.status(201).json({ id: board.id, title: board.title, createdAt: board.createdAt, thumbnail: board.thumbnail });
   } catch (err) {
     console.error('createBoard error:', err);
     return res.status(500).json({ error: 'Failed to create board' });

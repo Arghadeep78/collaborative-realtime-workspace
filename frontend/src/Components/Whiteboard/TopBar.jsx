@@ -51,9 +51,9 @@ export default function TopBar({
 
         <div className="h-5 w-px bg-gray-200 dark:bg-slate-700"></div>
 
-        <div className="flex items-center gap-2">
-          <span className={UI.logo}>board</span>
-          <span className={UI.lite}>lite</span>
+        <div className="flex items-center gap-2 px-1">
+          <span className={UI.logo}>Collab</span>
+          <span className={UI.lite}>Board</span>
         </div>
 
         <div className="relative">
