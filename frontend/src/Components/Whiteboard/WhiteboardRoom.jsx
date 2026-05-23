@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tldraw, DefaultColorStyle, DefaultSizeStyle, DefaultDashStyle, DefaultFillStyle, GeoShapeGeoStyle, exportAs } from '@tldraw/tldraw';
+import { Tldraw, DefaultColorStyle, DefaultSizeStyle, DefaultDashStyle, DefaultFillStyle, GeoShapeGeoStyle, exportAs, react as reactEffect } from '@tldraw/tldraw';
 import { FixedNoteShapeUtil } from './FixedNoteShapeUtil.js';
 import '@tldraw/tldraw/tldraw.css';
 import toast from 'react-hot-toast';
@@ -59,6 +59,10 @@ export default function WhiteboardRoom() {
   const [activeShape, setActiveShape] = useState('rectangle');
   const [activeTextFont, setActiveTextFont] = useState('sans');
   const [activeTextAlign, setActiveTextAlign] = useState('start');
+  const [activeTextVAlign, setActiveTextVAlign] = useState('middle');
+  const [activeOpacity, setActiveOpacity] = useState(1);
+  const [selectedTypes, setSelectedTypes] = useState([]);
+  const [editingType, setEditingType] = useState(null);
   const toolbarRef = useRef(null);
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
@@ -339,6 +343,26 @@ export default function WhiteboardRoom() {
     return () => { unsubStart(); unsubEnd(); stopBroadcast(); };
   }, [editorReady, provider, persistCamera]);
 
+  // ── Toolbar context: track selection / text editing / opacity ─────────────
+  useEffect(() => {
+    if (!editorReady || !editorRef.current) return;
+    const editor = editorRef.current;
+    const dispose = reactEffect('toolbar-context', () => {
+      const editingId = editor.getEditingShapeId();
+      const editingShape = editingId ? editor.getShape(editingId) : null;
+      setEditingType(prev => {
+        const next = editingShape ? editingShape.type : null;
+        return prev === next ? prev : next;
+      });
+      const types = [...new Set(editor.getSelectedShapes().map(s => s.type))];
+      setSelectedTypes(prev => (prev.length === types.length && prev.every((t, i) => t === types[i]) ? prev : types));
+      const op = editor.getSharedOpacity();
+      const opacity = op.type === 'shared' ? op.value : null;
+      setActiveOpacity(prev => (prev === opacity ? prev : opacity));
+    });
+    return () => dispose();
+  }, [editorReady]);
+
   // ── Spotlight cleanup ─────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
@@ -411,6 +435,14 @@ export default function WhiteboardRoom() {
   const handleSizeSelect = (size) => { setActiveSize(size); applyEditorStyle('size', size); };
   const handleDashSelect = (dash) => { setActiveDash(dash); applyEditorStyle('dash', dash); };
   const handleFillSelect = (fill) => { setActiveFill(fill); applyEditorStyle('fill', fill); };
+
+  const handleOpacitySelect = (value) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.setOpacityForNextShapes(value);
+    editor.setOpacityForSelectedShapes(value);
+    setActiveOpacity(value);
+  };
 
   const handleShapeSelect = (type) => {
     setActiveShape(type);
@@ -733,6 +765,8 @@ export default function WhiteboardRoom() {
 
       <ContextToolbar
         activeTool={activeTool}
+        selectedTypes={selectedTypes}
+        editingType={editingType}
         activeColor={activeColor}
         activeSize={activeSize}
         activeDash={activeDash}
@@ -740,13 +774,17 @@ export default function WhiteboardRoom() {
         activeShape={activeShape}
         activeTextFont={activeTextFont}
         activeTextAlign={activeTextAlign}
+        activeTextVAlign={activeTextVAlign}
+        activeOpacity={activeOpacity}
         handleColorSelect={handleColorSelect}
         handleSizeSelect={handleSizeSelect}
         handleDashSelect={handleDashSelect}
         handleFillSelect={handleFillSelect}
         handleShapeSelect={handleShapeSelect}
+        handleOpacitySelect={handleOpacitySelect}
         setActiveTextFont={setActiveTextFont}
         setActiveTextAlign={setActiveTextAlign}
+        setActiveTextVAlign={setActiveTextVAlign}
         editorRef={editorRef}
       />
 

@@ -1,17 +1,44 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { DefaultFontStyle, DefaultTextAlignStyle } from '@tldraw/tlschema';
+import { DefaultFontStyle, DefaultTextAlignStyle, DefaultVerticalAlignStyle } from '@tldraw/tlschema';
 import { UI, GRID_COLORS } from './whiteboardConstants.js';
 
-// Which control groups appear for each tool
-const TOOL_CAPS = {
-  draw:    { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false },
-  geo:     { color: true, weight: true,  stroke: true,  shapes: true,  fill: true,  font: false, textSize: false, align: false },
-  line:    { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false },
-  arrow:   { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false },
-  text:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: true,  textSize: true,  align: true  },
-  note:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: false, textSize: false, align: false },
+// Capability sets per normalized context key. `opacity` is appended for every
+// visible context, so it isn't listed here.
+const CAPS = {
+  draw:  { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false, valign: false },
+  geo:   { color: true, weight: true,  stroke: true,  shapes: true,  fill: true,  font: false, textSize: false, align: false, valign: false },
+  line:  { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false, valign: false },
+  arrow: { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false, valign: false },
+  text:  { color: true, weight: false, stroke: false, shapes: false, fill: false, font: true,  textSize: true,  align: true,  valign: true  },
+  note:  { color: true, weight: false, stroke: false, shapes: false, fill: false, font: true,  textSize: true,  align: true,  valign: true  },
 };
+
+// While typing into any shape, only the text controls are relevant.
+const TEXT_EDIT_CAPS = { color: true, font: true, textSize: true, align: true, valign: true };
+
+// tldraw tool ids / shape type ids → normalized capability key
+const TO_KEY = { draw: 'draw', highlight: 'draw', geo: 'geo', line: 'line', arrow: 'arrow', text: 'text', note: 'note' };
+
+function resolveCaps({ activeTool, selectedTypes, editingType }) {
+  // 1) Actively typing into a shape → text sub-toolbar.
+  if (editingType) return { ...TEXT_EDIT_CAPS, opacity: true };
+
+  // 2) One or more shapes selected → union of their capability sets.
+  if (selectedTypes && selectedTypes.length) {
+    const merged = {};
+    for (const type of selectedTypes) {
+      const caps = CAPS[TO_KEY[type]];
+      if (caps) for (const k in caps) merged[k] = merged[k] || caps[k];
+    }
+    merged.opacity = true; // any shape can change opacity
+    return merged;
+  }
+
+  // 3) Otherwise reflect the active drawing tool.
+  const caps = CAPS[TO_KEY[activeTool]];
+  return caps ? { ...caps, opacity: true } : {};
+}
 
 const SHAPES = [
   { id: 'rectangle', path: <rect x="2" y="2" width="12" height="12" rx="1.5" /> },
@@ -64,6 +91,12 @@ const ALIGN_OPTIONS = [
   { id: 'end', title: 'Align Right', icon: <><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></> },
 ];
 
+const VALIGN_OPTIONS = [
+  { id: 'start', title: 'Align Top', icon: <><line x1="3" y1="4" x2="21" y2="4"/><rect x="8" y="8" width="8" height="11" rx="1.5" fill="none"/></> },
+  { id: 'middle', title: 'Align Middle', icon: <><line x1="3" y1="12" x2="21" y2="12"/><rect x="8" y="6" width="8" height="12" rx="1.5" fill="none"/></> },
+  { id: 'end', title: 'Align Bottom', icon: <><rect x="8" y="5" width="8" height="11" rx="1.5" fill="none"/><line x1="3" y1="20" x2="21" y2="20"/></> },
+];
+
 function VDiv() {
   return <div className="w-px self-stretch bg-slate-200 dark:bg-slate-700 mx-1 my-1" />;
 }
@@ -71,6 +104,8 @@ function VDiv() {
 function Btn({ active, onClick, title, children }) {
   return (
     <button
+      // Keep focus on the text editor so clicking a control doesn't end editing.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       title={title}
       className={`h-8 min-w-[32px] px-1.5 rounded-lg flex items-center justify-center transition-all shrink-0
@@ -112,6 +147,7 @@ function ColorPicker({ activeColor, handleColorSelect }) {
     <div className="relative flex items-center shrink-0">
       <button
         ref={btnRef}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => (open ? setOpen(false) : openMenu())}
         className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${open ? 'bg-slate-100' : 'hover:bg-slate-100'}`}
         title="Color"
@@ -127,6 +163,7 @@ function ColorPicker({ activeColor, handleColorSelect }) {
           {GRID_COLORS.map(c => (
             <button
               key={c.id}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => { handleColorSelect(c); setOpen(false); }}
               className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
               style={{ borderColor: activeColor === c.id ? c.hex : 'transparent', backgroundColor: c.hex }}
@@ -140,8 +177,73 @@ function ColorPicker({ activeColor, handleColorSelect }) {
   );
 }
 
+function OpacityPicker({ activeOpacity, handleOpacitySelect }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
+  const pct = Math.round((activeOpacity ?? 1) * 100);
+
+  const openMenu = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) setCoords({ top: rect.bottom + 8, left: rect.left });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (btnRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div className="relative flex items-center shrink-0">
+      <button
+        ref={btnRef}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${open ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-100 dark:hover:bg-slate-700'} text-slate-600 dark:text-slate-400`}
+        title="Opacity"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M12 3 a9 9 0 0 1 0 18 z" fill="currentColor" />
+        </svg>
+      </button>
+      {open && coords && createPortal(
+        <div
+          ref={popRef}
+          className="fixed p-3 rounded-xl bg-white dark:bg-slate-800 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200 dark:border-slate-700 z-[100] w-44"
+          style={{ top: coords.top, left: coords.left }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opacity</span>
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 tabular-nums">{activeOpacity == null ? 'Mixed' : `${pct}%`}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={pct}
+            onChange={(e) => handleOpacitySelect(Number(e.target.value) / 100)}
+            className="w-full accent-indigo-500 cursor-pointer"
+          />
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 export default function ContextToolbar({
   activeTool,
+  selectedTypes,
+  editingType,
   activeColor,
   activeSize,
   activeDash,
@@ -149,16 +251,20 @@ export default function ContextToolbar({
   activeShape,
   activeTextFont,
   activeTextAlign,
+  activeTextVAlign,
+  activeOpacity,
   handleColorSelect,
   handleSizeSelect,
   handleDashSelect,
   handleFillSelect,
   handleShapeSelect,
+  handleOpacitySelect,
   setActiveTextFont,
   setActiveTextAlign,
+  setActiveTextVAlign,
   editorRef,
 }) {
-  const caps = TOOL_CAPS[activeTool] || {};
+  const caps = resolveCaps({ activeTool, selectedTypes, editingType });
   if (!Object.values(caps).some(Boolean)) return null;
 
   const applyTextAlign = (align) => {
@@ -167,6 +273,14 @@ export default function ContextToolbar({
     editor.setStyleForNextShapes(DefaultTextAlignStyle, align);
     editor.setStyleForSelectedShapes(DefaultTextAlignStyle, align);
     setActiveTextAlign(align);
+  };
+
+  const applyVerticalAlign = (align) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.setStyleForNextShapes(DefaultVerticalAlignStyle, align);
+    editor.setStyleForSelectedShapes(DefaultVerticalAlignStyle, align);
+    setActiveTextVAlign(align);
   };
 
   const applyFont = (fontId) => {
@@ -179,8 +293,8 @@ export default function ContextToolbar({
 
   return (
     <div
-      className={`absolute top-4 left-20 z-20 flex items-center rounded-2xl px-2 py-1.5 gap-0.5 ${UI.surface}`}
-      style={{ maxWidth: 'calc(100vw - 100px)', overflowX: 'auto' }}
+      className={`absolute top-20 left-20 z-20 flex items-center rounded-2xl px-2 py-1.5 gap-0.5 ${UI.surface}`}
+      style={{ maxWidth: 'calc(100vw - 120px)', overflowX: 'auto' }}
     >
       {/* Color — present when the color cap is on */}
       {caps.color && <ColorPicker activeColor={activeColor} handleColorSelect={handleColorSelect} />}
@@ -243,7 +357,7 @@ export default function ContextToolbar({
         </>
       )}
 
-      {/* Font (text tool) */}
+      {/* Font (text + note) */}
       {caps.font && (
         <>
           <VDiv />
@@ -276,7 +390,7 @@ export default function ContextToolbar({
         </>
       )}
 
-      {/* Text align */}
+      {/* Text align (horizontal) */}
       {caps.align && (
         <>
           <VDiv />
@@ -287,6 +401,28 @@ export default function ContextToolbar({
               </Btn>
             ))}
           </div>
+        </>
+      )}
+
+      {/* Text align (vertical) */}
+      {caps.valign && (
+        <>
+          <VDiv />
+          <div className="flex items-center gap-0.5">
+            {VALIGN_OPTIONS.map(({ id, title, icon }) => (
+              <Btn key={id} active={activeTextVAlign === id} onClick={() => applyVerticalAlign(id)} title={title}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{icon}</svg>
+              </Btn>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Opacity — present for every visible context */}
+      {caps.opacity && (
+        <>
+          <VDiv />
+          <OpacityPicker activeOpacity={activeOpacity} handleOpacitySelect={handleOpacitySelect} />
         </>
       )}
     </div>
