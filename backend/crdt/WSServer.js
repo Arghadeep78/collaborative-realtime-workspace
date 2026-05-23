@@ -274,10 +274,12 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         }
       }
 
-      if (documentManager.getConnections(boardId).size === 0) {
-        awarenessMap.delete(boardId);
-        docListenersReady.delete(boardId);
-      }
+      // NOTE: awarenessMap / docListenersReady are intentionally NOT cleared
+      // here. The Y.Doc (and its single `update` listener) survives the GC
+      // window, so clearing docListenersReady on an empty room would let a
+      // reconnect within that window attach a duplicate `update` listener,
+      // doubling every broadcast and Redis publish. Cleanup happens in
+      // onDocEvicted, which fires only when the doc is actually evicted.
     });
   });
 

@@ -1,2 +1,2 @@
-import { DefaultColorStyle } from '@tldraw/tldraw';
-console.log("Values:", DefaultColorStyle.values);
+import { Tldraw } from '@tldraw/tldraw';
+console.log(Object.keys(Tldraw));

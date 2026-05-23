@@ -127,8 +127,6 @@ userSchema.statics.updatenewPassword = async function (
 
     // If user registered with Google but trying to update password
     if (user.authProvider === "google" && !user.password) {
-      user.password = newPassword; // Set new password
-      user.authProvider = "local"; // Change auth provider to local
       throw new Error(
         "This account is linked with Google. Please use Google Sign-in."
       );

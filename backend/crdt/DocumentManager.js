@@ -114,7 +114,15 @@ class DocumentManager {
     this.gcTimers.set(
       boardId,
       setTimeout(() => {
-        if (this.dirtyDocs.has(boardId)) return; // let persistence flush first
+        // Still un-persisted: let the next persistence flush finish, then
+        // retry eviction. Returning without rescheduling would strand the
+        // doc in memory forever (the room is empty, so nothing else will
+        // ever re-arm the GC timer).
+        if (this.dirtyDocs.has(boardId)) {
+          this.gcTimers.delete(boardId);
+          this._scheduleGC(boardId);
+          return;
+        }
         const ydoc = this.docs.get(boardId);
         if (ydoc) {
           ydoc.destroy();

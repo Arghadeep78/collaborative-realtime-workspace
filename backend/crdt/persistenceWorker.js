@@ -42,6 +42,10 @@ export function startPersistenceWorker(redisOpts) {
 
   worker.on('failed', (job, err) => {
     lerr(`Job ${job?.id} failed — boardId: ${job?.data?.boardId}:`, err.message);
+    // The scheduler clears the dirty flag when it enqueues, so a failed
+    // persist would otherwise be lost until the next edit. Re-mark dirty so
+    // the next scheduler tick retries the write.
+    if (job?.data?.boardId) documentManager.markDirty(job.data.boardId);
   });
 
   worker.on('error', (err) => {

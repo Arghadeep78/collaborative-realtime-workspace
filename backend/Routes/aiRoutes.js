@@ -4,8 +4,8 @@ import { expandIdea, generateIdeas, summarizeBoard } from '../Controllers/AiWhit
 
 const router = express.Router();
 
-router.post('/expand',         authMiddleware, express.json(), expandIdea);
-router.post('/generate-ideas', authMiddleware, express.json(), generateIdeas);
-router.post('/summarize',      authMiddleware, express.json(), summarizeBoard);
+router.post('/expand',         authMiddleware, expandIdea);
+router.post('/generate-ideas', authMiddleware, generateIdeas);
+router.post('/summarize',      authMiddleware, summarizeBoard);
 
 export default router;

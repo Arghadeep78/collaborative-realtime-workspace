@@ -210,9 +210,6 @@ const updatePassword = async (req, res) => {
   try {
     const userEmail = req.email;
     const { oldPassword, newPassword } = req.body;
-    console.log("Updating password for user:", userEmail);
-    console.log("Old Password:", oldPassword);
-    console.log("New Password:", newPassword);
     if (!oldPassword || !newPassword) {
       return res
         .status(400)

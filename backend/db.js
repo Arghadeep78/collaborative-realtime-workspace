@@ -23,11 +23,6 @@ const connectionString = hasDirectUri
       : '';
 
 
-const connectionParams = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-};
-
 const connectToDatabase = async () => {
     try {
         if (!connectionString) {
@@ -35,7 +30,7 @@ const connectToDatabase = async () => {
                 'Missing MongoDB connection settings. Set DB_CLUSTER_URL or DB_USERNAME/DB_PASSWORD/DB_CLUSTER_URL.'
             );
         }
-        await mongoose.connect(connectionString, connectionParams);
+        await mongoose.connect(connectionString);
         console.log('Connected to database');
     } catch (err) {
         console.error(`Error connecting to the database.\n${err}`);
