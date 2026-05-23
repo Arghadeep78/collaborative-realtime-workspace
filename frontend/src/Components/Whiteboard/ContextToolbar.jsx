@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { DefaultFontStyle, DefaultTextAlignStyle } from '@tldraw/tlschema';
-import { UI, GRID_COLORS } from './whiteboardConstants.js';
+import { UI, GRID_COLORS, ERASER_SIZES } from './whiteboardConstants.js';
 
 // Which control groups appear for each tool
 const TOOL_CAPS = {
@@ -10,6 +11,7 @@ const TOOL_CAPS = {
   arrow:   { color: true, weight: true,  stroke: true,  shapes: false, fill: false, font: false, textSize: false, align: false },
   text:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: true,  textSize: true,  align: true  },
   note:    { color: true, weight: false, stroke: false, shapes: false, fill: false, font: false, textSize: false, align: false },
+  eraser:  { color: false, weight: false, stroke: false, shapes: false, fill: false, font: false, textSize: false, align: false, eraser: true },
 };
 
 const SHAPES = [
@@ -85,27 +87,44 @@ function Btn({ active, onClick, title, children }) {
 
 function ColorPicker({ activeColor, handleColorSelect }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [coords, setCoords] = useState(null);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
   const hex = GRID_COLORS.find(c => c.id === activeColor)?.hex ?? '#1d1d1d';
+
+  const openMenu = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect) setCoords({ top: rect.bottom + 8, left: rect.left });
+    setOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onDown = (e) => {
+      if (btnRef.current?.contains(e.target)) return;
+      if (popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
   return (
-    <div ref={ref} className="relative flex items-center shrink-0">
+    <div className="relative flex items-center shrink-0">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${open ? 'bg-slate-100' : 'hover:bg-slate-100'}`}
         title="Color"
       >
         <div className="w-5 h-5 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: hex }} />
       </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-2 p-2 rounded-xl bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200 grid grid-cols-4 gap-1.5 z-[60]">
+      {open && coords && createPortal(
+        <div
+          ref={popRef}
+          className="fixed p-2 rounded-xl bg-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-200 grid grid-cols-4 gap-1.5 z-[100]"
+          style={{ top: coords.top, left: coords.left }}
+        >
           {GRID_COLORS.map(c => (
             <button
               key={c.id}
@@ -115,7 +134,8 @@ function ColorPicker({ activeColor, handleColorSelect }) {
               title={c.tl}
             />
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -130,11 +150,13 @@ export default function ContextToolbar({
   activeShape,
   activeTextFont,
   activeTextAlign,
+  activeEraserSize,
   handleColorSelect,
   handleSizeSelect,
   handleDashSelect,
   handleFillSelect,
   handleShapeSelect,
+  handleEraserSizeSelect,
   setActiveTextFont,
   setActiveTextAlign,
   editorRef,
@@ -160,11 +182,23 @@ export default function ContextToolbar({
 
   return (
     <div
-      className={`absolute top-[68px] left-20 z-20 flex items-center rounded-2xl px-2 py-1.5 gap-0.5 ${UI.surface}`}
+      className={`absolute top-4 left-20 z-20 flex items-center rounded-2xl px-2 py-1.5 gap-0.5 ${UI.surface}`}
       style={{ maxWidth: 'calc(100vw - 100px)', overflowX: 'auto' }}
     >
-      {/* Color — always present when any cap is on */}
-      <ColorPicker activeColor={activeColor} handleColorSelect={handleColorSelect} />
+      {/* Eraser size (eraser only) */}
+      {caps.eraser && (
+        <div className="flex items-center gap-0.5">
+          <span className="text-[11px] font-semibold text-slate-400 px-1.5 select-none">Size</span>
+          {ERASER_SIZES.map(({ id, dot }) => (
+            <Btn key={id} active={activeEraserSize === id} onClick={() => handleEraserSizeSelect(id)} title={`Eraser: ${id.toUpperCase()}`}>
+              <div className="rounded-full border border-current" style={{ width: dot, height: dot }} />
+            </Btn>
+          ))}
+        </div>
+      )}
+
+      {/* Color — present when the color cap is on */}
+      {caps.color && <ColorPicker activeColor={activeColor} handleColorSelect={handleColorSelect} />}
 
       {/* Shape type (geo only) */}
       {caps.shapes && (

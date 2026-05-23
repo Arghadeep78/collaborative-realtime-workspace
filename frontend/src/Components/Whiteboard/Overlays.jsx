@@ -75,8 +75,13 @@ const Overlays = track(({ editor, votes, comments, peers = [], presenceTick, myV
               className="absolute pointer-events-none"
               style={{ transform: `translate(${pt.x}px, ${pt.y}px)`, opacity }}
             >
-              <div className="absolute w-2.5 h-2.5 rounded-full shadow" style={{ backgroundColor: peer.color, transform: 'translate(-50%, -50%)' }} />
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[10px] rounded bg-white/90 border border-black/10 text-slate-800 shadow whitespace-nowrap">
+              <svg width="20" height="20" viewBox="0 0 24 24" className="absolute" style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.3))' }}>
+                <path d="M5 2.5 L5 19 L9.2 14.8 L12 21 L15 19.7 L12.2 13.6 L18 13 Z" fill={peer.color} stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
+              </svg>
+              <div
+                className="absolute top-[18px] left-[14px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md text-white shadow whitespace-nowrap"
+                style={{ backgroundColor: peer.color }}
+              >
                 {label}
               </div>
             </div>

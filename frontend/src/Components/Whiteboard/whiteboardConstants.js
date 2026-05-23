@@ -59,3 +59,13 @@ export const getClosestTldrawColor = (hex) => {
 export const ZOOM_MIN = 0.05;
 export const ZOOM_MAX = 4;
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+// Eraser sizes — `dot` is the swatch size shown in the toolbar (px),
+// `radius` is the erase/cursor radius in page units.
+export const ERASER_SIZES = [
+  { id: 's', dot: 8, radius: 10 },
+  { id: 'm', dot: 12, radius: 20 },
+  { id: 'l', dot: 18, radius: 34 },
+  { id: 'xl', dot: 24, radius: 52 },
+];
+export const ERASER_RADII = Object.fromEntries(ERASER_SIZES.map(s => [s.id, s.radius]));

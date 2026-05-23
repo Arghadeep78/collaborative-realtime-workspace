@@ -1,6 +1,10 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
+// How often local tldraw changes are flushed to Yjs during continuous activity.
+// ~20 fps — smooth enough for live collaboration without flooding the socket.
+const FLUSH_INTERVAL = 50;
+
 export function useWhiteboardSync({ ydoc, editorRef, setTimer, setVotes, setComments }) {
   const bindingActiveRef = useRef(false);
   const bindingCleanupRef = useRef(null);
@@ -102,8 +106,10 @@ export function useWhiteboardSync({ ydoc, editorRef, setTimer, setVotes, setComm
         pendingChanges.removed[rec.id] = true;
       }
 
-      if (flushTimer) clearTimeout(flushTimer);
-      flushTimer = setTimeout(flushToYjs, 100);
+      // Throttle, not debounce: schedule a flush only if one isn't already
+      // pending. This guarantees updates propagate every FLUSH_INTERVAL ms even
+      // during a continuous drag/draw, instead of waiting for the user to pause.
+      if (!flushTimer) flushTimer = setTimeout(flushToYjs, FLUSH_INTERVAL);
     }, { scope: 'document' });
 
     // Yjs → tldraw

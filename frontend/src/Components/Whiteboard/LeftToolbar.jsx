@@ -30,7 +30,7 @@ export default function LeftToolbar({
           }`}
       >
         {children}
-        {hasColorDot && colorDot}
+        {hasColorDot && active && colorDot}
       </button>
     );
   };
