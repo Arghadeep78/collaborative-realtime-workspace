@@ -8,9 +8,9 @@ import { BACKEND_URL } from '../../constants/apiConfig.js';
 import AIPanel from './AIPanel.jsx';
 import ShareModal from './ShareModal.jsx';
 import CustomGrid from './CustomGrid.jsx';
-import CustomStylePanel from './CustomStylePanel.jsx';
 import Overlays from './Overlays.jsx';
 import LeftToolbar from './LeftToolbar.jsx';
+import ContextToolbar from './ContextToolbar.jsx';
 import TopBar from './TopBar.jsx';
 import { useWhiteboardSync } from './useWhiteboardSync.js';
 import { UI, myColor, ZOOM_MIN, ZOOM_MAX, clamp, boardShellClass, tldrawHostClass } from './whiteboardConstants.js';
@@ -51,15 +51,9 @@ export default function WhiteboardRoom() {
   const [activeSize, setActiveSize] = useState('m');
   const [activeDash, setActiveDash] = useState('draw');
   const [activeFill, setActiveFill] = useState('none');
+  const [activeShape, setActiveShape] = useState('rectangle');
   const [activeTextFont, setActiveTextFont] = useState('sans');
   const [activeTextAlign, setActiveTextAlign] = useState('start');
-  const [penPresets, setPenPresets] = useState([
-    { id: 'blue', tl: 'blue', hex: '#3b82f6' },
-    { id: 'red', tl: 'red', hex: '#ef4444' },
-    { id: 'green', tl: 'green', hex: '#22c55e' },
-  ]);
-  const [hoveredTool, setHoveredTool] = useState(null);
-  const [showFullPalette, setShowFullPalette] = useState(false);
   const toolbarRef = useRef(null);
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
@@ -100,17 +94,6 @@ export default function WhiteboardRoom() {
   useEffect(() => {
     const interval = setInterval(() => setPresenceTick(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, []);
-
-  // ── Close toolbar flyouts on outside click ────────────────────────────────
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target)) {
-        setHoveredTool(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // ── Fetch board metadata ──────────────────────────────────────────────────
@@ -412,6 +395,7 @@ export default function WhiteboardRoom() {
   const handleFillSelect = (fill) => { setActiveFill(fill); applyEditorStyle('fill', fill); };
 
   const handleShapeSelect = (type) => {
+    setActiveShape(type);
     handleToolSelect('geo');
     const editor = editorRef.current;
     if (editor) editor.setStyleForNextShapes(GeoShapeGeoStyle, type);
@@ -677,6 +661,7 @@ export default function WhiteboardRoom() {
             Toolbar: () => null,
             QuickActions: () => null,
             StylePanel: () => null,
+            NavigationPanel: () => null,
           }}
         >
           <Overlays
@@ -689,9 +674,6 @@ export default function WhiteboardRoom() {
             onToggleVote={toggleVoteDirectly}
             onDeleteComment={deleteComment}
           />
-          <div className="absolute top-[80px] left-4 z-50 pointer-events-none">
-            <CustomStylePanel />
-          </div>
         </Tldraw>
       </div>
 
@@ -713,37 +695,45 @@ export default function WhiteboardRoom() {
         toolbarRef={toolbarRef}
         activeTool={activeTool}
         activeColor={activeColor}
+        handleToolSelect={handleToolSelect}
+        handleUndo={handleUndo}
+        handleRedo={handleRedo}
+      />
+
+      <ContextToolbar
+        activeTool={activeTool}
+        activeColor={activeColor}
         activeSize={activeSize}
         activeDash={activeDash}
         activeFill={activeFill}
+        activeShape={activeShape}
         activeTextFont={activeTextFont}
         activeTextAlign={activeTextAlign}
-        penPresets={penPresets}
-        setPenPresets={setPenPresets}
-        hoveredTool={hoveredTool}
-        setHoveredTool={setHoveredTool}
-        showFullPalette={showFullPalette}
-        setShowFullPalette={setShowFullPalette}
-        handleToolSelect={handleToolSelect}
         handleColorSelect={handleColorSelect}
         handleSizeSelect={handleSizeSelect}
         handleDashSelect={handleDashSelect}
         handleFillSelect={handleFillSelect}
         handleShapeSelect={handleShapeSelect}
-        handleUndo={handleUndo}
-        handleRedo={handleRedo}
-        editorRef={editorRef}
         setActiveTextFont={setActiveTextFont}
         setActiveTextAlign={setActiveTextAlign}
+        editorRef={editorRef}
       />
 
-      {/* Zoom controls */}
-      <div className={`absolute bottom-6 right-6 z-30 rounded-full px-2 py-1.5 flex items-center gap-2 ${UI.surface}`}>
-        <button onClick={handleZoomOut} className={UI.iconBtn} title="Zoom out">-</button>
-        <button onClick={() => setZoomLevel(1)} className="text-xs font-semibold text-gray-700 px-2" title="Reset zoom">
+      {/* Zoom controls — single control, bottom-left */}
+      <div className={`absolute bottom-5 left-4 z-30 flex items-center gap-1 rounded-2xl px-2 py-1.5 ${UI.surface}`}>
+        <button onClick={handleZoomOut} className={UI.iconBtn} title="Zoom out (−)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        </button>
+        <button
+          onClick={() => setZoomLevel(1)}
+          className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 px-1.5 min-w-11 text-center transition-colors"
+          title="Reset zoom (100%)"
+        >
           {Math.round(zoom * 100)}%
         </button>
-        <button onClick={handleZoomIn} className={UI.iconBtn} title="Zoom in">+</button>
+        <button onClick={handleZoomIn} className={UI.iconBtn} title="Zoom in (+)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        </button>
       </div>
 
       {/* New comment input */}

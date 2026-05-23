@@ -10,6 +10,7 @@ The frontend for the real-time collaborative whiteboard platform, powered by Rea
 - **Real-Time Collaboration:** Synchronize drawings, sticky notes, and shapes instantly with Yjs CRDTs and WebSockets.
 - **AI Brainstorming Panel:** Generate ideas and content directly on your canvas using the Gemini API.
 - **Collaboration Roles:** Support for Viewers, Commenters, and Editors.
+- **Comments & Voting:** Threaded comments on board elements with upvote/downvote for async feedback.
 - **Facilitation Tools:** Built-in countdown timer and "Follow Me" features for workshops and meetings.
 - **Premium UI:** Beautiful floating-card style design, responsive breakpoints, and micro-animations for an elevated user experience.
 
