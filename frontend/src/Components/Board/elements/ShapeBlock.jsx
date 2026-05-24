@@ -125,7 +125,6 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
 
   const scale = getScale?.() || 1;
 
-  const clipShape = !!getShapeClipPath(shapeType);
   const textPadding = getTextPadding(shapeType, strokeWidth, w, h);
   // leading-snug = 1.375; compute how many lines fit in the padded safe area
   const maxLines = Math.max(1, Math.floor((h - 2 * textPadding) / (fontSize * 1.375)));

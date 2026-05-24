@@ -97,7 +97,6 @@ export default function SlideCanvas({
   onGroupDragPreview,
   onGroupDragCommit,
   onGroupDragEnd,
-  onGroupDragCancel,
   // Connector link-mode
   connectFromId,
   onConnectClick,

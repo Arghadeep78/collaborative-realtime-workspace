@@ -329,7 +329,6 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
         requestAnimationFrame(() => { if (h > elementHRef.current) fn({ h }); });
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subcards.length, props.collapsed]);
   
   // Local state for active editing (inline & modal)

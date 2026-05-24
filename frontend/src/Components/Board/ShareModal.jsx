@@ -95,7 +95,6 @@ export default function ShareModal({ boardId, board, onClose }) {
   };
 
   const inputClass = "bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition";
-  const selectClass = "bg-white border border-slate-200 hover:bg-slate-50 rounded-lg px-2 py-1 text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer font-medium transition";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm rb-anim-fade">

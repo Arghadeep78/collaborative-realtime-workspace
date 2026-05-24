@@ -133,7 +133,7 @@ function MediaDisplay({ url, mediaType, caption, editable, onCaption, onReplace,
   );
 }
 
-export default function MediaBlock({ element, editable, editing, onEditProps }) {
+export default function MediaBlock({ element, editable, onEditProps }) {
   const { url = '', mediaType = 'image', caption = '' } = element.props || {};
   const [uploading, setUploading] = useState(false);
 

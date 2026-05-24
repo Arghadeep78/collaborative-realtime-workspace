@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { BarChart2, CheckCircle2, Plus, Trash2 } from 'lucide-react';
-
-const voteKey = (pollId, optionId) => `poll:${pollId}:${optionId}`;
 
 const OPTION_COLORS = [
   { bar: 'bg-blue-500/20 dark:bg-blue-500/30', fill: 'bg-blue-500', active: 'border-blue-500 ring-1 ring-blue-500', text: 'text-blue-600 dark:text-blue-400' },
@@ -31,7 +29,6 @@ export default function PollBlock({
   selected,
   onEditProps,
   votes,
-  boardId,
   castPollVote,
   removePollVote,
 }) {
@@ -48,7 +45,7 @@ export default function PollBlock({
   const myName = userData.name || 'Anonymous';
   
   // Get all votes for this poll
-  const pollVotes = votes?.[pollId] || {};
+  const pollVotes = useMemo(() => votes?.[pollId] || {}, [votes, pollId]);
   
   // Group votes by option
   const optionsVotes = useMemo(() => {

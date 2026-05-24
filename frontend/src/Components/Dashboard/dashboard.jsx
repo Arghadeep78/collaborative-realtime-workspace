@@ -280,7 +280,7 @@ function timeAgo(dateStr) {
 }
 
 // ── WorkspaceDropdown ─────────────────────────────────────────────────────────
-function WorkspaceDropdown({ workspaces, activeWorkspace, onSelect, onCreate, onClose }) {
+function WorkspaceDropdown({ workspaces, activeWorkspace, onSelect, onCreate }) {
   return (
     <div className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-30 py-2 rb-anim-pop" onClick={e => e.stopPropagation()}>
       <p className="px-3 py-1.5 text-xs text-gray-400 dark:text-white/30 font-medium uppercase tracking-widest">Workspaces</p>
@@ -563,7 +563,6 @@ export default function Dashboard({ logout }) {
               activeWorkspace={activeWorkspace}
               onSelect={(ws) => { setActiveWs(ws); setShowWsDropdown(false); setActiveView('all'); }}
               onCreate={() => { setShowCreateWs(true); setShowWsDropdown(false); }}
-              onClose={() => setShowWsDropdown(false)}
             />
           )}
           {/* Rename current workspace */}
@@ -646,7 +645,8 @@ export default function Dashboard({ logout }) {
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
-                    e.currentTarget.src = '';
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement.textContent = profileInitial;
                   }}
                 />
               ) : (

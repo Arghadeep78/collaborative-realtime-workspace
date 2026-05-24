@@ -47,7 +47,7 @@ function PlatformIcon({ platform }) {
  * header sits above a sandboxed live frame. When the URL is empty (or while
  * editing) it shows a URL input instead of the frame.
  */
-export default function IframeWindow({ element, editable, editing, selected, onEditProps }) {
+export default function IframeWindow({ element, editable, editing, onEditProps }) {
   const { props } = element;
   const { platform, src } = resolveEmbed(props.url);
   const [draft, setDraft] = useState(props.url || '');

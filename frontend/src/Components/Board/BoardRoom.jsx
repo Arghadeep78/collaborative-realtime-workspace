@@ -509,7 +509,18 @@ export default function BoardRoom() {
         e.preventDefault();
         const offset = 20;
         const newIds = [];
-        clipboardRef.current.forEach((el) => {
+        const idMap = {}; // original id → pasted id, so connectors can re-link to the copies
+        // Paste nodes before connectors so endpoint ids are already mapped.
+        const ordered = [...clipboardRef.current].sort(
+          (a, b) => (a.type === 'connector' ? 1 : 0) - (b.type === 'connector' ? 1 : 0),
+        );
+        ordered.forEach((el) => {
+          let props = el.props;
+          if (el.type === 'connector') {
+            const p = el.props || {};
+            // Re-point to the pasted copies; keep the original endpoint if it wasn't copied.
+            props = { ...p, fromId: idMap[p.fromId] ?? p.fromId, toId: idMap[p.toId] ?? p.toId };
+          }
           const newId = addElement({
             ...el,
             id: undefined,
@@ -517,8 +528,9 @@ export default function BoardRoom() {
             x: clamp(el.x + offset, 0, SLIDE_W - el.w),
             y: clamp(el.y + offset, 0, SLIDE_H - el.h),
             z: nextZ(),
+            props,
           });
-          if (newId) newIds.push(newId);
+          if (newId) { idMap[el.id] = newId; newIds.push(newId); }
         });
         if (newIds.length > 0) {
           setSelectedIds(new Set(newIds));
@@ -570,10 +582,6 @@ export default function BoardRoom() {
   }, [selectedIds, elements, bulkUpdate]);
 
   const handleGroupDragEnd = useCallback(() => {
-    setGroupDragOffset(null);
-  }, []);
-
-  const handleGroupDragCancel = useCallback(() => {
     setGroupDragOffset(null);
   }, []);
 
@@ -691,7 +699,6 @@ export default function BoardRoom() {
             onGroupDragPreview={handleGroupDragPreview}
             onGroupDragCommit={handleGroupDragCommit}
             onGroupDragEnd={handleGroupDragEnd}
-            onGroupDragCancel={handleGroupDragCancel}
             onStartEdit={setEditingId}
             onStopEdit={() => setEditingId(null)}
             onUpdate={updateElement}
