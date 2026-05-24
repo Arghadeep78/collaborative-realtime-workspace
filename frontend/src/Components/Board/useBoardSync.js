@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Y from 'yjs';
 import { getBoardTypes, makeId } from './boardConstants.js';
 
 // Transaction origin tag for local edits. We don't *need* it for correctness
@@ -41,25 +42,39 @@ export function useBoardSync(ydoc) {
     syncVotes();
     yPages.observe(syncPages);
     yElements.observe(syncElements);
-    yVotes.observe(syncVotes);
+    yVotes.observeDeep(syncVotes); // Use observeDeep so nested Map changes trigger re-sync!
 
     return () => {
       yPages.unobserve(syncPages);
       yElements.unobserve(syncElements);
-      yVotes.unobserve(syncVotes);
+      yVotes.unobserveDeep(syncVotes);
     };
   }, [ydoc]);
 
-  /**
-   * Adjust a poll tally by `delta`, clamped at zero. Tallies live in the reused
-   * `votes` Y.Map under flat keys (e.g. `poll:<pollId>:<optionId>`), so the Poll
-   * Block needs only this one primitive.
-   */
-  const bumpVote = useCallback((key, delta) => {
+  const castPollVote = useCallback((pollId, optionId, user) => {
     const doc = ydocRef.current;
     if (!doc) return;
     const yVotes = doc.getMap('votes');
-    doc.transact(() => yVotes.set(key, Math.max(0, (yVotes.get(key) || 0) + delta)), LOCAL);
+    doc.transact(() => {
+      let yPoll = yVotes.get(pollId);
+      if (!(yPoll instanceof Y.Map)) {
+        yPoll = new Y.Map();
+        yVotes.set(pollId, yPoll);
+      }
+      yPoll.set(user.email, { optionId, ...user });
+    }, LOCAL);
+  }, []);
+
+  const removePollVote = useCallback((pollId, email) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yVotes = doc.getMap('votes');
+    doc.transact(() => {
+      const yPoll = yVotes.get(pollId);
+      if (yPoll instanceof Y.Map) {
+        yPoll.delete(email);
+      }
+    }, LOCAL);
   }, []);
 
   // ── Element mutations ──────────────────────────────────────────────────────
@@ -217,7 +232,8 @@ export function useBoardSync(ydoc) {
     pages,
     elements,
     votes,
-    bumpVote,
+    castPollVote,
+    removePollVote,
     addElement,
     updateElement,
     updateElementProps,

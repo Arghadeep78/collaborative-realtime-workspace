@@ -50,17 +50,17 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
 
   return (
     <div
-      className="w-full h-full rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col p-5 relative overflow-hidden transition-all duration-200 border border-black/5 dark:border-white/5"
+      className="w-full h-full rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col p-5 relative transition-all duration-200 border border-black/5 dark:border-white/5"
       style={{ backgroundColor: color }}
     >
       {/* Subtle Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none rounded-2xl" />
 
       {/* Tape Decoration */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-4 bg-white/40 dark:bg-black/10 backdrop-blur-sm rounded-b-lg shadow-sm border border-white/50 dark:border-white/10 pointer-events-none" />
 
-      {/* Text format toolbar — shows while editing */}
-      {editing && (
+      {/* Text format toolbar — shows while editing or selected */}
+      {(editing || selected) && editable && (
         <FloatBar scale={scale}>
           {/* Font size */}
           <button

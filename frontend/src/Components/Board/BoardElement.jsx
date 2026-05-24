@@ -49,6 +49,8 @@ export default function BoardElement({
   // Poll-specific wiring
   votes,
   bumpVote,
+  castPollVote,
+  removePollVote,
   boardId,
   // Kanban assignee options (board members)
   members,

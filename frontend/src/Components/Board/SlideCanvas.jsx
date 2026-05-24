@@ -9,6 +9,7 @@ const FIT_PADDING = 64; // breathing room around the slide within the viewport
 
 function getSlideBackground(bg, isDark) {
   const defaultBg = isDark ? '#282e33' : '#ffffff';
+  const bgColor = bg?.value || defaultBg;
   const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.07)';
   const gridColorLighter = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.06)';
 
@@ -16,7 +17,7 @@ function getSlideBackground(bg, isDark) {
     return {
       backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: defaultBg,
+      backgroundColor: bgColor,
     };
   }
   if (bg.type === 'grid') {
@@ -24,38 +25,38 @@ function getSlideBackground(bg, isDark) {
       backgroundImage:
         `linear-gradient(to right, ${gridColorLighter} 1px, transparent 1px), linear-gradient(to bottom, ${gridColorLighter} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: defaultBg,
+      backgroundColor: bgColor,
     };
   }
   if (bg.type === 'lines') {
     return {
       backgroundImage: `linear-gradient(to bottom, ${gridColorLighter} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: defaultBg,
+      backgroundColor: bgColor,
     };
   }
   if (bg.type === 'isometric') {
     return {
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 20 L20 0 L40 20 L20 40 Z' fill='none' stroke='${encodeURIComponent(gridColorLighter)}' stroke-width='1'/%3E%3C/svg%3E")`,
       backgroundSize: '40px 40px',
-      backgroundColor: defaultBg,
+      backgroundColor: bgColor,
     };
   }
   if (bg.type === 'none') {
-    return { backgroundColor: defaultBg };
+    return { backgroundColor: bgColor };
   }
   if (bg.type === 'solid') {
-    return { backgroundColor: bg.value || defaultBg };
+    return { backgroundColor: bgColor };
   }
   if (bg.type === 'image') {
     return {
       backgroundImage: bg.value ? `url(${bg.value})` : undefined,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      backgroundColor: defaultBg,
+      backgroundColor: defaultBg, // Keep defaultBg for images to avoid weird tinting behind transparent images unless desired
     };
   }
-  return { backgroundColor: defaultBg, backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`, backgroundSize: '32px 32px' };
+  return { backgroundColor: bgColor, backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`, backgroundSize: '32px 32px' };
 }
 
 /**
@@ -97,6 +98,8 @@ export default function SlideCanvas({
   // Poll wiring
   votes,
   bumpVote,
+  castPollVote,
+  removePollVote,
   boardId,
   // Kanban assignee options
   members,
@@ -297,6 +300,8 @@ export default function SlideCanvas({
             onDragEnd={onDragEnd}
             votes={votes}
             bumpVote={bumpVote}
+            castPollVote={castPollVote}
+            removePollVote={removePollVote}
             boardId={boardId}
             members={members}
             activeTool={activeTool}

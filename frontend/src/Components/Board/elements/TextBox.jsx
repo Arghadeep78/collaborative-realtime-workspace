@@ -30,8 +30,8 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
 
   return (
     <div className="relative w-full h-full">
-      {/* Text format toolbar — shows while editing */}
-      {editing && (
+      {/* Text format toolbar — shows while editing or selected */}
+      {(editing || selected) && editable && (
         <TextFormatToolbar
           onEditProps={onEditProps}
           fontSize={fontSize}

@@ -32,7 +32,8 @@ export default function BoardRoom() {
     pages,
     elements,
     votes,
-    bumpVote,
+    castPollVote,
+    removePollVote,
     addElement,
     updateElement,
     updateElementProps,
@@ -59,7 +60,44 @@ export default function BoardRoom() {
   const [layoutMode, setLayoutMode] = useState('freeform');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1024);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const boardRoomRef = useRef(null);
+
+  // Auto-collapse on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) setSidebarCollapsed(true);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setPresentationMode(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  // Slide keyboard navigation
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        const idx = pages.findIndex((p) => p.id === activePageId);
+        if (idx < pages.length - 1) selectPage(pages[idx + 1].id);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        const idx = pages.findIndex((p) => p.id === activePageId);
+        if (idx > 0) selectPage(pages[idx - 1].id);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pages, activePageId]);
+
   const [connectFromId, setConnectFromId] = useState(null); // pending connector source
   const [graduationTargetId, setGraduationTargetId] = useState(null); // kanban drop target
 
@@ -387,7 +425,8 @@ export default function BoardRoom() {
   // ── Loading gate ───────────────────────────────────────────────────────────
   if (!synced) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-50 dark:bg-[#212121] text-slate-900 dark:text-slate-100 gap-4">
+    <div ref={boardRoomRef} className={`w-screen h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <div className="relative">
           <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 rounded-full" />
           <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
@@ -397,11 +436,13 @@ export default function BoardRoom() {
           <p className="text-slate-500 text-sm mt-1">Syncing with collaborators</p>
         </div>
       </div>
+    </div>
     );
   }
 
   return (
-    <div className={`${boardShellClass} flex flex-col`} onClick={() => showUserMenu && setShowUserMenu(false)}>
+    <div ref={boardRoomRef} className={`${boardShellClass} flex flex-col w-screen h-screen ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`} onClick={() => showUserMenu && setShowUserMenu(false)}>
+      {!presentationMode && (
       <TopUtilityBar
         board={board}
         role={role}
@@ -426,10 +467,13 @@ export default function BoardRoom() {
         toggleTheme={toggleTheme}
         activePage={activePage}
         onUpdateBackground={handleUpdateBackground}
+        onPresent={() => boardRoomRef.current?.requestFullscreen().catch(e => console.error(e))}
       />
+      )}
 
-      <div className="flex-1 flex min-h-0">
-        <Sidebar
+      <div className="flex-1 flex min-h-0 relative">
+        {!presentationMode && (
+          <Sidebar
           pages={pages}
           elements={elements}
           activePageId={activePageId}
@@ -440,9 +484,12 @@ export default function BoardRoom() {
           onAddPage={() => { const id = addPage(); if (id) selectPage(id); }}
           onRenamePage={renamePage}
           onDeletePage={deletePage}
-        />
+          />
+        )}
 
-        <SlideCanvas
+        <div className="flex-1 relative min-w-0 flex flex-col">
+          <SlideCanvas
+            ydoc={ydoc}
           elements={elements}
           activePageId={activePageId}
           editable={editable}
@@ -470,12 +517,45 @@ export default function BoardRoom() {
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           votes={votes}
-          bumpVote={bumpVote}
+          castPollVote={castPollVote}
+          removePollVote={removePollVote}
           boardId={boardId}
           members={members}
           activePage={activePage}
           isDark={isDark}
-        />
+          />
+
+          {/* Slide Navigation (Bottom Center) */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 z-50">
+            <button
+              onClick={() => {
+                const idx = pages.findIndex((p) => p.id === activePageId);
+                if (idx > 0) selectPage(pages[idx - 1].id);
+              }}
+              disabled={pages.findIndex((p) => p.id === activePageId) <= 0}
+              className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-600 transition"
+              title="Previous Slide (Left Arrow)"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 min-w-[3rem] text-center select-none">
+              {pages.findIndex((p) => p.id === activePageId) + 1} / {pages.length}
+            </span>
+            
+            <button
+              onClick={() => {
+                const idx = pages.findIndex((p) => p.id === activePageId);
+                if (idx < pages.length - 1) selectPage(pages[idx + 1].id);
+              }}
+              disabled={pages.findIndex((p) => p.id === activePageId) >= pages.length - 1}
+              className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-600 transition"
+              title="Next Slide (Right Arrow)"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+        </div>
       </div>
 
       {showShare && <ShareModal boardId={boardId} board={board} onClose={() => setShowShare(false)} />}

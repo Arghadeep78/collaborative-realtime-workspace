@@ -9,17 +9,8 @@ const BG_PATTERNS = [
 ];
 
 const BG_COLORS = [
-  // White & Grays & Darks
-  '#ffffff', '#f8fafc', '#f1f5f9', '#e2e8f0', 
-  '#1e293b', '#0f172a', '#020617', '#172554',
-  
-  // Pastels
-  '#eff6ff', '#f0fdfa', '#f0fdf4', '#fefce8', 
-  '#fff7ed', '#fef2f2', '#fdf2f8', '#f5f3ff',
-
-  // Mid-tones
-  '#dbeafe', '#ccfbf1', '#dcfce7', '#fef08a', 
-  '#ffedd5', '#fee2e2', '#fce7f3', '#ede9fe',
+  '#ffffff', '#f1f5f9', '#0f172a', '#eff6ff', 
+  '#f0fdf4', '#fefce8', '#fef2f2',
 ];
 
 function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
@@ -57,7 +48,7 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
               {BG_PATTERNS.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => set({ type: p.id, value: '' })}
+                  onClick={() => set({ type: p.id, value: bg?.value || '' })}
                   title={p.label}
                   className={`flex flex-col items-center gap-1 rounded-xl p-1.5 border-2 transition ${
                     currentType === p.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
@@ -73,18 +64,36 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
             </div>
 
             <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Color</p>
-            <div className="grid grid-cols-8 gap-1.5">
+            <div className="grid grid-cols-8 gap-1.5 items-center relative">
               {BG_COLORS.map((c) => (
                 <button
                   key={c}
-                  onClick={() => set({ type: 'solid', value: c })}
+                  onClick={() => set({ type: currentType === 'image' || currentType === 'solid' ? 'solid' : currentType, value: c })}
                   title={c}
                   className={`w-7 h-7 rounded-full border-2 transition ${
-                    currentType === 'solid' && bg?.value === c ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300'
+                    bg?.value === c ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300'
                   }`}
                   style={{ backgroundColor: c, boxShadow: c === '#ffffff' ? '0 0 0 1px #e2e8f0 inset' : undefined }}
                 />
               ))}
+              
+              {/* Custom Color Wheel */}
+              <label 
+                title="Custom Color"
+                className={`relative w-7 h-7 rounded-full border-2 cursor-pointer transition flex items-center justify-center overflow-hidden shrink-0 ${
+                  bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300'
+                }`}
+                style={{
+                  background: 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8a00 60deg, #ffe500 120deg, #14ff00 180deg, #00a3ff 240deg, #0500ff 300deg, #ff0000 360deg)'
+                }}
+              >
+                <input
+                  type="color"
+                  value={bg?.value || '#ffffff'}
+                  onChange={(e) => set({ type: currentType === 'image' || currentType === 'solid' ? 'solid' : currentType, value: e.target.value })}
+                  className="opacity-0 w-[150%] h-[150%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                />
+              </label>
             </div>
 
             <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Image URL</p>
@@ -103,8 +112,28 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
                 Set
               </button>
             </div>
+            
+            <div className="flex items-center gap-2 mt-1">
+              {[
+                { id: 'clouds', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80', label: 'Clouds' },
+                { id: 'watercolor', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=800&q=80', label: 'Watercolor' },
+                { id: 'abstract', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800&q=80', label: 'Abstract' },
+                { id: 'stars', url: 'https://images.unsplash.com/photo-1534796636912-36528502c5c0?w=800&q=80', label: 'Stars' }
+              ].map((img) => (
+                <button
+                  key={img.id}
+                  title={img.label}
+                  onClick={() => set({ type: 'image', value: img.url })}
+                  className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition ${
+                    bg?.value === img.url ? 'border-blue-500 scale-105 shadow-md' : 'border-transparent hover:border-slate-300'
+                  }`}
+                  style={{ backgroundImage: `url(${img.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                />
+              ))}
+            </div>
+
             {currentType === 'image' && bg?.value && (
-              <button onClick={() => set({ type: 'dots', value: '' })} className="self-start text-[12px] text-rose-500 hover:text-rose-600 font-medium">
+              <button onClick={() => set({ type: 'dots', value: '' })} className="self-start text-[12px] text-rose-500 hover:text-rose-600 font-medium mt-1">
                 Remove image
               </button>
             )}
@@ -177,6 +206,7 @@ export default function TopUtilityBar({
   toggleTheme,
   activePage,
   onUpdateBackground,
+  onPresent,
 }) {
   return (
     <header className="relative z-50 shrink-0 flex items-center gap-3 px-3 py-2.5">
@@ -326,7 +356,12 @@ export default function TopUtilityBar({
           )}
         </div>
 
-        <button onClick={onShare} className={`${UI.primaryBtn} text-sm font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5`}>
+        <button onClick={onPresent} className={`text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all`}>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+          Present
+        </button>
+
+        <button onClick={onShare} className={`text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all`}>
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
           Share
         </button>

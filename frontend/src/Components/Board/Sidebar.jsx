@@ -10,10 +10,11 @@ const SWATCH = {
   iframe: '#cbd5e1',
 };
 
+import BoardElement from './BoardElement.jsx';
+
 /**
  * A live, scaled-down render of one slide. Elements are positioned by percentage
- * of the slide (1600×900) so the preview tracks the box size with no scale math,
- * and each type gets a representative flat swatch. Connectors are skipped.
+ * of the slide (1600×900) so the preview tracks the box size with no scale math.
  */
 function SlideThumbnail({ elements, pageId }) {
   const items = useMemo(
@@ -24,31 +25,33 @@ function SlideThumbnail({ elements, pageId }) {
     [elements, pageId],
   );
 
+  // Width is approx 202px inside the container. Scale is ~0.126
+  const scale = 0.126;
+
   return (
     <div
-      className="relative w-full aspect-video rounded-md overflow-hidden bg-white ring-1 ring-black/10"
+      className="relative w-full aspect-video rounded-md overflow-hidden bg-white ring-1 ring-black/10 select-none pointer-events-none"
       style={{
         backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.06) 1px, transparent 1px)',
         backgroundSize: '10px 10px',
       }}
     >
-      {items.map((el) => {
-        const isText = el.type === 'text';
-        return (
-          <div
+      <div 
+        className="absolute top-0 left-0 origin-top-left"
+        style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})` }}
+      >
+        {items.map((el) => (
+          <BoardElement
             key={el.id}
-            className={`absolute rounded-xs ${el.type === 'kanban' ? 'ring-1 ring-slate-300 shadow-sm' : ''}`}
-            style={{
-              left: `${(el.x / SLIDE_W) * 100}%`,
-              top: `${(el.y / SLIDE_H) * 100}%`,
-              width: `${(el.w / SLIDE_W) * 100}%`,
-              height: `${(el.h / SLIDE_H) * 100}%`,
-              background: el.type === 'sticky' ? el.props?.color || SWATCH.sticky : SWATCH[el.type],
-              ...(isText && { borderBottom: '2px solid #94a3b8' }),
-            }}
+            element={el}
+            getScale={() => scale}
+            selected={false}
+            editing={false}
+            editable={false}
+            connectMode={false}
           />
-        );
-      })}
+        ))}
+      </div>
       {items.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-slate-300">
           Empty slide
@@ -100,7 +103,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className={`shrink-0 w-60 h-full flex flex-col m-3 mr-0 rounded-2xl ${UI.surface}`}>
+    <aside className={`shrink-0 w-60 flex flex-col m-3 mr-0 rounded-2xl ${UI.surface}`}>
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200/70 dark:border-slate-700/60">
         <span className="text-[11px] font-bold tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">
           Slides

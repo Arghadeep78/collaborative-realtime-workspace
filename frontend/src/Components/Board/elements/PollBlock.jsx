@@ -30,36 +30,41 @@ export default function PollBlock({
   onEditProps,
   votes,
   boardId,
-  bumpVote,
+  castPollVote,
+  removePollVote,
 }) {
   const { props } = element;
   const options = useMemo(() => props.options || [], [props.options]);
   const pollId = element.id;
 
-  const choiceStorageKey = `pollvote:${boardId}:${pollId}`;
-  const [choice, setChoice] = useState(() => localStorage.getItem(choiceStorageKey) || null);
+  const userData = useMemo(() => JSON.parse(localStorage.getItem('userData') || '{}'), []);
+  const myEmail = userData.email || 'anon';
+  const myName = userData.name || 'Anonymous';
+  
+  // Get all votes for this poll
+  const pollVotes = votes?.[pollId] || {};
+  
+  // Group votes by option
+  const optionsVotes = useMemo(() => {
+    const grouped = {};
+    Object.values(pollVotes).forEach(v => {
+      if (!grouped[v.optionId]) grouped[v.optionId] = [];
+      grouped[v.optionId].push(v);
+    });
+    return grouped;
+  }, [pollVotes]);
 
-  useEffect(() => {
-    if (choice && !options.some((o) => o.id === choice)) {
-      localStorage.removeItem(choiceStorageKey);
-      setChoice(null);
-    }
-  }, [choice, options, choiceStorageKey]);
-
-  const counts = options.map((o) => votes?.[voteKey(pollId, o.id)] || 0);
+  const counts = options.map((o) => optionsVotes[o.id]?.length || 0);
   const total = counts.reduce((a, b) => a + b, 0);
+  const myVote = pollVotes[myEmail]?.optionId || null;
 
   const castVote = (optionId) => {
     if (editing) return;
-    if (choice === optionId) {
-      bumpVote(voteKey(pollId, optionId), -1);
-      localStorage.removeItem(choiceStorageKey);
-      setChoice(null);
+    
+    if (myVote === optionId) {
+      removePollVote(pollId, myEmail);
     } else {
-      if (choice) bumpVote(voteKey(pollId, choice), -1);
-      bumpVote(voteKey(pollId, optionId), +1);
-      localStorage.setItem(choiceStorageKey, optionId);
-      setChoice(optionId);
+      castPollVote(pollId, optionId, { email: myEmail, name: myName, color: '#94a3b8' }); // Fallback color if myColor not available
     }
   };
 
@@ -119,8 +124,9 @@ export default function PollBlock({
       <div className="flex-1 flex flex-col gap-3 overflow-y-auto pr-1 z-10" onPointerDown={(e) => editing && e.stopPropagation()}>
         {options.map((opt, i) => {
           const pct = total ? Math.round((counts[i] / total) * 100) : 0;
-          const mine = choice === opt.id;
+          const mine = myVote === opt.id;
           const theme = OPTION_COLORS[i % OPTION_COLORS.length];
+          const votersForOption = optionsVotes[opt.id] || [];
           
           if (editing) {
             return (
@@ -165,6 +171,18 @@ export default function PollBlock({
                   </span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-3">
+                  <div className="flex -space-x-1.5">
+                    {votersForOption.slice(0, 4).map((voter) => (
+                      <div
+                        key={voter.email}
+                        title={voter.name}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold border-2 ${hasColor ? 'border-white/60' : 'border-white dark:border-slate-800'} shadow-sm`}
+                        style={{ backgroundColor: voter.color || '#94a3b8' }}
+                      >
+                        {voter.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    ))}
+                  </div>
                   <span className={`text-[17px] font-bold tabular-nums ${mine ? theme.text : textMuted}`}>
                     {pct}%
                   </span>
