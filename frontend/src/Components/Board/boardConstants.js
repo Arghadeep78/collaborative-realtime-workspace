@@ -94,6 +94,13 @@ export const SPAWN_TOOLS = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape
 
 export const MIN_W = 80;
 export const MIN_H = 48;
+export const MIN_FONT = 8;
+
+// Per-element-type resize floors. Elements below these sizes become unreadable.
+export const ELEMENT_MIN_DIMS = {
+  poll:   { minW: 260, minH: 220 },
+  kanban: { minW: 220, minH: 200 },
+};
 
 // How often live drag/resize positions are flushed to Yjs during a continuous
 // gesture — matches the old whiteboard's 50ms (~20fps) socket cadence.

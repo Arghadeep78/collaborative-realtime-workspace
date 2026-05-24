@@ -57,6 +57,8 @@ export default function BoardRoom() {
   const [isEditingTitle, setEditTitle] = useState(false);
   const [titleInput, setTitleInput] = useState('');
   const editable = role === 'editor';
+  const isEditingTitleRef = useRef(false);
+  isEditingTitleRef.current = isEditingTitle;
 
   // ── Canvas / interaction state ──────────────────────────────────────────
   const [activePageId, setActivePageId] = useState(null);
@@ -70,6 +72,7 @@ export default function BoardRoom() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1024);
   const [presentationMode, setPresentationMode] = useState(false);
   const boardRoomRef = useRef(null);
+  const [spawnProps, setSpawnProps] = useState(null); // holds extra props for next spawn (e.g., shapeType)
 
   // Auto-collapse on resize
   useEffect(() => {
@@ -112,6 +115,7 @@ export default function BoardRoom() {
   const [peers, setPeers] = useState([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 
   const activePageRef = useRef(activePageId);
   activePageRef.current = activePageId;
@@ -169,7 +173,15 @@ export default function BoardRoom() {
         else {
           const collab = data.collaborators?.find((c) => c.email === email);
           if (collab) setRole(collab.role);
-          else if (data.isPublic) setRole(data.publicRole || 'viewer');
+          else if (data.isPublic) {
+            setRole(data.publicRole || 'viewer');
+            // New joiner via public link — prompt to add to a workspace (once per session).
+            const seenKey = `ws-picker-shown:${boardId}`;
+            if (token && email && !sessionStorage.getItem(seenKey)) {
+              sessionStorage.setItem(seenKey, '1');
+              setShowWorkspacePicker(true);
+            }
+          }
         }
       })
       .catch((err) => {
@@ -177,6 +189,32 @@ export default function BoardRoom() {
         navigate('/dashboard');
       });
   }, [boardId, navigate, userData.email]);
+
+  // ── Live title sync via ySystem map ──────────────────────────────────────
+  // Observe remote title changes so renaming propagates to every open tab.
+  useEffect(() => {
+    if (!ydoc) return;
+    const ySystem = ydoc.getMap('system');
+    const onSystemChange = () => {
+      const t = ySystem.get('title');
+      if (!t) return;
+      setBoard((b) => (b ? { ...b, title: t } : b));
+      if (!isEditingTitleRef.current) setTitleInput(t);
+    };
+    ySystem.observe(onSystemChange);
+    return () => ySystem.unobserve(onSystemChange);
+  }, [ydoc]);
+
+  // Seed: write the REST-fetched title into ySystem once (first editor in room).
+  const sysTitleSeededRef = useRef(false);
+  useEffect(() => {
+    if (!ydoc || !synced || !board?.title || sysTitleSeededRef.current) return;
+    const ySystem = ydoc.getMap('system');
+    if (!ySystem.get('title')) {
+      ydoc.transact(() => ySystem.set('title', board.title));
+    }
+    sysTitleSeededRef.current = true;
+  }, [ydoc, synced, board?.title]);
 
   // ── On first sync: migrate a legacy tldraw board, else seed a first slide ──
   const seededRef = useRef(false);
@@ -234,6 +272,8 @@ export default function BoardRoom() {
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
 
+  const clipboardRef = useRef(null);
+
   const broadcastCursor = useCallback((x, y, isLaser = false) => {
     if (!provider) return;
     provider.awareness.setLocalStateField('cursor', {
@@ -267,12 +307,20 @@ export default function BoardRoom() {
       w: def.w,
       h: def.h,
       z: nextZ(),
-      props: { ...def.props },
+      props: { ...def.props, ...(spawnProps || {}) },
       createdBy: userData.email || userData.name || 'anon',
     });
     setSelectedIds(new Set([id]));
     setEditingId(id); // drop straight into text entry
-  }, [addElement, nextZ, userData.email, userData.name]);
+    // clear spawn override if it was a one-off selection
+    if (spawnProps) setSpawnProps(null);
+  }, [addElement, nextZ, userData.email, userData.name, spawnProps, setSpawnProps]);
+
+  const handlePickShape = useCallback((shapeType) => {
+    if (!shapeType) return;
+    setSpawnProps({ shapeType });
+    setActiveTool('shape');
+  }, [setSpawnProps]);
 
   // ── Connector link-mode ────────────────────────────────────────────────────
   const handleConnectClick = useCallback((elementId) => {
@@ -404,6 +452,42 @@ export default function BoardRoom() {
         redo();
         return;
       }
+      // Copy selected elements to clipboard
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
+        if (selectedIds.size === 0) return;
+        e.preventDefault();
+        const toCopy = [...selectedIds]
+          .map(id => elements[id])
+          .filter(Boolean);
+        if (toCopy.length > 0) {
+          clipboardRef.current = toCopy;
+          toast.success(`Copied ${toCopy.length} element${toCopy.length === 1 ? '' : 's'}`);
+        }
+        return;
+      }
+      // Paste elements from clipboard
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
+        if (!editable || !clipboardRef.current || !activePageRef.current) return;
+        e.preventDefault();
+        const offset = 20;
+        const newIds = [];
+        clipboardRef.current.forEach((el) => {
+          const newId = addElement({
+            ...el,
+            id: undefined,
+            pageId: activePageRef.current,
+            x: clamp(el.x + offset, 0, SLIDE_W - el.w),
+            y: clamp(el.y + offset, 0, SLIDE_H - el.h),
+            z: nextZ(),
+          });
+          if (newId) newIds.push(newId);
+        });
+        if (newIds.length > 0) {
+          setSelectedIds(new Set(newIds));
+          toast.success(`Pasted ${newIds.length} element${newIds.length === 1 ? '' : 's'}`);
+        }
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0 && editable) {
         e.preventDefault();
         [...selectedIds].forEach(id => handleDelete(id));
@@ -414,7 +498,7 @@ export default function BoardRoom() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedIds, editable, handleDelete, undo, redo]);
+  }, [selectedIds, editable, handleDelete, undo, redo, elements, addElement, nextZ]);
 
   // Switching slides clears transient selection/edit.
   const selectPage = useCallback((id) => {
@@ -458,15 +542,17 @@ export default function BoardRoom() {
   // ── Title save ─────────────────────────────────────────────────────────────
   const saveTitle = useCallback(async () => {
     if (!titleInput.trim() || titleInput === board?.title) { setEditTitle(false); return; }
+    // Broadcast live to all open tabs via Yjs, then persist to Mongo for the dashboard.
+    if (ydoc) ydoc.transact(() => ydoc.getMap('system').set('title', titleInput));
+    setBoard((b) => ({ ...b, title: titleInput }));
+    setEditTitle(false);
     const token = localStorage.getItem('token');
     await fetch(`${BACKEND_URL}/boards/title/${boardId}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: titleInput }),
-    });
-    setBoard((b) => ({ ...b, title: titleInput }));
-    setEditTitle(false);
-  }, [titleInput, board, boardId]);
+    }).catch(() => {});
+  }, [titleInput, board, boardId, ydoc]);
 
   const handleSignOut = useCallback(() => {
     localStorage.removeItem('token');
@@ -506,6 +592,7 @@ export default function BoardRoom() {
         setEditTitle={setEditTitle}
         activeTool={activeTool}
         onSelectTool={setActiveTool}
+        onPickShape={handlePickShape}
         onUndo={undo}
         onRedo={redo}
         canUndo={canUndo}
@@ -545,8 +632,7 @@ export default function BoardRoom() {
 
         <div className="flex-1 relative min-w-0 flex flex-col">
           <SlideCanvas
-            ydoc={ydoc}
-          elements={elements}
+            elements={elements}
           activePageId={activePageId}
           editable={editable}
           activeTool={activeTool}
@@ -627,6 +713,145 @@ export default function BoardRoom() {
       </div>
 
       {showShare && <ShareModal boardId={boardId} board={board} onClose={() => setShowShare(false)} />}
+      {showWorkspacePicker && (
+        <WorkspacePickerModal
+          boardId={boardId}
+          boardTitle={board?.title}
+          onClose={() => setShowWorkspacePicker(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── WorkspacePickerModal ──────────────────────────────────────────────────────
+// Shown once per session to authenticated users who arrive via a public share link.
+function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
+  const [workspaces, setWorkspaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newWsName, setNewWsName] = useState('');
+  const [mode, setMode] = useState('pick'); // 'pick' | 'create'
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const token = localStorage.getItem('token');
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/workspaces/list`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setWorkspaces(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const addToWorkspace = async (wsId) => {
+    setSaving(true);
+    try {
+      await fetch(`${BACKEND_URL}/workspaces/${wsId}/add-board`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boardId }),
+      });
+      setDone(true);
+      setTimeout(onClose, 1400);
+    } catch (e) {
+      console.error(e);
+      setSaving(false);
+    }
+  };
+
+  const createAndAdd = async () => {
+    if (!newWsName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/workspaces/create`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newWsName.trim() }),
+      });
+      const ws = await res.json();
+      await addToWorkspace(ws.id);
+    } catch (e) {
+      console.error(e);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        {done ? (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center text-green-600 dark:text-green-400">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <p className="text-gray-900 dark:text-white font-semibold">Board saved to workspace!</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-5">
+              <p className="text-gray-900 dark:text-white font-semibold text-base">Add to your workspace?</p>
+              <p className="text-gray-500 dark:text-white/50 text-sm mt-1">
+                Save &ldquo;{boardTitle || 'this board'}&rdquo; to a workspace so it appears in your dashboard.
+              </p>
+            </div>
+
+            {mode === 'pick' ? (
+              <>
+                {loading ? (
+                  <div className="space-y-2 mb-4">
+                    {[1, 2].map(i => <div key={i} className="h-10 rounded-lg bg-gray-100 dark:bg-white/5 animate-pulse" />)}
+                  </div>
+                ) : workspaces.length > 0 ? (
+                  <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                    {workspaces.map(ws => (
+                      <button key={ws.id} onClick={() => addToWorkspace(ws.id)} disabled={saving}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-left transition-colors disabled:opacity-50">
+                        <div className="w-7 h-7 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                          {ws.name[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium text-gray-800 dark:text-white/90 truncate">{ws.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 dark:text-white/30 text-sm mb-4">You don&apos;t have any workspaces yet.</p>
+                )}
+                <button onClick={() => setMode('create')}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-dashed border-gray-300 dark:border-white/15 hover:border-gray-400 dark:hover:border-white/30 rounded-lg transition-colors mb-3">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  New workspace
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  autoFocus
+                  value={newWsName}
+                  onChange={e => setNewWsName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') createAndAdd(); if (e.key === 'Escape') setMode('pick'); }}
+                  placeholder="Workspace name"
+                  className="w-full bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 placeholder:text-gray-400 dark:placeholder:text-white/25 transition-colors mb-4"
+                />
+                <button onClick={createAndAdd} disabled={!newWsName.trim() || saving}
+                  className="w-full py-2.5 text-sm font-medium bg-indigo-600 dark:bg-white text-white dark:text-black rounded-lg disabled:opacity-40 hover:bg-indigo-700 dark:hover:bg-white/90 transition-colors mb-3">
+                  {saving ? 'Creating...' : 'Create & add'}
+                </button>
+                <button onClick={() => setMode('pick')}
+                  className="w-full py-2 text-sm text-gray-500 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 transition-colors">
+                  ← Back
+                </button>
+              </>
+            )}
+
+            <button onClick={onClose}
+              className="w-full py-2 text-sm text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50 transition-colors">
+              Maybe later
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import PollBlock from './elements/PollBlock.jsx';
 import IframeWindow from './elements/IframeWindow.jsx';
 import ShapeBlock from './elements/ShapeBlock.jsx';
 import MediaBlock from './elements/MediaBlock.jsx';
-import { SLIDE_W, SLIDE_H, clamp } from './boardConstants.js';
+import { SLIDE_W, SLIDE_H, clamp, MIN_FONT, ELEMENT_MIN_DIMS } from './boardConstants.js';
 
 const RENDERERS = {
   sticky: StickyNote,
@@ -60,7 +60,6 @@ export default function BoardElement({
   onDragEnd,
   // Poll-specific wiring
   votes,
-  bumpVote,
   castPollVote,
   removePollVote,
   boardId,
@@ -71,8 +70,9 @@ export default function BoardElement({
   const selected       = selectedIds?.has(element.id) ?? false;
   const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
 
-  const [live, setLive] = useState(null); // { x?, y?, w?, h? } gesture override
+  const [live, setLive] = useState(null); // { x?, y?, w?, h?, props? } gesture override
   const lastClickRef   = useRef({ time: 0, x: 0, y: 0 });
+  const resizeOriginRef = useRef(null); // captures font size at resize start
   const isGroupAnchor  = useRef(false);   // true when this element is driving the group drag
   const dragOriginRef  = useRef(null);    // {x,y} of this element at drag start
 
@@ -123,14 +123,45 @@ export default function BoardElement({
     },
   });
 
+  // Returns the current font size and which prop name to write for text-bearing elements.
+  const getFontInfo = (el) => {
+    if (el.type === 'shape') return { fs: el.props?.fontSize ?? 28, prop: 'fontSize' };
+    if (el.type === 'text')  return { fs: el.props?.fontSize ?? el.props?.size ?? 34, prop: 'fontSize' };
+    // Sticky: only when user has explicitly set a fontSize (otherwise autoSize formula scales naturally)
+    if (el.type === 'sticky' && el.props?.fontSize) return { fs: el.props.fontSize, prop: 'fontSize' };
+    return null;
+  };
+
+  const scaleFontSize = (origFs, origW, origH, newW, newH) =>
+    Math.max(MIN_FONT, Math.round(origFs * Math.sqrt((newW * newH) / (origW * origH))));
+
+  const elementMinDims = ELEMENT_MIN_DIMS[element.type] ?? {};
   const { resizing, startResize } = useElementResize({
     getScale,
-    onPreview: (w, h) => setLive((p) => ({ ...p, w: fitW(w), h: fitH(h) })),
-    onCommit: (w, h) => onUpdate(element.id, { w: fitW(w), h: fitH(h) }),
+    ...elementMinDims,
+    onPreview: (w, h) => {
+      const fw = fitW(w), fh = fitH(h);
+      const origin = resizeOriginRef.current;
+      const propsPatch = origin?.fontInfo
+        ? { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh) }
+        : null;
+      setLive((p) => ({ ...p, w: fw, h: fh, ...(propsPatch && { props: propsPatch }) }));
+    },
+    onCommit: (w, h) => {
+      const fw = fitW(w), fh = fitH(h);
+      onUpdate(element.id, { w: fw, h: fh });
+      const origin = resizeOriginRef.current;
+      if (origin?.fontInfo) {
+        onUpdateProps(element.id, { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh) });
+      }
+    },
   });
 
   useEffect(() => {
-    if (!dragging && !resizing) setLive(null);
+    if (!dragging && !resizing) {
+      setLive(null);
+      resizeOriginRef.current = null;
+    }
   }, [dragging, resizing]);
 
   // Non-anchor group members show their offset via shifted left/top.
@@ -148,6 +179,8 @@ export default function BoardElement({
   if (!Renderer) return null;
 
   const handleBodyPointerDown = (e) => {
+    // In draw/spawn mode let the event bubble through to the canvas for element creation
+    if (editable && activeTool && activeTool !== 'pointer' && !connectMode && !editing) return;
     e.stopPropagation();
 
     if (connectMode) {
@@ -195,7 +228,7 @@ export default function BoardElement({
         height: geom.h,
         zIndex: (element.z ?? 1) + (selected ? 1000 : 0),
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
-        pointerEvents: (activeTool && activeTool !== 'pointer' && !connectMode && !editing) ? 'none' : 'auto',
+        pointerEvents: (!editable || (activeTool && activeTool !== 'pointer' && !connectMode && !editing)) ? 'none' : 'auto',
       }}
       onPointerDown={handleBodyPointerDown}
       onDoubleClick={(e) => {
@@ -235,14 +268,13 @@ export default function BoardElement({
       )}
 
       <Renderer
-        element={{ ...element, ...geom }}
+        element={{ ...element, ...geom, props: live?.props ? { ...element.props, ...live.props } : element.props }}
         editable={editable}
         editing={editing}
         selected={selected}
         onEditProps={(patch) => onUpdateProps(element.id, patch)}
         onUpdateElement={(patch) => onUpdate(element.id, patch)}
         votes={votes}
-        bumpVote={bumpVote}
         castPollVote={castPollVote}
         removePollVote={removePollVote}
         boardId={boardId}
@@ -252,6 +284,11 @@ export default function BoardElement({
       {/* Intercept pointer events from iframe during drag so pointermove reaches window */}
       {dragging && element.type === 'iframe' && (
         <div className="absolute inset-0 z-10" style={{ cursor: 'move' }} />
+      )}
+
+      {/* Block child content (video controls, upload zones, etc.) from capturing events in draw/spawn mode */}
+      {editable && activeTool && activeTool !== 'pointer' && !connectMode && !editing && (
+        <div className="absolute inset-0" style={{ zIndex: 100 }} />
       )}
 
       {/* Delete + resize affordances (editor only, when selected) */}
@@ -272,7 +309,10 @@ export default function BoardElement({
             </svg>
           </button>
           <div
-            onPointerDown={(e) => startResize(e, element)}
+            onPointerDown={(e) => {
+              resizeOriginRef.current = { origW: element.w, origH: element.h, fontInfo: getFontInfo(element) };
+              startResize(e, element);
+            }}
             className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-sm bg-white border-2 border-blue-500 cursor-nwse-resize shadow"
             title="Resize"
           />

@@ -57,6 +57,31 @@ function ShapeSvg({ type, w, h, fill, stroke, strokeWidth }) {
   }
 }
 
+// ── Shape clip-path helpers ────────────────────────────────────────────────
+
+function getShapeClipPath(type) {
+  switch (type) {
+    case 'circle':   return 'ellipse(48% 48% at 50% 50%)';
+    case 'diamond':  return 'polygon(50% 4%, 96% 50%, 50% 96%, 4% 50%)';
+    case 'triangle': return 'polygon(50% 4%, 96% 96%, 4% 96%)';
+    case 'hexagon':  return 'polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%)';
+    default:         return undefined;
+  }
+}
+
+// Padding large enough to keep text in the "inscribed safe zone" for each shape
+function getTextPadding(type, strokeWidth, w, h) {
+  const base = Math.max(8, strokeWidth + 4);
+  const s = Math.min(w, h);
+  switch (type) {
+    case 'circle':   return Math.max(base, s * 0.18);
+    case 'diamond':  return Math.max(base, s * 0.25);
+    case 'triangle': return Math.max(base, s * 0.22);
+    case 'hexagon':  return Math.max(base, s * 0.12);
+    default:         return base;
+  }
+}
+
 // ── Palette helpers ────────────────────────────────────────────────────────
 
 const FILL_COLORS = [
@@ -100,6 +125,11 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
 
   const scale = getScale?.() || 1;
 
+  const clipShape = !!getShapeClipPath(shapeType);
+  const textPadding = getTextPadding(shapeType, strokeWidth, w, h);
+  // leading-snug = 1.375; compute how many lines fit in the padded safe area
+  const maxLines = clipShape ? Math.max(1, Math.floor((h - 2 * textPadding) / (fontSize * 1.375))) : undefined;
+
   return (
     <div className="relative w-full h-full select-none" style={{ opacity }}>
       {/* SVG shape */}
@@ -114,9 +144,12 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
 
       {/* Text layer */}
       <div
-        className="absolute inset-0 flex items-center justify-center overflow-hidden"
-        style={{ padding: Math.max(8, strokeWidth + 4), pointerEvents: editing ? 'auto' : 'none' }}
-        onPointerDown={(e) => editing && e.stopPropagation()}
+        className="absolute inset-0 flex items-start justify-center overflow-hidden"
+        style={{
+          padding: getTextPadding(shapeType, strokeWidth, w, h),
+          pointerEvents: 'none',
+          clipPath: getShapeClipPath(shapeType),
+        }}
       >
         {editing ? (
           <textarea
@@ -126,13 +159,24 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
             onPointerDown={(e) => e.stopPropagation()}
             placeholder="Type text…"
             className="w-full h-full bg-transparent outline-none resize-none placeholder:text-black/25 leading-snug"
-            style={{ fontSize, color: textColor, textAlign, fontWeight: bold ? 700 : 400, fontStyle: italic ? 'italic' : 'normal' }}
+            style={{ fontSize, color: textColor, textAlign, fontWeight: bold ? 700 : 400, fontStyle: italic ? 'italic' : 'normal', pointerEvents: 'auto' }}
           />
         ) : (
           text && (
             <div
-              className="w-full whitespace-pre-wrap break-words leading-snug"
-              style={{ fontSize, color: textColor, textAlign, fontWeight: bold ? 700 : 400, fontStyle: italic ? 'italic' : 'normal' }}
+              className={`w-full leading-snug ${clipShape ? 'overflow-hidden wrap-break-word' : 'overflow-y-auto whitespace-pre-wrap wrap-break-word'}`}
+              style={{
+                fontSize, color: textColor, textAlign,
+                fontWeight: bold ? 700 : 400,
+                fontStyle: italic ? 'italic' : 'normal',
+                maxHeight: '100%',
+                pointerEvents: 'auto',
+                ...(clipShape && {
+                  display: '-webkit-box',
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: maxLines,
+                }),
+              }}
             >
               {text}
             </div>

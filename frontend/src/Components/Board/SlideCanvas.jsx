@@ -109,7 +109,6 @@ export default function SlideCanvas({
   onDragEnd,
   // Poll wiring
   votes,
-  bumpVote,
   castPollVote,
   removePollVote,
   boardId,
@@ -121,9 +120,13 @@ export default function SlideCanvas({
 }) {
   const containerRef = useRef(null);
   const slideRef = useRef(null);
-  const [scale, setScale] = useState(1);
-  const scaleRef = useRef(1);
+  const [fitScale, setFitScale] = useState(1);
+  const [zoomMult, setZoomMult] = useState(1);
+  const scale = fitScale * zoomMult;
+  const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  const fitScaleRef = useRef(fitScale);
+  fitScaleRef.current = fitScale;
   const getScale = useCallback(() => scaleRef.current, []);
 
   // Double-click-empty radial quick-spawn (container-relative coords + slide pt).
@@ -154,13 +157,70 @@ export default function SlideCanvas({
       const heightFit = (ch - FIT_PADDING) / SLIDE_H;
       const widthFit = (cw - FIT_PADDING) / SLIDE_W;
       const next = clamp(Math.min(heightFit, widthFit), 0.35, 2);
-      setScale(next);
+      setFitScale(next);
     };
     recompute();
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Stores the cursor's slide-space position + viewport offset just before each
+  // wheel zoom so the layout effect can scroll to keep that point fixed.
+  const zoomAnchorRef = useRef(null);
+
+  // After every zoomMult change triggered by the wheel, shift scroll so the
+  // cursor-pinned slide point stays visually fixed under the pointer.
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    if (!anchor) return;
+    zoomAnchorRef.current = null;
+    const container = containerRef.current;
+    const slide     = slideRef.current;
+    if (!container || !slide) return;
+
+    // Where the anchored slide point now appears in the viewport (new scale,
+    // scroll not yet adjusted — getBoundingClientRect reflects live DOM).
+    const sr = slide.getBoundingClientRect();
+    const cr = container.getBoundingClientRect();
+    const currentX = sr.left - cr.left + anchor.cursorSlideX * scale;
+    const currentY = sr.top  - cr.top  + anchor.cursorSlideY * scale;
+
+    container.scrollLeft += currentX - anchor.viewportX;
+    container.scrollTop  += currentY - anchor.viewportY;
+  }, [zoomMult]); // scale is derived from zoomMult so it's up-to-date here
+
+  // Ctrl+wheel zoom — capture cursor anchor synchronously before updating state.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+
+      const slide = slideRef.current;
+      if (slide) {
+        const sr = slide.getBoundingClientRect();
+        const cr = el.getBoundingClientRect();
+        zoomAnchorRef.current = {
+          cursorSlideX: (e.clientX - sr.left) / scaleRef.current,
+          cursorSlideY: (e.clientY - sr.top)  / scaleRef.current,
+          viewportX: e.clientX - cr.left,
+          viewportY: e.clientY - cr.top,
+        };
+      }
+
+      const factor = e.deltaY < 0 ? 1.04 : 1 / 1.04;
+      setZoomMult(prev => clamp(prev * factor, 0.1 / fitScaleRef.current, 4 / fitScaleRef.current));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  const zoomIn  = useCallback(() => setZoomMult(prev => ZOOM_STEPS.find(s => s > prev + 0.01) ?? 3), []);
+  const zoomOut = useCallback(() => setZoomMult(prev => [...ZOOM_STEPS].reverse().find(s => s < prev - 0.01) ?? 0.25), []);
+  const zoomFit = useCallback(() => setZoomMult(1), []);
 
   // Split the active slide's elements: connectors paint in their own SVG layer;
   // everything else paints back-to-front by z as positioned divs.
@@ -303,15 +363,20 @@ export default function SlideCanvas({
     const cRect = containerRef.current?.getBoundingClientRect();
     const pt = toSlide(e.clientX, e.clientY);
     if (!cRect || !pt) return;
-    setRadial({ menuX: e.clientX - cRect.left, menuY: e.clientY - cRect.top, slideX: pt.x, slideY: pt.y });
+    setRadial({
+      menuX: e.clientX - cRect.left + (containerRef.current?.scrollLeft ?? 0),
+      menuY: e.clientY - cRect.top  + (containerRef.current?.scrollTop  ?? 0),
+      slideX: pt.x, slideY: pt.y,
+    });
   };
 
   const slideBg = getSlideBackground(activePage?.background, isDark);
 
   return (
+    <div className="relative flex-1 min-h-0">
     <div
       ref={containerRef}
-      className="relative flex-1 h-full overflow-auto"
+      className="absolute inset-0 overflow-auto"
       style={{ scrollbarGutter: 'stable', cursor: creating || connectMode ? 'crosshair' : undefined }}
       onPointerDown={handleContainerPointerDown}
       onPointerMove={handlePointerMove}
@@ -381,7 +446,6 @@ export default function SlideCanvas({
             onGroupDragCommit={onGroupDragCommit}
             onGroupDragEnd={onGroupDragEnd}
             votes={votes}
-            bumpVote={bumpVote}
             castPollVote={castPollVote}
             removePollVote={removePollVote}
             boardId={boardId}
@@ -444,5 +508,52 @@ export default function SlideCanvas({
         />
       )}
     </div>
+
+    {/* Zoom controls — floats over the canvas, anchored to the outer wrapper */}
+    <div className="absolute bottom-5 right-4 z-50 flex items-center gap-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 select-none pointer-events-auto">
+      {/* Zoom out */}
+      <button
+        onClick={zoomOut}
+        title="Zoom out"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 transition shrink-0"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+        </svg>
+      </button>
+
+      {/* Log-scale slider: 0→200 maps 0.25× → 1× (midpoint) → 4× */}
+      <input
+        type="range"
+        min="0"
+        max="200"
+        step="1"
+        value={Math.round(Math.log(zoomMult / 0.25) / Math.log(16) * 200)}
+        onChange={(e) => setZoomMult(0.25 * Math.pow(16, Number(e.target.value) / 200))}
+        title="Drag to zoom"
+        className="w-20 h-1 accent-blue-500 cursor-pointer"
+      />
+
+      {/* Zoom in */}
+      <button
+        onClick={zoomIn}
+        title="Zoom in"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 transition shrink-0"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
+      {/* Percentage / fit reset */}
+      <button
+        onClick={zoomFit}
+        title="Reset to fit view"
+        className="min-w-10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 text-center hover:text-blue-600 dark:hover:text-blue-400 transition tabular-nums"
+      >
+        {Math.abs(zoomMult - 1) < 0.01 ? 'Fit' : `${Math.round(zoomMult * 100)}%`}
+      </button>
+    </div>
+  </div>
   );
 }

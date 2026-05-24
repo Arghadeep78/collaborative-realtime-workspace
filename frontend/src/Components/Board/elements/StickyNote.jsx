@@ -54,12 +54,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
           }}
         />
 
-        {/* Tape Decoration */}
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 w-16 h-3 pointer-events-none">
-          <div className="absolute inset-0 bg-white/60 dark:bg-black/15 backdrop-blur-sm rounded-sm shadow-[0_2px_8px_rgba(0,0,0,0.15)] border-y border-white/30 dark:border-white/5" />
-          <div className="absolute inset-0 bg-linear-to-b from-white/40 to-transparent rounded-sm" />
-          <div className="absolute -bottom-1 inset-x-0 h-1 bg-black/5 blur-sm" />
-        </div>
+        {/* Tape Decoration removed */}
 
         {/* Main content */}
         {editing ? (
@@ -68,7 +63,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
             value={props.text}
             onChange={(e) => onEditProps({ text: e.target.value })}
             onPointerDown={(e) => e.stopPropagation()}
-            className="flex-1 w-full bg-transparent resize-none outline-none placeholder:text-black/25 dark:placeholder:text-white/30 leading-snug z-10 pt-2 font-medium"
+            className="flex-1 w-full bg-transparent resize-none outline-none placeholder:text-black/25 dark:placeholder:text-white/30 leading-snug z-10 pt-5 font-medium"
             style={{
               fontSize,
               color: textColor,
@@ -79,7 +74,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
           />
         ) : (
           <div
-            className={`flex-1 w-full whitespace-pre-wrap wrap-break-word leading-snug overflow-hidden z-10 pt-2 font-medium transition-opacity ${!props.text ? 'opacity-40' : ''}`}
+            className={`flex-1 w-full whitespace-pre-wrap wrap-break-word leading-snug overflow-hidden z-10 font-medium transition-opacity ${!props.text ? 'opacity-40' : ''}`}
             style={{
               fontSize,
               color: textColor,

@@ -22,6 +22,8 @@ const BG_COLORS = [
   '#cce0ff', // pastel blue
 ];
 
+const POLL_BASE_W = 380;
+
 export default function PollBlock({
   element,
   editable,
@@ -34,6 +36,10 @@ export default function PollBlock({
   removePollVote,
 }) {
   const { props } = element;
+
+  // Scale all text proportionally with element width, clamped for readability.
+  const textScale = Math.min(1.6, Math.max(0.7, element.w / POLL_BASE_W));
+  const fs = (base) => Math.round(base * textScale);
   const options = useMemo(() => props.options || [], [props.options]);
   const pollId = element.id;
 
@@ -90,17 +96,26 @@ export default function PollBlock({
   const unvotedCircle = hasColor ? 'border-slate-400 group-hover:border-slate-500' : 'border-slate-300 dark:border-slate-600 group-hover:border-slate-400 dark:group-hover:border-slate-500';
   const footerDot = hasColor ? 'border-[#22272b]/20 bg-slate-400' : 'border-white dark:border-[#22272b] bg-slate-300 dark:bg-slate-600';
 
+  // Responsive spacing — scales with the same ratio as text so layout stays proportional.
+  const pad = fs(16);
+  const rowGap = fs(10);
+  const iconSz = fs(28);
+  const iconIconSz = fs(14);
+
   return (
-    <div 
-      className="w-full h-full rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col p-5 gap-4 overflow-hidden transition-colors"
-      style={{ backgroundColor: props.bgColor || undefined }}
+    <div
+      className="w-full h-full rounded-2xl border border-slate-200 dark:border-slate-700/60 shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col overflow-hidden transition-colors"
+      style={{ backgroundColor: props.bgColor || undefined, padding: pad, gap: rowGap }}
     >
       <div className={`absolute inset-0 -z-10 ${!hasColor ? 'bg-white dark:bg-[#22272b]' : ''} rounded-2xl pointer-events-none`} />
-      
+
       {/* Header / Question */}
-      <div className="flex gap-3 items-start shrink-0 z-10">
-        <div className="mt-1 bg-gradient-to-br from-indigo-500 to-purple-500 w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm">
-          <BarChart2 className="w-4 h-4 text-white" />
+      <div className="flex gap-2 items-start shrink-0 z-10">
+        <div
+          className="mt-0.5 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+          style={{ width: iconSz, height: iconSz, minWidth: iconSz }}
+        >
+          <BarChart2 className="text-white" style={{ width: iconIconSz, height: iconIconSz }} />
         </div>
         <div className="flex-1 min-w-0">
           {editing ? (
@@ -110,10 +125,11 @@ export default function PollBlock({
               onChange={(e) => onEditProps({ question: e.target.value })}
               onPointerDown={(e) => e.stopPropagation()}
               placeholder="Ask a question…"
-              className={`w-full bg-transparent outline-none text-[26px] font-bold ${textMain} placeholder:text-slate-400`}
+              className={`w-full bg-transparent outline-none font-bold ${textMain} placeholder:text-slate-400`}
+              style={{ fontSize: fs(26) }}
             />
           ) : (
-            <div className={`text-[26px] font-bold ${textMain} break-words leading-snug`}>
+            <div className={`font-bold ${textMain} break-words leading-snug`} style={{ fontSize: fs(26) }}>
               {props.question || <span className="text-slate-400 font-semibold italic">Untitled poll</span>}
             </div>
           )}
@@ -121,7 +137,7 @@ export default function PollBlock({
       </div>
 
       {/* Options */}
-      <div className="flex-1 flex flex-col gap-3 overflow-y-auto pr-1 z-10" onPointerDown={(e) => editing && e.stopPropagation()}>
+      <div className="flex-1 flex flex-col overflow-y-auto pr-1 z-10" style={{ gap: fs(8) }} onPointerDown={(e) => editing && e.stopPropagation()}>
         {options.map((opt, i) => {
           const pct = total ? Math.round((counts[i] / total) * 100) : 0;
           const mine = myVote === opt.id;
@@ -135,7 +151,8 @@ export default function PollBlock({
                 <input
                   value={opt.label}
                   onChange={(e) => setOptionLabel(opt.id, e.target.value)}
-                  className={`flex-1 min-w-0 text-[18px] border focus:border-slate-400 dark:focus:border-slate-500 rounded-lg px-3 py-2 outline-none transition-colors ${inputBg}`}
+                  className={`flex-1 min-w-0 border focus:border-slate-400 dark:focus:border-slate-500 rounded-lg outline-none transition-colors ${inputBg}`}
+                  style={{ fontSize: fs(18), padding: `${fs(6)}px ${fs(10)}px` }}
                 />
                 {options.length > 2 && (
                   <button onClick={() => removeOption(opt.id)} className="text-slate-400 hover:text-rose-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1" title="Remove option">
@@ -159,14 +176,14 @@ export default function PollBlock({
                 className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out ${mine ? theme.bar : (hasColor ? 'bg-white/40' : 'bg-slate-100 dark:bg-slate-800')}`}
                 style={{ width: `${pct}%` }}
               />
-              <div className="relative flex-1 flex items-center justify-between px-4 py-3 min-h-[48px]">
+              <div className="relative flex-1 flex items-center justify-between" style={{ padding: `${fs(8)}px ${fs(14)}px`, minHeight: fs(40) }}>
                 <div className="flex items-center gap-3">
                   {mine ? (
                     <CheckCircle2 className={`w-5 h-5 shrink-0 ${theme.text}`} />
                   ) : (
                     <div className={`w-5 h-5 rounded-full border-2 shrink-0 transition-colors ${unvotedCircle}`} />
                   )}
-                  <span className={`text-[18px] font-medium break-words ${mine ? textMain : textSub}`}>
+                  <span className={`font-medium break-words ${mine ? textMain : textSub}`} style={{ fontSize: fs(18) }}>
                     {opt.label}
                   </span>
                 </div>
@@ -183,7 +200,7 @@ export default function PollBlock({
                       </div>
                     ))}
                   </div>
-                  <span className={`text-[17px] font-bold tabular-nums ${mine ? theme.text : textMuted}`}>
+                  <span className={`font-bold tabular-nums ${mine ? theme.text : textMuted}`} style={{ fontSize: fs(17) }}>
                     {pct}%
                   </span>
                 </div>
@@ -193,13 +210,13 @@ export default function PollBlock({
         })}
 
         {editing && editable && (
-          <div className="flex flex-col gap-3 mt-2">
-            <button onClick={addOption} className={`flex w-max items-center gap-1.5 text-[17px] font-semibold self-start px-2 py-1 rounded transition-colors ${hasColor ? 'text-slate-700 hover:bg-white/40' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+          <div className="flex flex-col" style={{ gap: fs(8), marginTop: fs(6) }}>
+            <button onClick={addOption} className={`flex w-max items-center gap-1.5 font-semibold self-start px-2 py-1 rounded transition-colors ${hasColor ? 'text-slate-700 hover:bg-white/40' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`} style={{ fontSize: fs(17) }}>
               <Plus className="w-5 h-5" /> Add another option
             </button>
 
             <div className={`flex items-center gap-2 pt-2 border-t ${footerBorder}`}>
-              <span className={`text-[15px] font-medium ${textMuted} mr-1`}>Color:</span>
+              <span className={`font-medium ${textMuted} mr-1`} style={{ fontSize: fs(15) }}>Color:</span>
               {BG_COLORS.map((c) => (
                 <button
                   key={c || 'default'}
@@ -218,7 +235,7 @@ export default function PollBlock({
 
       {/* Footer Stats */}
       {!editing && (
-        <div className={`mt-2 pt-3 border-t flex items-center justify-between text-[15px] font-medium z-10 ${footerBorder} ${textMuted}`}>
+        <div className={`border-t flex items-center justify-between font-medium z-10 shrink-0 ${footerBorder} ${textMuted}`} style={{ fontSize: fs(15), paddingTop: fs(8), marginTop: fs(4) }}>
           <div className="flex items-center gap-1.5">
             <div className="flex -space-x-1">
               {total > 0 && Array.from({ length: Math.min(total, 3) }).map((_, idx) => (

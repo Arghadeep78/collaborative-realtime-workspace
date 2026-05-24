@@ -15,6 +15,7 @@ import { setupYjsWSServer } from "./crdt/WSServer.js";
 import { startPersistenceWorker } from "./crdt/persistenceWorker.js";
 import { startPersistenceScheduler } from "./crdt/persistenceScheduler.js";
 import publishRoute from "./Routes/publishRoute.js";
+import workspaceRoute from "./Routes/workspaceRoutes.js";
 import { startPublishWorker } from "./jobs/publishWorker.js";
 import { initPublishQueue } from "./jobs/publishQueue.js";
 import { initBoardCache } from "./cache/boardCache.js";
@@ -141,6 +142,7 @@ const startServer = async () => {
   app.use("/boards", apiLimiter, boardRoute);
   app.use("/ai", aiLimiter, aiRoutes);
   app.use("/publish", apiLimiter, publishRoute);
+  app.use("/workspaces", apiLimiter, workspaceRoute);
   // Socket.io middleware for authentication (kept for future use / presence)
   io.use(socketAuth);
 

@@ -10,6 +10,13 @@ export default function ShareModal({ boardId, board, onClose }) {
   const [isPublic, setIsPublic]       = useState(board?.isPublic || false);
   const [publicRole, setPublicRole]   = useState(board?.publicRole || 'viewer');
 
+  // Combined general-access value: 'restricted' | 'viewer' | 'commenter' | 'editor'
+  const generalAccess = isPublic ? publicRole : 'restricted';
+  const handleGeneralAccess = (val) => {
+    if (val === 'restricted') handleUpdateGeneralAccess(false, publicRole);
+    else handleUpdateGeneralAccess(true, val);
+  };
+
   const [collaborators, setCollabs]   = useState(board?.collaborators || []);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -182,13 +189,15 @@ export default function ShareModal({ boardId, board, onClose }) {
               </div>
               <div className="flex-1">
                 <select
-                  value={isPublic ? 'public' : 'restricted'}
-                  onChange={e => handleUpdateGeneralAccess(e.target.value === 'public', publicRole)}
+                  value={generalAccess}
+                  onChange={e => handleGeneralAccess(e.target.value)}
                   className="font-semibold text-slate-900 bg-transparent text-sm focus:outline-none cursor-pointer -ml-1 hover:bg-slate-200/50 rounded px-1 py-0.5 transition-colors"
                   disabled={isProcessing}
                 >
                   <option value="restricted">Restricted</option>
-                  <option value="public">Anyone with the link</option>
+                  <option value="viewer">Anyone with the link — Viewer</option>
+                  <option value="commenter">Anyone with the link — Commenter</option>
+                  <option value="editor">Anyone with the link — Editor</option>
                 </select>
                 <p className="text-[13px] text-slate-500 mt-0.5">
                   {isPublic
@@ -196,18 +205,6 @@ export default function ShareModal({ boardId, board, onClose }) {
                     : "Only people with access can open with the link"}
                 </p>
               </div>
-              {isPublic && (
-                <select
-                  value={publicRole}
-                  onChange={e => handleUpdateGeneralAccess(true, e.target.value)}
-                  className={selectClass}
-                  disabled={isProcessing}
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="commenter">Commenter</option>
-                  <option value="editor">Editor</option>
-                </select>
-              )}
             </div>
           </div>
         </div>

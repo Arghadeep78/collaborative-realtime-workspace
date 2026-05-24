@@ -11,7 +11,7 @@ import { FLUSH_MS, MIN_W, MIN_H } from './boardConstants.js';
  * @param {(w:number,h:number)=>void} opts.onPreview  local-only size update
  * @param {(w:number,h:number)=>void} opts.onCommit   write {w,h} to Yjs
  */
-export function useElementResize({ getScale, onPreview, onCommit }) {
+export function useElementResize({ getScale, onPreview, onCommit, minW = MIN_W, minH = MIN_H }) {
   const [resizing, setResizing] = useState(false);
   const ref = useRef(null);
 
@@ -35,8 +35,8 @@ export function useElementResize({ getScale, onPreview, onCommit }) {
         const s = ref.current;
         if (!s) return;
         const sc = getScale() || scale;
-        const w = Math.max(MIN_W, s.origW + (ev.clientX - s.startX) / sc);
-        const h = Math.max(MIN_H, s.origH + (ev.clientY - s.startY) / sc);
+        const w = Math.max(minW, s.origW + (ev.clientX - s.startX) / sc);
+        const h = Math.max(minH, s.origH + (ev.clientY - s.startY) / sc);
         s.latest = { w, h };
         onPreview(w, h);
         const now = performance.now();
@@ -62,7 +62,7 @@ export function useElementResize({ getScale, onPreview, onCommit }) {
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     },
-    [getScale, onPreview, onCommit],
+    [getScale, onPreview, onCommit, minW, minH],
   );
 
   return { resizing, startResize };

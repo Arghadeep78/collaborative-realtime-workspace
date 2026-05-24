@@ -116,6 +116,10 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
               onChange={e => onUpdate({ title: e.target.value })}
               className="flex-1 bg-transparent text-[30px] font-bold text-[#172b4d] dark:text-[#b6c2cf] outline-none placeholder:text-slate-300"
               placeholder="Card title..."
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
+              spellCheck={false}
             />
           </div>
         </div>
@@ -146,7 +150,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
                      {cMembers.includes(m.email) && <Check className="w-3 h-3 ml-auto" />}
                   </button>
                 ))}
-                <input value={newMemberName} onChange={e => setNewMemberName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newMemberName) { onUpdate({ members: [...cMembers, newMemberName] }); setNewMemberName(''); } }} placeholder="Add name..." className="text-[14px] p-1.5 border rounded outline-none w-full" />
+                <input value={newMemberName} onChange={e => setNewMemberName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newMemberName) { onUpdate({ members: [...cMembers, newMemberName] }); setNewMemberName(''); } }} placeholder="Add name..." className="text-[14px] p-1.5 border rounded outline-none w-full" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
               </div>
             )}
           </div>
@@ -176,7 +180,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
             </button>
             {showLocationPicker && (
                <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg p-2 z-10 flex flex-col gap-2">
-                 <input autoFocus value={card.location || ''} onChange={e => onUpdate({ location: e.target.value })} placeholder="Enter location..." className="text-[14px] p-1.5 border rounded outline-none w-full bg-transparent text-[#172b4d] dark:text-[#b6c2cf]" />
+                 <input autoFocus value={card.location || ''} onChange={e => onUpdate({ location: e.target.value })} placeholder="Enter location..." className="text-[14px] p-1.5 border rounded outline-none w-full bg-transparent text-[#172b4d] dark:text-[#b6c2cf]" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
                </div>
             )}
           </div>
@@ -227,6 +231,10 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
             onBlur={handleSaveDesc}
             placeholder="Add a more detailed description..."
             className="w-full min-h-[100px] border border-slate-300 dark:border-slate-700 rounded-lg p-3 text-[18px] text-[#172b4d] dark:text-[#b6c2cf] outline-none focus:ring-2 focus:ring-blue-500 resize-y bg-transparent"
+            data-gramm="false"
+            data-gramm_editor="false"
+            data-enable-grammarly="false"
+            spellCheck={false}
           />
         </div>
         
@@ -249,7 +257,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
                      <button onClick={() => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${chk.done ? 'bg-teal-500 border-teal-500 text-white' : 'border-slate-300 bg-white'}`}>
                        {chk.done && <Check className="w-3.5 h-3.5" />}
                      </button>
-                     <input value={chk.text} onChange={e => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, text: e.target.value } : c) })} className={`flex-1 text-[18px] bg-transparent outline-none ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`} placeholder="Item..." />
+                     <input value={chk.text} onChange={e => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, text: e.target.value } : c) })} className={`flex-1 text-[18px] bg-transparent outline-none ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`} placeholder="Item..." data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
                      <button onClick={() => onUpdate({ checklist: cChecklist.filter(c => c.id !== chk.id) })} className="opacity-0 group-hover/chk:opacity-100 text-slate-400 hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
                   </div>
                 ))}
@@ -284,30 +292,45 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
   return createPortal(modalContent, document.body);
 }
 
+const KANBAN_BASE_W = 380;
+
 // ── Main Kanban List Component ─────────────────────────────────────────────
 export default function KanbanCard({ element, editable, editing, onEditProps, onUpdateElement, members = [] }) {
   const { props } = element;
+
+  // Scale text proportionally with element width, clamped for readability.
+  const textScale = Math.min(1.6, Math.max(0.7, element.w / KANBAN_BASE_W));
+  const fs = (base) => Math.round(base * textScale);
   const listLabels = (props.labels || []).map(l => (typeof l === 'string' ? { color: l, text: '' } : l));
   const subcards = props.subcards || [];
 
   const titleRef = useRef(null);
   const listRef = useRef(null);
 
-  // Auto-resize vertically based on content
+  // Stable refs so the auto-resize effect doesn't re-run on every render.
+  // onUpdateElement is a new arrow function each render; element.h changes after each call —
+  // putting either in the dep array causes an infinite setState loop.
+  const onUpdateElementRef = useRef(onUpdateElement);
+  onUpdateElementRef.current = onUpdateElement;
+  const elementHRef = useRef(element.h);
+  elementHRef.current = element.h;
+
+  // Auto-resize vertically when cards are added / removed.
   useEffect(() => {
-    if (!listRef.current || props.collapsed || !onUpdateElement) return;
-    
-    // Check if the scrollable area exceeds the client area
+    if (!listRef.current || props.collapsed || !onUpdateElementRef.current) return;
     const { scrollHeight, clientHeight } = listRef.current;
     if (scrollHeight > clientHeight) {
-      // Add the overflow amount to the current element height
-      const neededHeight = element.h + (scrollHeight - clientHeight);
-      // Cap the auto-growth so it doesn't extend infinitely
-      if (neededHeight > element.h && neededHeight <= 1200) {
-        onUpdateElement({ h: neededHeight });
+      const neededHeight = elementHRef.current + (scrollHeight - clientHeight);
+      if (neededHeight > elementHRef.current && neededHeight <= 1200) {
+        // Defer the Yjs write out of React's passive-effect commit phase to avoid
+        // the synchronous observer→setElements chain that causes "maximum update depth exceeded".
+        const fn = onUpdateElementRef.current;
+        const h = neededHeight;
+        requestAnimationFrame(() => { if (h > elementHRef.current) fn({ h }); });
       }
     }
-  }, [subcards, element.h, props.collapsed, onUpdateElement]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subcards.length, props.collapsed]);
   
   // Local state for active editing (inline & modal)
   const [activeCardId, setActiveCardId] = useState(null);
@@ -315,6 +338,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
   const [openChecklistId, setOpenChecklistId] = useState(null);
   const [showListColorPicker, setShowListColorPicker] = useState(false);
   const colorPickerRef = useRef(null);
+  const activeCardRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -328,11 +352,37 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
     return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, [showListColorPicker]);
 
+  // Click-outside closes inline edit (auto-save — data is already patched on each keystroke)
+  useEffect(() => {
+    if (!activeCardId) return;
+    const handleOutside = (e) => {
+      if (activeCardRef.current && !activeCardRef.current.contains(e.target)) {
+        setActiveCardId(null);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside, { capture: true });
+    return () => document.removeEventListener('pointerdown', handleOutside, { capture: true });
+  }, [activeCardId]);
+
   useEffect(() => {
     if (editing && titleRef.current) {
       titleRef.current.focus({ preventScroll: true });
     }
   }, [editing]);
+
+  // Hide Grammarly overlays injected by browser extensions near this component.
+  // This is a targeted, removable workaround to avoid extension UI blocking our header.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('copilot-hide-grammarly')) return;
+    const style = document.createElement('style');
+    style.id = 'copilot-hide-grammarly';
+    style.innerHTML = `
+      [class*="gr-"], [class*="gr_"], [class*="grammarly"], [id^="grammarly"], .gr__tooltip, .gr-tooltip, .gr-floating-panel, .gr-floating-bubble, .gr-ghost { display: none !important; }
+    `;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
 
   // ── mutations ────────────────────────────────────────────────────────────
   const setListColor = (color) => onEditProps({ labels: color ? [{ color, text: '' }] : [] });
@@ -359,7 +409,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
            <ArrowRightLeft className="w-6 h-6" strokeWidth={3} />
          </button>
          <div className="mt-8 flex-1 flex items-start justify-center">
-            <span className="text-[24px] font-bold text-[#172b4d] tracking-widest uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+            <span className="font-bold text-[#172b4d] tracking-widest uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: fs(24) }}>
               {props.title || 'Untitled'}
             </span>
          </div>
@@ -375,7 +425,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
         onPointerDown={editing ? stop : undefined}
       >
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-3 px-1 shrink-0">
+        <div className="flex items-start justify-between gap-2 mb-3 px-1 shrink-0 min-w-0">
           {editing ? (
             <input
               ref={titleRef}
@@ -383,19 +433,22 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               onChange={(e) => onEditProps({ title: e.target.value })}
               onPointerDown={stop}
               placeholder="List title..."
-              className="flex-1 min-w-0 bg-white/50 focus:bg-white rounded px-2 py-1 outline-none text-[28px] font-bold text-[#172b4d] placeholder:text-[#172b4d]/50 transition-colors"
+              className="flex-1 min-w-0 bg-white/90 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg outline-none font-bold text-[#172b4d] dark:text-[#b6c2cf] placeholder:text-[#172b4d]/50 transition-colors"
+              style={{ fontSize: fs(28) }}
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
+              spellCheck={false}
             />
           ) : (
-            <div className="font-bold text-[28px] text-[#172b4d] px-2">{props.title || 'Untitled'}</div>
+            <div className="font-bold text-[#172b4d] min-w-0 flex-1" style={{ fontSize: fs(28) }}>
+              <span className="block bg-white/90 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg shadow-sm min-w-0 max-w-full whitespace-normal wrap-break-word leading-tight">
+                {props.title || 'Untitled'}
+              </span>
+            </div>
           )}
           
           <div className="flex items-center gap-1 text-slate-600 shrink-0 ml-2 relative">
-            {!editing && (
-              <div className="flex bg-white/70 rounded-lg px-1.5 py-0.5 gap-1 shadow-sm mr-1">
-                <Sparkles className="w-4 h-4 text-teal-700" />
-                <MessageCircle className="w-4 h-4 text-teal-700" fill="currentColor" />
-              </div>
-            )}
             <button onPointerDown={stop} onClick={() => { 
               onEditProps({ collapsed: true }); 
               const textLen = (props.title || 'Untitled').length;
@@ -408,7 +461,12 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
         </div>
 
         {/* ── Body (Cards) ────────────────────────────────────────────────── */}
-        <div ref={listRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 px-1 pb-1 scrollbar-hide">
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 px-1 pb-1"
+          style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.18) transparent' }}
+          onWheel={(e) => e.stopPropagation()}
+        >
           {subcards.map(s => {
             const isActive = activeCardId === s.id;
             const hasChecklist = s.checklist && s.checklist.length > 0;
@@ -419,46 +477,37 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
             if (isActive) {
               // Inline Edit Mode
               return (
-                <div key={s.id} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md ring-2 ring-blue-500 flex flex-col shrink-0" onPointerDown={stop}>
+                <div key={s.id} ref={activeCardRef} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md border-2 border-blue-500 flex flex-col shrink-0" onPointerDown={stop}>
                   {coverImage && <div className="overflow-hidden rounded-t-xl"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
                   {!coverImage && s.coverColor && <div className="w-full h-10 rounded-t-xl shrink-0" style={{ backgroundColor: s.coverColor }} />}
 
                   <div className="p-3 pb-3 flex flex-col gap-2">
-                    {/* Header: EDITING label + sparkles cover picker + Save button */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Editing</span>
-                        <div className="relative" ref={colorPickerRef}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setShowListColorPicker(!showListColorPicker); }}
-                            onPointerDown={stop}
-                            title="Cover color"
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                          </button>
-                          {showListColorPicker && (
-                            <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl p-2 rounded-lg flex flex-col gap-2 z-20 w-44" onClick={stop} onPointerDown={stop}>
-                              <div className="text-[11px] font-bold text-slate-500 px-1 pt-0.5">Cover Color</div>
-                              <div className="grid grid-cols-4 gap-1.5 px-1 pb-1">
-                                {LABEL_COLORS.map(c => (
-                                  <button key={c} onClick={() => { patchSubcard(s.id, { coverColor: c }); setShowListColorPicker(false); }} className={`w-full aspect-4/3 rounded ${s.coverColor === c ? 'ring-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />
-                                ))}
-                              </div>
-                              {s.coverColor && (
-                                <button onClick={() => { patchSubcard(s.id, { coverColor: null }); setShowListColorPicker(false); }} className="mx-1 mb-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 py-1 px-2 rounded transition">Remove</button>
-                              )}
+                    {/* Header: EDITING label + sparkles cover picker */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Editing</span>
+                      <div className="relative" ref={colorPickerRef}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowListColorPicker(!showListColorPicker); }}
+                          onPointerDown={stop}
+                          title="Cover color"
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                        </button>
+                        {showListColorPicker && (
+                          <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl p-2 rounded-lg flex flex-col gap-2 z-20 w-44" onClick={stop} onPointerDown={stop}>
+                            <div className="text-[11px] font-bold text-slate-500 px-1 pt-0.5">Cover Color</div>
+                            <div className="grid grid-cols-4 gap-1.5 px-1 pb-1">
+                              {LABEL_COLORS.map(c => (
+                                <button key={c} onClick={() => { patchSubcard(s.id, { coverColor: c }); setShowListColorPicker(false); }} className={`w-full aspect-4/3 rounded ${s.coverColor === c ? 'ring-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />
+                              ))}
                             </div>
-                          )}
-                        </div>
+                            {s.coverColor && (
+                              <button onClick={() => { patchSubcard(s.id, { coverColor: null }); setShowListColorPicker(false); }} className="mx-1 mb-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 py-1 px-2 rounded transition">Remove</button>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <button
-                        onClick={() => setActiveCardId(null)}
-                        title="Save"
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold text-[13px] transition shadow-sm"
-                      >
-                        <Check className="w-3.5 h-3.5" /> Save
-                      </button>
                     </div>
 
                     {/* Label dashes */}
@@ -474,20 +523,25 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                       onChange={(e) => patchSubcard(s.id, { title: e.target.value })}
                       placeholder="Card title..."
                       rows={1}
-                      className="w-full bg-transparent outline-none resize-none text-[20px] font-medium text-[#172b4d] dark:text-[#b6c2cf] leading-snug"
+                      className="w-full bg-transparent outline-none resize-none font-medium text-[#172b4d] dark:text-[#b6c2cf] leading-snug"
+                      style={{ fontSize: fs(20) }}
                       onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                      data-gramm="false"
+                      data-gramm_editor="false"
+                      data-enable-grammarly="false"
+                      spellCheck={false}
                     />
 
                     {/* Badges + action row */}
                     <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-100 dark:border-slate-700/50">
                       <div className="flex items-center gap-2 flex-wrap">
                         {due && (
-                          <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] font-semibold ${due.badgeCls}`}>
+                          <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded font-semibold ${due.badgeCls}`} style={{ fontSize: fs(14) }}>
                             <Clock className="w-3.5 h-3.5" /> {due.label}
                           </div>
                         )}
                         {hasChecklist && (
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" style={{ fontSize: fs(14) }}>
                             <CheckSquare className="w-3.5 h-3.5" /> {doneCount}/{s.checklist.length}
                           </div>
                         )}
@@ -498,9 +552,9 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        <button onClick={() => setModalCardId(s.id)} className="text-[13px] font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[#172b4d] dark:text-[#b6c2cf] px-3 py-1.5 rounded-lg transition">Details</button>
-                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition" title="Delete card">
-                          <X className="w-4 h-4" />
+                        <button onClick={() => setModalCardId(s.id)} className="font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[#172b4d] dark:text-[#b6c2cf] px-3 py-1.5 rounded-lg transition" style={{ fontSize: fs(13) }}>Details</button>
+                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition font-semibold" style={{ fontSize: fs(13) }} title="Delete card">
+                          Delete
                         </button>
                       </div>
                     </div>
@@ -519,12 +573,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                 {coverImage && <div className="overflow-hidden rounded-t-lg"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
                 {!coverImage && s.coverColor && <div className="w-full h-8 rounded-t-lg shrink-0" style={{ backgroundColor: s.coverColor }} />}
                 <div className="px-3 py-2.5 flex flex-col gap-1.5">
-                  {(s.labels && s.labels.length > 0) && (
-                    <div className="flex flex-wrap gap-1">
-                      {s.labels.map(c => <div key={c} className="h-1.5 w-8 rounded-full" style={{ backgroundColor: c }} />)}
-                    </div>
-                  )}
-                  <div className={`text-[20px] font-medium leading-snug break-words ${s.done ? 'line-through text-slate-500' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>
+                  <div className={`font-medium leading-snug break-words ${s.done ? 'line-through text-slate-500' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`} style={{ fontSize: fs(20) }}>
                     {s.title ? s.title : <span className="text-slate-400 italic">Untitled card</span>}
                   </div>
 
@@ -533,7 +582,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                     <div className="flex flex-col gap-1 mt-0.5">
                       <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 flex-wrap">
                         {due && (
-                          <div className={`flex items-center gap-1 px-1 rounded text-[15px] font-semibold ${due.badgeCls}`}>
+                          <div className={`flex items-center gap-1 px-1 rounded font-semibold ${due.badgeCls}`} style={{ fontSize: fs(14) }}>
                             <Clock className="w-3.5 h-3.5" /> {due.label}
                           </div>
                         )}
@@ -542,18 +591,19 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                           <button
                             onPointerDown={stop}
                             onClick={(e) => { e.stopPropagation(); setOpenChecklistId(openChecklistId === s.id ? null : s.id); }}
-                            className={`flex items-center gap-1 text-[15px] font-medium hover:opacity-80 transition ${doneCount === s.checklist.length ? 'bg-[#1f845a] text-white px-1.5 py-0.5 rounded' : ''}`}
+                            className="flex items-center gap-1 font-medium hover:opacity-80 transition"
+                            style={{ fontSize: fs(14) }}
                           >
                             <CheckSquare className="w-3.5 h-3.5" /> {doneCount}/{s.checklist.length}
                           </button>
                         )}
                         {s.location && (
-                          <div className="flex items-center gap-1 text-[15px] font-medium max-w-[120px] truncate" title={s.location}>
+                          <div className="flex items-center gap-1 font-medium max-w-[120px] truncate" style={{ fontSize: fs(14) }} title={s.location}>
                             <MapPin className="w-3.5 h-3.5" /> {s.location}
                           </div>
                         )}
                         {(s.images && s.images.length > 0) && (
-                          <div className="flex items-center gap-1 text-[15px] font-medium">
+                          <div className="flex items-center gap-1 font-medium" style={{ fontSize: fs(14) }}>
                             <ImageIcon className="w-3.5 h-3.5" /> {s.images.length}
                           </div>
                         )}
@@ -592,7 +642,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
         <div className="mt-1 px-1 shrink-0">
           {editing && (
             <div className="flex items-center gap-2 px-2 py-2 border-t border-black/10" onPointerDown={stop}>
-              <span className="text-[15px] font-medium text-[#172b4d]/60 mr-1">Color:</span>
+              <span className="font-medium text-[#172b4d]/60 mr-1" style={{ fontSize: fs(15) }}>Color:</span>
               {PICKER_COLORS.map((pastel) => (
                 <button
                   key={pastel || 'default'}
@@ -613,21 +663,24 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
             className="w-full flex items-center justify-start gap-2 px-2 py-2 hover:bg-black/5 rounded-lg text-[#172b4d] transition-colors"
           >
             <Plus className="w-5 h-5" />
-            <span className="text-[19px] font-medium">Add a card</span>
+            <span className="font-medium" style={{ fontSize: fs(19) }}>Add a card</span>
           </button>
         </div>
       </div>
 
       {/* Render Modal if a card is open */}
-      {modalCardId && (
-        <CardModal 
-          card={subcards.find(s => s.id === modalCardId)} 
-          listTitle={props.title || 'Untitled'}
-          onClose={() => setModalCardId(null)}
-          onUpdate={(patch) => patchSubcard(modalCardId, patch)}
-          members={members}
-        />
-      )}
+      {modalCardId && (() => {
+        const modalCard = subcards.find(s => s.id === modalCardId);
+        return modalCard ? (
+          <CardModal
+            card={modalCard}
+            listTitle={props.title || 'Untitled'}
+            onClose={() => setModalCardId(null)}
+            onUpdate={(patch) => patchSubcard(modalCardId, patch)}
+            members={members}
+          />
+        ) : null;
+      })()}
     </>
   );
 }

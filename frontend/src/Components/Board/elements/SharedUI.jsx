@@ -120,7 +120,7 @@ export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAli
       >I</button>
       <Sep />
       {/* Alignment */}
-      {[['left', '⬅'], ['center', '↔'], ['right', '➡']].map(([a, sym]) => (
+      {[['left', '⬅'], ['center', '↔'], ['right', '➡'], ['justify', '⇔']].map(([a, sym]) => (
         <button
           key={a}
           onClick={() => onEditProps({ textAlign: a })}

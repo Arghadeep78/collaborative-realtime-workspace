@@ -223,10 +223,76 @@ export default function TopUtilityBar({
   onUpdateBackground,
   onPresent,
 }) {
+  const toolbar = (
+    <div className="flex items-center gap-2 px-1">
+      <div className={`flex items-center gap-1 rounded-2xl p-1.5 shrink-0 ${UI.surface}`}>
+        {TOOLS.map((tool) => {
+          const active = activeTool === tool.id;
+          const disabled = tool.disabled || (!editable && tool.id !== 'pointer' && tool.id !== 'laser');
+          return (
+            <button
+              key={tool.id}
+              disabled={disabled}
+              onClick={() => onSelectTool(tool.id)}
+              title={`${tool.label}${tool.disabled ? ' (coming soon)' : ` · ${tool.key}`}`}
+              className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition ${
+                active
+                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-1 ring-blue-400/50'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+              } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
+            >
+              <ToolGlyph id={tool.id} />
+              <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-slate-400">{tool.key}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {editable && (
+        <div className={`flex items-center gap-1 rounded-2xl p-1.5 shrink-0 ${UI.surface}`}>
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo your last change (⌘Z)"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+              canUndo
+                ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+                : 'text-slate-400 opacity-35 cursor-not-allowed'
+            }`}
+          >
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+            </svg>
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (⌘⇧Z)"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+              canRedo
+                ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+                : 'text-slate-400 opacity-35 cursor-not-allowed'
+            }`}
+          >
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 14l5-5-5-5" />
+              <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <div className="shrink-0">
+        <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />
+      </div>
+    </div>
+  );
+
   return (
-    <header className="relative z-50 shrink-0 flex items-center gap-3 px-3 py-2.5">
+    <header className="relative z-50 shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
       {/* ── Left: identity ─────────────────────────────────────────── */}
-      <div className={`flex items-center gap-2.5 rounded-2xl px-3 py-1.5 ${UI.surface}`}>
+      <div className={`flex items-center gap-2.5 rounded-2xl px-3 py-1.5 min-w-0 shrink-0 ${UI.surface}`}>
         <button onClick={() => navigate('/dashboard')} className={UI.iconBtn} title="Back to dashboard">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -244,12 +310,12 @@ export default function TopUtilityBar({
             onChange={(e) => setTitleInput(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
-            className={`${UI.input} text-sm w-32 sm:w-44 py-1`}
+            className={`${UI.input} text-sm w-28 sm:w-40 lg:w-48 max-w-48 py-1 min-w-0`}
           />
         ) : (
           <button
             onClick={() => editable && setEditTitle(true)}
-            className="text-slate-900 dark:text-slate-100 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 px-2 py-1 rounded-lg transition max-w-32 sm:max-w-[14rem] truncate"
+            className="text-slate-900 dark:text-slate-100 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 px-2 py-1 rounded-lg transition max-w-28 sm:max-w-44 lg:max-w-56 min-w-0 truncate block"
           >
             {board?.title || 'Untitled Board'}
           </button>
@@ -257,74 +323,14 @@ export default function TopUtilityBar({
         {role === 'viewer' && <span className={UI.chip}>View Only</span>}
       </div>
 
-      {/* ── Centre: element toolbar ─────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center gap-2">
-        <div className={`flex items-center gap-1 rounded-2xl p-1.5 ${UI.surface}`}>
-          {TOOLS.map((tool) => {
-            const active = activeTool === tool.id;
-            const disabled = tool.disabled || (!editable && tool.id !== 'pointer' && tool.id !== 'laser');
-            return (
-              <button
-                key={tool.id}
-                disabled={disabled}
-                onClick={() => onSelectTool(tool.id)}
-                title={`${tool.label}${tool.disabled ? ' (coming soon)' : ` · ${tool.key}`}`}
-                className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition ${
-                  active
-                    ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-1 ring-blue-400/50'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
-                } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
-              >
-                <ToolGlyph id={tool.id} />
-                <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-slate-400">{tool.key}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Undo / redo — reverses only your own changes */}
-        {editable && (
-          <div className={`flex items-center gap-1 rounded-2xl p-1.5 ${UI.surface}`}>
-            <button
-              onClick={onUndo}
-              disabled={!canUndo}
-              title="Undo your last change (⌘Z)"
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
-                canUndo
-                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
-                  : 'text-slate-400 opacity-35 cursor-not-allowed'
-              }`}
-            >
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 14 4 9l5-5" />
-                <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
-              </svg>
-            </button>
-            <button
-              onClick={onRedo}
-              disabled={!canRedo}
-              title="Redo (⌘⇧Z)"
-              className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
-                canRedo
-                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
-                  : 'text-slate-400 opacity-35 cursor-not-allowed'
-              }`}
-            >
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 14l5-5-5-5" />
-                <path d="M20 9H10a6 6 0 0 0 0 12h3" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Background picker */}
-        <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />
+      {/* ── Centre: element toolbar — inline on lg+, full-width row below on smaller ── */}
+      <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center">
+        {toolbar}
       </div>
 
       {/* ── Right: presence + account + share ──────────────────────── */}
-      <div className={`flex items-center gap-2 rounded-2xl pl-2.5 pr-1.5 py-1.5 ${UI.surface}`}>
-        <div className="flex items-center -space-x-1.5">
+      <div className={`flex items-center gap-2 rounded-2xl pl-2.5 pr-1.5 py-1.5 shrink-0 ml-auto lg:ml-0 ${UI.surface}`}>
+        <div className="hidden sm:flex items-center -space-x-1.5">
           {peers.slice(0, 4).map((peer) => (
             <div
               key={peer.clientId}
@@ -337,6 +343,20 @@ export default function TopUtilityBar({
           ))}
         </div>
 
+        {/* Theme toggle moved out from user menu */}
+        <div className="mr-2">
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
+          >
+            {isDark ? (
+              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>
+            ) : (
+              <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
+            )}
+          </button>
+        </div>
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
@@ -365,19 +385,6 @@ export default function TopUtilityBar({
                 Profile
               </button>
               <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-              <button onClick={() => { toggleTheme(); setShowUserMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition">
-                {isDark ? (
-                  <>
-                    <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>
-                    Switch to Light Mode
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
-                    Switch to Dark Mode
-                  </>
-                )}
-              </button>
               <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
               <button onClick={onSignOut} className="w-full text-left px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2.5 transition">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -387,15 +394,20 @@ export default function TopUtilityBar({
           )}
         </div>
 
-        <button onClick={onPresent} className="text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-          Present
+        <button onClick={onPresent} className="text-sm font-semibold px-3 lg:px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-colors" title="Present (fullscreen)">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+          <span className="hidden lg:inline">Present</span>
         </button>
 
-        <button onClick={onShare} className="text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-          Share
+        <button onClick={onShare} className="text-sm font-semibold px-3 lg:px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors" title="Share board">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+          <span className="hidden lg:inline">Share</span>
         </button>
+      </div>
+
+      {/* ── Toolbar row 2: shown below lg breakpoint ────────────────── */}
+      <div className="flex lg:hidden w-full items-center justify-center pb-0.5">
+        {toolbar}
       </div>
     </header>
   );

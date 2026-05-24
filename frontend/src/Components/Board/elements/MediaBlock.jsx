@@ -16,7 +16,7 @@ function UploadZone({ onFile, uploading }) {
 
   return (
     <div
-      className={`flex flex-col items-center justify-center h-full w-full gap-3 rounded-2xl border-2 border-dashed transition-colors cursor-pointer select-none
+      className={`flex flex-col items-center justify-center h-full w-full gap-4 rounded-2xl border-2 border-dashed transition-colors cursor-pointer select-none px-6 py-6
         ${dragging ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-600 bg-slate-50/60 dark:bg-slate-800/60 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/40 dark:hover:bg-blue-950/20'}`}
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -32,25 +32,25 @@ function UploadZone({ onFile, uploading }) {
       />
       {uploading ? (
         <>
-          <div className="w-8 h-8 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-          <p className="text-xs text-slate-500 dark:text-slate-400">Uploading…</p>
+          <div className="w-10 h-10 rounded-full border-2.5 border-blue-400 border-t-transparent animate-spin" />
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Uploading…</p>
         </>
       ) : (
         <>
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-100 to-blue-100 dark:from-violet-900/40 dark:to-blue-900/40 flex items-center justify-center">
-            <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-100 to-blue-100 dark:from-violet-900/40 dark:to-blue-900/40 flex items-center justify-center shadow-md">
+            <svg className="w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
           </div>
           <div className="text-center px-4">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Drop media here</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Image · Video · Audio</p>
+            <p className="text-2xl font-semibold text-slate-800 dark:text-slate-100">Drop media here</p>
+            <p className="text-base text-slate-500 dark:text-slate-400 mt-1">Image · Video · Audio</p>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
             {['IMG', 'VID', 'AUD'].map((tag) => (
-              <span key={tag} className="text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 uppercase">{tag}</span>
+              <span key={tag} className="text-sm font-semibold tracking-widest px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 uppercase">{tag}</span>
             ))}
           </div>
         </>
@@ -59,9 +59,30 @@ function UploadZone({ onFile, uploading }) {
   );
 }
 
-function MediaDisplay({ url, mediaType, caption, editable, onCaption }) {
+function MediaDisplay({ url, mediaType, caption, editable, onCaption, onReplace, onShare }) {
   return (
-    <div className="flex flex-col h-full w-full gap-0 overflow-hidden rounded-2xl">
+    <div className="flex flex-col h-full w-full gap-0 overflow-hidden rounded-2xl relative border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f1112] shadow-sm">
+      <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+        {onShare && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
+            title="Share"
+            className="w-8 h-8 rounded-md bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          </button>
+        )}
+        {onReplace && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onReplace(); }}
+            title="Remove media"
+            className="w-8 h-8 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 min-h-0 relative bg-black/5 dark:bg-white/5 overflow-hidden rounded-t-2xl">
         {mediaType === 'image' && (
           <img
@@ -91,17 +112,21 @@ function MediaDisplay({ url, mediaType, caption, editable, onCaption }) {
         )}
       </div>
       {/* Caption bar */}
-      <div className="shrink-0 px-3 py-1.5 bg-white/80 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 rounded-b-2xl">
+      <div className="shrink-0 px-3 py-2 bg-white/90 dark:bg-slate-800/90 border-t border-slate-100 dark:border-slate-700 rounded-b-lg">
         {editable ? (
           <input
             value={caption || ''}
             onChange={(e) => onCaption(e.target.value)}
             placeholder="Add a caption…"
             onPointerDown={(e) => e.stopPropagation()}
-            className="w-full text-[11px] text-slate-500 dark:text-slate-400 bg-transparent focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+            className="w-full text-lg font-bold text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 leading-tight text-center"
           />
         ) : (
-          caption && <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{caption}</p>
+          caption ? (
+            <p className="text-lg font-bold text-slate-900 dark:text-slate-100 truncate leading-tight text-center">{caption}</p>
+          ) : (
+            <p className="text-lg font-bold text-slate-400 leading-tight text-center">YOUR NAME</p>
+          )
         )}
       </div>
     </div>
@@ -139,20 +164,8 @@ export default function MediaBlock({ element, editable, editing, onEditProps }) 
   }
 
   return (
-    <div className="w-full h-full relative group">
-      <MediaDisplay url={url} mediaType={mediaType} caption={caption} editable={editable} onCaption={handleCaption} />
-      {editable && (
-        <button
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={handleReplace}
-          title="Replace media"
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-lg bg-black/50 hover:bg-black/70 flex items-center justify-center text-white"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-        </button>
-      )}
+    <div className="w-full h-full">
+      <MediaDisplay url={url} mediaType={mediaType} caption={caption} editable={editable} onCaption={handleCaption} onReplace={editable ? handleReplace : undefined} onShare={async () => { try { await navigator.clipboard.writeText(url); alert('Media link copied to clipboard'); } catch { alert('Could not copy link'); } }} />
     </div>
   );
 }
