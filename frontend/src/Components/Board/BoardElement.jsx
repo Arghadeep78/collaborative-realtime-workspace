@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useElementDrag } from './useElementDrag.js';
 import { useElementResize } from './useElementResize.js';
 import StickyNote from './elements/StickyNote.jsx';
@@ -52,8 +52,10 @@ export default function BoardElement({
   boardId,
   // Kanban assignee options (board members)
   members,
+  activeTool,
 }) {
   const [live, setLive] = useState(null); // { x?, y?, w?, h? } gesture override
+  const lastClickRef = useRef({ time: 0, x: 0, y: 0 }); // track clicks for double-click detection
 
   // Keep elements inside the slide so content never flows off the page.
   const clampX = (x) => clamp(x, 0, Math.max(0, SLIDE_W - element.w));
@@ -107,7 +109,18 @@ export default function BoardElement({
     }
     onSelect(element.id);
     onBringToFront(element.id);
-    if (editable && !editing) startDrag(e, element);
+
+    // Prevent drag from starting on the first click of a double-click
+    // (300ms threshold, ~20px distance threshold)
+    const now = performance.now();
+    const lastClick = lastClickRef.current;
+    const timeSinceLastClick = now - lastClick.time;
+    const distSinceLastClick = Math.sqrt(Math.pow(e.clientX - lastClick.x, 2) + Math.pow(e.clientY - lastClick.y, 2));
+    const isDoubleClickCandidate = timeSinceLastClick < 300 && distSinceLastClick < 20;
+
+    lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+
+    if (editable && !editing && !isDoubleClickCandidate) startDrag(e, element);
   };
 
   return (
@@ -120,6 +133,7 @@ export default function BoardElement({
         height: geom.h,
         zIndex: (element.z ?? 1) + (selected ? 1000 : 0),
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
+        pointerEvents: (activeTool && activeTool !== 'pointer' && !connectMode && !editing) ? 'none' : 'auto',
       }}
       onPointerDown={handleBodyPointerDown}
       onDoubleClick={(e) => {
@@ -174,6 +188,7 @@ export default function BoardElement({
               onDelete(element.id);
             }}
             className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-rose-500 text-white shadow-md flex items-center justify-center hover:bg-rose-600 transition"
+            style={{ cursor: 'pointer' }}
             title="Delete element"
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">

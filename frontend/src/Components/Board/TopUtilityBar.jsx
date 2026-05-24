@@ -9,7 +9,17 @@ const BG_PATTERNS = [
 ];
 
 const BG_COLORS = [
-  '#ffffff','#f8fafc','#eff6ff','#f5f3ff','#fefce8','#f0fdf4','#1e293b','#0f172a',
+  // White & Grays & Darks
+  '#ffffff', '#f8fafc', '#f1f5f9', '#e2e8f0', 
+  '#1e293b', '#0f172a', '#020617', '#172554',
+  
+  // Pastels
+  '#eff6ff', '#f0fdfa', '#f0fdf4', '#fefce8', 
+  '#fff7ed', '#fef2f2', '#fdf2f8', '#f5f3ff',
+
+  // Mid-tones
+  '#dbeafe', '#ccfbf1', '#dcfce7', '#fef08a', 
+  '#ffedd5', '#fee2e2', '#fce7f3', '#ede9fe',
 ];
 
 function BackgroundPicker({ activePage, onUpdateBackground, editable }) {

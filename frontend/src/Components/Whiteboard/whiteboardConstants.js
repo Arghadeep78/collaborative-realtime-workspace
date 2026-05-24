@@ -16,7 +16,7 @@ export const UI = {
   lite: "bg-amber-200/60 dark:bg-amber-900/40 text-amber-950 dark:text-amber-300 border border-amber-300/70 dark:border-amber-700/60 rounded-full text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5",
 };
 
-export const boardShellClass = "fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] dark:[background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.12),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.08),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.08),transparent_65%),#0f172a] [&_button]:cursor-pointer";
+export const boardShellClass = "fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 dark:bg-[#212121] [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] dark:[background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.12),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.08),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.08),transparent_65%),#212121] [&_button]:cursor-pointer";
 export const tldrawHostClass = "absolute inset-0 overflow-hidden [&_[title*='license']]:hidden [&_[aria-label*='license']]:hidden [&_[href*='license']]:hidden";
 
 export const GRID_COLORS = [

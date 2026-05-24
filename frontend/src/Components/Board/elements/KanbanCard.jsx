@@ -437,22 +437,53 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               return (
                 <div key={s.id} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md ring-2 ring-blue-500 overflow-hidden flex flex-col shrink-0 relative" onPointerDown={stop}>
                   
-                  {/* Save/Close Checkmark */}
-                  <button onClick={() => setActiveCardId(null)} className="absolute top-2 right-2 w-7 h-7 bg-white dark:bg-[#22272b] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 rounded flex items-center justify-center text-slate-600 dark:text-slate-300 z-10 transition shadow-sm">
-                     <Check className="w-4 h-4" />
+                  {/* Save/Close Button */}
+                  <button
+                    onClick={() => setActiveCardId(null)}
+                    title="Save and close (Esc)"
+                    className="absolute top-3 right-3 px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center z-10 transition shadow-sm font-semibold text-[12px] gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Save
                   </button>
 
                   {coverImage && <img src={coverImage} className="w-full h-24 object-cover" alt="" />}
                   {!coverImage && s.coverColor && <div className="w-full h-10 shrink-0" style={{ backgroundColor: s.coverColor }} />}
                   
                   <div className="p-3 pb-2 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2 pr-8">
+                      <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Editing</span>
+                      <div className="flex items-center gap-1 shrink-0" ref={colorPickerRef}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowListColorPicker(!showListColorPicker); }}
+                          onPointerDown={stop}
+                          title="Change card cover color"
+                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
+                        >
+                          <Sparkles className="w-4 h-4 text-teal-600" />
+                        </button>
+                        {showListColorPicker && (
+                          <div className="absolute top-full right-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl p-2 rounded-lg flex flex-col gap-2 z-20 w-48" onClick={stop} onPointerDown={stop}>
+                            <div className="text-[11px] font-bold text-slate-500 px-2 pt-1">Cover Color</div>
+                            <div className="grid grid-cols-4 gap-1 px-2 pb-2">
+                              {LABEL_COLORS.map(c => (
+                                <button key={c} onClick={() => { patchSubcard(s.id, { coverColor: c }); setShowListColorPicker(false); }} className={`w-full aspect-[4/3] rounded ${s.coverColor === c ? 'ring-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />
+                              ))}
+                            </div>
+                            {s.coverColor && (
+                              <button onClick={() => { patchSubcard(s.id, { coverColor: null }); setShowListColorPicker(false); }} className="mx-2 mb-2 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 py-1 px-2 rounded transition">Remove</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Small Color Dashes */}
                     {(s.labels && s.labels.length > 0) && (
                       <div className="flex flex-wrap gap-1 pr-8">
                         {s.labels.map(c => <div key={c} className="h-1.5 w-8 rounded-full" style={{ backgroundColor: c }} />)}
                       </div>
                     )}
-                    
+
                     <textarea
                       autoFocus
                       value={s.title}
@@ -485,9 +516,9 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <button onClick={() => setModalCardId(s.id)} className="text-[12px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded transition">OPEN MODAL</button>
-                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="w-7 h-7 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded flex items-center justify-center transition" title="Delete card">
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <button onClick={() => setModalCardId(s.id)} className="text-[11px] font-bold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50 px-2 py-1 rounded transition">Details</button>
+                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded transition" title="Delete card">
                            <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -499,8 +530,8 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
 
             // Standard View Mode
             return (
-              <div 
-                key={s.id} 
+              <div
+                key={s.id}
                 onClick={() => { if(editable) setActiveCardId(s.id); }}
                 className="bg-white dark:bg-[#22272b] rounded-lg shadow-sm overflow-hidden flex flex-col group/card shrink-0 cursor-pointer hover:ring-1 hover:ring-blue-400 transition-all border border-transparent dark:border-slate-700"
               >
@@ -513,7 +544,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                     </div>
                   )}
                   <div className={`text-[20px] font-medium leading-snug break-words ${s.done ? 'line-through text-slate-500' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>
-                    {s.title || '\u00A0'}
+                    {s.title ? s.title : <span className="text-slate-400 italic">Untitled card</span>}
                   </div>
                   
                   {/* Badges */}
@@ -531,16 +562,16 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                                <CheckSquare className="w-4 h-4" /> {doneCount}/{s.checklist.length}
                              </button>
                              {openChecklistId === s.id && (
-                                <div onClick={stop} onPointerDown={stop} className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg p-3 z-[100] flex flex-col gap-2 cursor-default">
+                                <div onClick={stop} onPointerDown={stop} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-2xl rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default">
                                   <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[16px] font-bold text-[#172b4d] dark:text-[#b6c2cf]">Checklist</span>
-                                    <button onClick={() => setOpenChecklistId(null)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded transition"><X className="w-3 h-3 text-slate-500" /></button>
+                                    <span className="text-[14px] font-bold text-[#172b4d] dark:text-[#b6c2cf] uppercase tracking-wide">Checklist</span>
+                                    <button onClick={() => setOpenChecklistId(null)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded transition"><X className="w-4 h-4 text-slate-500" /></button>
                                   </div>
-                                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                                  <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-1">
                                     {s.checklist.map(chk => (
-                                      <label key={chk.id} className="flex items-start gap-2 cursor-pointer group/chkitem">
-                                        <input type="checkbox" checked={chk.done} onChange={() => patchSubcard(s.id, { checklist: s.checklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })} className="mt-1" />
-                                        <span className={`text-[16px] flex-1 leading-snug ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>{chk.text}</span>
+                                      <label key={chk.id} className="flex items-center gap-2.5 cursor-pointer group/chkitem py-0.5 px-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded transition">
+                                        <input type="checkbox" checked={chk.done} onChange={() => patchSubcard(s.id, { checklist: s.checklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })} className="mt-0.5" />
+                                        <span className={`text-[15px] flex-1 leading-snug ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>{chk.text}</span>
                                       </label>
                                     ))}
                                   </div>

@@ -113,9 +113,6 @@ export default function IframeWindow({ element, editable, editing, selected, onE
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             loading="lazy"
           />
-          {/* While selected, a transparent shield lets you drag the window without
-              the iframe swallowing the pointer; double-click still edits. */}
-          {selected && <div className="absolute inset-0" title="Select frame — double-click to edit URL" />}
         </div>
       )}
     </div>

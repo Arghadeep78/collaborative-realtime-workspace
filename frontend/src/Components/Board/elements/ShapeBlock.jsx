@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { FloatBar, Sep, Swatch, Popover, TextFormatToolbar, TEXT_COLORS } from './SharedUI';
 
 // ── Shape geometry helpers ─────────────────────────────────────────────────
 
@@ -67,74 +68,30 @@ const STROKE_OPTIONS = [
   { v: '#6366f1' }, { v: '#ef4444' }, { v: '#10b981' },
   { v: '#f59e0b' }, { v: '#1e293b' }, { v: '#ffffff' },
 ];
-const TEXT_COLORS = ['#1e293b', '#ffffff', '#6366f1', '#ef4444', '#10b981', '#f59e0b'];
 const SHAPES = [
-  { id: 'rect',     icon: '▭' },
-  { id: 'roundrect',icon: '▢' },
-  { id: 'circle',   icon: '○' },
-  { id: 'diamond',  icon: '◇' },
+  { id: 'rect', icon: '▭' },
+  { id: 'roundrect', icon: '▢' },
+  { id: 'circle', icon: '○' },
+  { id: 'diamond', icon: '◇' },
   { id: 'triangle', icon: '△' },
-  { id: 'star',     icon: '☆' },
-  { id: 'hexagon',  icon: '⬡' },
-  { id: 'arrow',    icon: '→' },
+  { id: 'star', icon: '☆' },
+  { id: 'hexagon', icon: '⬡' },
+  { id: 'arrow', icon: '→' },
 ];
-
-// ── Floating toolbar (counter-scaled to fixed screen size) ─────────────────
-
-function FloatBar({ children, anchorBottom, scale }) {
-  const inv = 1 / (scale || 1);
-  return (
-    <div
-      className="absolute pointer-events-auto"
-      style={{
-        ...(anchorBottom
-          ? { bottom: -56 * inv, top: 'auto' }
-          : { top: -56 * inv, bottom: 'auto' }),
-        left: 0,
-        transformOrigin: anchorBottom ? 'top left' : 'bottom left',
-        transform: `scale(${inv})`,
-        zIndex: 300,
-        whiteSpace: 'nowrap',
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl px-2.5 py-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const Sep = () => <div className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5 shrink-0" />;
-
-function Swatch({ color, active, onClick, label, transparent }) {
-  return (
-    <button
-      onClick={onClick}
-      title={label || color}
-      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}
-      style={{ backgroundColor: transparent ? 'transparent' : color, boxShadow: '0 0 0 1px #e2e8f0 inset' }}
-    >
-      {transparent && <span className="text-[10px] text-slate-400 font-bold leading-none">/</span>}
-    </button>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────────────────────
 
 export default function ShapeBlock({ element, editable, editing, selected, onEditProps, getScale }) {
   const { props, w, h } = element;
-  const shapeType  = props.shapeType  || 'rect';
-  const fill       = props.fill       ?? '#a5b4fc';
-  const stroke     = props.stroke     ?? '#6366f1';
-  const strokeWidth= props.strokeWidth ?? 3;
-  const opacity    = props.opacity    ?? 1;
-  const text       = props.text       || '';
-  const fontSize   = props.fontSize   || 28;
-  const textColor  = props.textColor  || '#1e293b';
-  const textAlign  = props.textAlign  || 'center';
-  const bold       = !!props.bold;
-  const italic     = !!props.italic;
+  const shapeType = props.shapeType || 'rect';
+  const fill = props.fill ?? '#a5b4fc';
+  const stroke = props.stroke ?? '#6366f1';
+  const strokeWidth = props.strokeWidth ?? 3;
+  const opacity = props.opacity ?? 1;
+  const text = props.text || '';
+  const fontSize = props.fontSize || 28;
+  const textColor = props.textColor || '#1e293b';
+  const textAlign = props.textAlign || 'center';
+  const bold = !!props.bold;
+  const italic = !!props.italic;
 
   const taRef = useRef(null);
   useEffect(() => {
@@ -185,87 +142,103 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
 
       {/* ── Text format toolbar (when editing) ────────────────────────────── */}
       {editing && (
-        <FloatBar scale={scale} anchorBottom={false}>
-          {/* Font size */}
-          <button
-            onClick={() => onEditProps({ fontSize: Math.max(10, fontSize - 2) })}
-            className="w-7 h-7 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-[13px] font-bold"
-          >A−</button>
-          <span className="text-[12px] text-slate-400 tabular-nums w-7 text-center">{fontSize}</span>
-          <button
-            onClick={() => onEditProps({ fontSize: Math.min(120, fontSize + 2) })}
-            className="w-7 h-7 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-[13px] font-bold"
-          >A+</button>
-          <Sep />
-          {/* Bold */}
-          <button
-            onClick={() => onEditProps({ bold: !bold })}
-            className={`w-7 h-7 rounded-lg text-[13px] font-bold flex items-center justify-center transition ${bold ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-          >B</button>
-          {/* Italic */}
-          <button
-            onClick={() => onEditProps({ italic: !italic })}
-            className={`w-7 h-7 rounded-lg text-[13px] italic font-semibold flex items-center justify-center transition ${italic ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-          >I</button>
-          <Sep />
-          {/* Alignment */}
-          {[['left','⬅'], ['center','↔'], ['right','➡']].map(([a, sym]) => (
-            <button
-              key={a}
-              onClick={() => onEditProps({ textAlign: a })}
-              className={`w-7 h-7 rounded-lg text-[11px] flex items-center justify-center transition ${textAlign === a ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-              title={`Align ${a}`}
-            >{sym}</button>
-          ))}
-          <Sep />
-          {/* Text color */}
-          {TEXT_COLORS.map((c) => (
-            <Swatch key={c} color={c} active={textColor === c} onClick={() => onEditProps({ textColor: c })} />
-          ))}
-        </FloatBar>
+        <TextFormatToolbar
+          onEditProps={onEditProps}
+          fontSize={fontSize}
+          bold={bold}
+          italic={italic}
+          textAlign={textAlign}
+          textColor={textColor}
+          scale={scale}
+        />
       )}
 
       {/* ── Shape style panel (when selected, not editing) ─────────────────── */}
       {selected && editable && !editing && (
-        <FloatBar scale={scale} anchorBottom>
+        <FloatBar scale={scale}>
           {/* Shape type */}
-          {SHAPES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onEditProps({ shapeType: s.id })}
-              title={s.id}
-              className={`w-7 h-7 rounded-lg text-[16px] flex items-center justify-center transition leading-none ${shapeType === s.id ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-            >{s.icon}</button>
-          ))}
+          <Popover
+            title="Shape"
+            activeIcon={<span className="text-[16px] leading-none">{SHAPES.find(s => s.id === shapeType)?.icon || '▭'}</span>}
+          >
+            <div className="grid grid-cols-4 gap-1.5 w-[144px]">
+              {SHAPES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => onEditProps({ shapeType: s.id })}
+                  title={s.id}
+                  className={`w-8 h-8 rounded-lg text-[18px] flex items-center justify-center transition leading-none ${shapeType === s.id ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >{s.icon}</button>
+              ))}
+            </div>
+          </Popover>
+
           <Sep />
+
           {/* Fill */}
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Fill</span>
-          {FILL_COLORS.map((c) => (
-            <Swatch key={c} color={c} active={fill === c} onClick={() => onEditProps({ fill: c })} />
-          ))}
+          <Popover
+            title="Fill Color"
+            activeIcon={<Swatch color={fill} active={false} />}
+          >
+            <div className="grid grid-cols-5 gap-1.5 w-36">
+              {FILL_COLORS.map((c) => (
+                <Swatch key={c} color={c} active={fill === c} onClick={() => onEditProps({ fill: c })} />
+              ))}
+            </div>
+          </Popover>
+
           <Sep />
-          {/* Stroke */}
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Border</span>
-          {STROKE_OPTIONS.map(({ v, label }) => (
-            <Swatch key={v} color={v} active={stroke === v} onClick={() => onEditProps({ stroke: v })} transparent={v === 'transparent'} label={label} />
-          ))}
+
+          {/* Border */}
+          <Popover
+            title="Border"
+            activeIcon={<Swatch color={stroke} transparent={stroke === 'transparent'} active={false} />}
+          >
+            <div className="flex flex-col gap-3 w-36">
+              <div className="grid grid-cols-4 gap-1.5">
+                {STROKE_OPTIONS.map(({ v, label }) => (
+                  <Swatch key={v} color={v} active={stroke === v} onClick={() => onEditProps({ stroke: v })} transparent={v === 'transparent'} label={label} />
+                ))}
+              </div>
+              <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
+              <div className="flex flex-col gap-1 w-full">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Width</span>
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{strokeWidth}px</span>
+                </div>
+                <input
+                  type="range" min={1} max={12} step={1} value={strokeWidth}
+                  onChange={(e) => onEditProps({ strokeWidth: Number(e.target.value) })}
+                  className="w-full accent-blue-500"
+                />
+              </div>
+            </div>
+          </Popover>
+
           <Sep />
-          {/* Stroke width */}
-          <input
-            type="range" min={1} max={12} step={1} value={strokeWidth}
-            onChange={(e) => onEditProps({ strokeWidth: Number(e.target.value) })}
-            className="w-14 accent-blue-500"
-            title="Border width"
-          />
-          <Sep />
+
           {/* Opacity */}
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Opacity</span>
-          <input
-            type="range" min={0.1} max={1} step={0.05} value={opacity}
-            onChange={(e) => onEditProps({ opacity: parseFloat(e.target.value) })}
-            className="w-14 accent-blue-500"
-          />
-          <span className="text-[11px] text-slate-400 tabular-nums w-8">{Math.round(opacity * 100)}%</span>
+          <Popover
+            title="Opacity"
+            activeIcon={
+              <svg width="14" height="14" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.4" stroke="currentColor" strokeWidth="2" />
+                <path d="M12 3 a9 9 0 0 1 0 18 z" fill="currentColor" />
+              </svg>
+            }
+          >
+            <div className="flex flex-col gap-2 w-32">
+               <div className="flex items-center justify-between">
+                 <span className="text-[10px] font-bold text-slate-500 uppercase">Opacity</span>
+                 <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{Math.round(opacity * 100)}%</span>
+               </div>
+               <input
+                 type="range" min={0.1} max={1} step={0.05} value={opacity}
+                 onChange={(e) => onEditProps({ opacity: parseFloat(e.target.value) })}
+                 className="w-full accent-blue-500"
+               />
+            </div>
+          </Popover>
         </FloatBar>
       )}
     </div>

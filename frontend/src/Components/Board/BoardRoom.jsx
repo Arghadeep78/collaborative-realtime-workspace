@@ -387,7 +387,7 @@ export default function BoardRoom() {
   // ── Loading gate ───────────────────────────────────────────────────────────
   if (!synced) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 gap-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-50 dark:bg-[#212121] text-slate-900 dark:text-slate-100 gap-4">
         <div className="relative">
           <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 rounded-full" />
           <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
@@ -447,6 +447,7 @@ export default function BoardRoom() {
           activePageId={activePageId}
           editable={editable}
           activeTool={activeTool}
+          onSelectTool={setActiveTool}
           onToolConsumed={() => setActiveTool('pointer')}
           selectedId={selectedId}
           editingId={editingId}
@@ -473,6 +474,7 @@ export default function BoardRoom() {
           boardId={boardId}
           members={members}
           activePage={activePage}
+          isDark={isDark}
         />
       </div>
 

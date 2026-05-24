@@ -7,51 +7,55 @@ import RadialMenu from './RadialMenu.jsx';
 
 const FIT_PADDING = 64; // breathing room around the slide within the viewport
 
-function getSlideBackground(bg) {
+function getSlideBackground(bg, isDark) {
+  const defaultBg = isDark ? '#282e33' : '#ffffff';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.07)';
+  const gridColorLighter = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.06)';
+
   if (!bg || bg.type === 'dots' || !bg.type) {
     return {
-      backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.07) 1px, transparent 1px)',
+      backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: 'white',
+      backgroundColor: defaultBg,
     };
   }
   if (bg.type === 'grid') {
     return {
       backgroundImage:
-        'linear-gradient(to right, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px)',
+        `linear-gradient(to right, ${gridColorLighter} 1px, transparent 1px), linear-gradient(to bottom, ${gridColorLighter} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: 'white',
+      backgroundColor: defaultBg,
     };
   }
   if (bg.type === 'lines') {
     return {
-      backgroundImage: 'linear-gradient(to bottom, rgba(15,23,42,0.06) 1px, transparent 1px)',
+      backgroundImage: `linear-gradient(to bottom, ${gridColorLighter} 1px, transparent 1px)`,
       backgroundSize: '32px 32px',
-      backgroundColor: 'white',
+      backgroundColor: defaultBg,
     };
   }
   if (bg.type === 'isometric') {
     return {
-      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 20 L20 0 L40 20 L20 40 Z' fill='none' stroke='rgba(15,23,42,0.07)' stroke-width='1'/%3E%3C/svg%3E")`,
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 20 L20 0 L40 20 L20 40 Z' fill='none' stroke='${encodeURIComponent(gridColorLighter)}' stroke-width='1'/%3E%3C/svg%3E")`,
       backgroundSize: '40px 40px',
-      backgroundColor: 'white',
+      backgroundColor: defaultBg,
     };
   }
   if (bg.type === 'none') {
-    return { backgroundColor: 'white' };
+    return { backgroundColor: defaultBg };
   }
   if (bg.type === 'solid') {
-    return { backgroundColor: bg.value || 'white' };
+    return { backgroundColor: bg.value || defaultBg };
   }
   if (bg.type === 'image') {
     return {
       backgroundImage: bg.value ? `url(${bg.value})` : undefined,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      backgroundColor: '#f8fafc',
+      backgroundColor: defaultBg,
     };
   }
-  return { backgroundColor: 'white', backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.07) 1px, transparent 1px)', backgroundSize: '32px 32px' };
+  return { backgroundColor: defaultBg, backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`, backgroundSize: '32px 32px' };
 }
 
 /**
@@ -66,6 +70,7 @@ export default function SlideCanvas({
   activePageId,
   editable,
   activeTool,
+  onSelectTool,
   onToolConsumed,
   selectedId,
   editingId,
@@ -97,6 +102,7 @@ export default function SlideCanvas({
   members,
   // Active page (background)
   activePage,
+  isDark,
 }) {
   const containerRef = useRef(null);
   const slideRef = useRef(null);
@@ -217,7 +223,7 @@ export default function SlideCanvas({
     setRadial({ menuX: e.clientX - cRect.left, menuY: e.clientY - cRect.top, slideX: pt.x, slideY: pt.y });
   };
 
-  const slideBg = getSlideBackground(activePage?.background);
+  const slideBg = getSlideBackground(activePage?.background, isDark);
 
   return (
     <div
@@ -250,7 +256,7 @@ export default function SlideCanvas({
           height: SLIDE_H,
           transform: `scale(${scale})`,
           transformOrigin: 'top left',
-          cursor: creating || connectMode || laserMode ? 'none' : 'default',
+          cursor: creating || connectMode ? 'crosshair' : laserMode ? 'none' : 'default',
           ...slideBg,
         }}
       >
@@ -293,6 +299,7 @@ export default function SlideCanvas({
             bumpVote={bumpVote}
             boardId={boardId}
             members={members}
+            activeTool={activeTool}
           />
         ))}
 
@@ -320,7 +327,14 @@ export default function SlideCanvas({
         <RadialMenu
           x={radial.menuX}
           y={radial.menuY}
-          onPick={(type) => { onCreate(type, radial.slideX, radial.slideY); setRadial(null); }}
+          onPick={(type) => {
+            if (SPAWN_TOOLS.includes(type)) {
+              onCreate(type, radial.slideX, radial.slideY);
+            } else if (onSelectTool) {
+              onSelectTool(type);
+            }
+            setRadial(null);
+          }}
           onClose={() => setRadial(null)}
         />
       )}
