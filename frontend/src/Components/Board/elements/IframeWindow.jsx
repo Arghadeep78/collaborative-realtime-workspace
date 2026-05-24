@@ -75,11 +75,11 @@ export default function IframeWindow({ element, editable, editing, selected, onE
   return (
     <div className="w-full h-full rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col overflow-hidden transition-all group">
       {/* Title bar (macOS style) */}
-      <div className="flex items-center px-3 py-2 bg-gradient-to-b from-white/60 to-white/30 dark:from-slate-800/60 dark:to-slate-800/30 border-b border-black/5 dark:border-white/5 relative">
+      <div className="relative flex items-center px-3 py-2 bg-gradient-to-b from-white/60 to-white/30 dark:from-slate-800/60 dark:to-slate-800/30 border-b border-black/5 dark:border-white/5">
         {/* Title */}
-        <div className="flex-1 flex justify-center items-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 opacity-70 group-hover:justify-start group-hover:opacity-100 transition-all duration-200 px-3 min-w-0">
           <PlatformIcon platform={platform} />
-          <span className="text-[10px] font-bold tracking-wider uppercase text-slate-600 dark:text-slate-300 truncate max-w-[60%]">
+          <span className="text-xs sm:text-sm font-bold tracking-wider uppercase text-slate-600 dark:text-slate-300 truncate max-w-[calc(100%-7rem)]">
             {props.title || platform || 'Web Frame'}
           </span>
         </div>

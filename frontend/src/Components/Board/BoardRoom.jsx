@@ -13,7 +13,7 @@ import { ELEMENT_DEFAULTS, GRID_STEP, SLIDE_W, SLIDE_H, clamp, myColor, boardShe
 import Sidebar from './Sidebar.jsx';
 import TopUtilityBar from './TopUtilityBar.jsx';
 import SlideCanvas from './SlideCanvas.jsx';
-import ShareModal from '../Whiteboard/ShareModal.jsx';
+import ShareModal from './ShareModal.jsx';
 
 /**
  * The 3-pane discussion board: slide sidebar · top utility bar · slide canvas.

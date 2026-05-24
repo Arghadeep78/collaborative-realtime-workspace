@@ -1,14 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 
-export function FloatBar({ children, scale }) {
+export function FloatBar({ children, scale, elementY }) {
   const inv = 1 / (scale || 1);
+  // Flip toolbar below element when element is near the top of the slide (avoids topbar overlap)
+  const flipDown = typeof elementY === 'number' && elementY * (scale || 1) < 80;
   return (
     <div
       className="absolute pointer-events-auto"
       style={{
-        top: -56 * inv,
+        ...(flipDown
+          ? { top: `calc(100% + ${8 * inv}px)`, transformOrigin: 'top center' }
+          : { top: -56 * inv, transformOrigin: 'bottom center' }),
         left: '50%',
-        transformOrigin: 'bottom center',
         transform: `translate(-50%, 0) scale(${inv})`,
         zIndex: 300,
         whiteSpace: 'nowrap',
@@ -39,7 +42,9 @@ export function Swatch({ color, active, onClick, label, transparent }) {
 
 export function Popover({ activeIcon, children, title }) {
   const [open, setOpen] = useState(false);
+  const [popStyle, setPopStyle] = useState({ left: '50%', transform: 'translateX(-50%)' });
   const containerRef = useRef(null);
+  const popoverRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -52,17 +57,34 @@ export function Popover({ activeIcon, children, title }) {
     return () => window.removeEventListener('pointerdown', onDown, { capture: true });
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open || !popoverRef.current) return;
+    const rect = popoverRef.current.getBoundingClientRect();
+    const margin = 8;
+    if (rect.right > window.innerWidth - margin) {
+      setPopStyle({ left: 'auto', right: 0, transform: 'none' });
+    } else if (rect.left < margin) {
+      setPopStyle({ left: 0, right: 'auto', transform: 'none' });
+    } else {
+      setPopStyle({ left: '50%', transform: 'translateX(-50%)' });
+    }
+  }, [open]);
+
   return (
     <div className="relative flex items-center shrink-0" ref={containerRef}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => { setPopStyle({ left: '50%', transform: 'translateX(-50%)' }); setOpen(!open); }}
         className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${open ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
         title={title}
       >
         {activeIcon}
       </button>
       {open && (
-        <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto">
+        <div
+          ref={popoverRef}
+          className="absolute top-full mt-3 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto"
+          style={popStyle}
+        >
           {children}
         </div>
       )}
@@ -72,9 +94,9 @@ export function Popover({ activeIcon, children, title }) {
 
 export const TEXT_COLORS = ['#1e293b', '#ffffff', '#6366f1', '#ef4444', '#10b981', '#f59e0b'];
 
-export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAlign, textColor, scale }) {
+export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAlign, textColor, scale, elementY }) {
   return (
-    <FloatBar scale={scale}>
+    <FloatBar scale={scale} elementY={elementY}>
       {/* Font size */}
       <button
         onClick={() => onEditProps({ fontSize: Math.max(10, fontSize - 2) })}

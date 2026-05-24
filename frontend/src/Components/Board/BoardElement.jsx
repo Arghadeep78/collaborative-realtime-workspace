@@ -7,6 +7,7 @@ import TextBox from './elements/TextBox.jsx';
 import PollBlock from './elements/PollBlock.jsx';
 import IframeWindow from './elements/IframeWindow.jsx';
 import ShapeBlock from './elements/ShapeBlock.jsx';
+import MediaBlock from './elements/MediaBlock.jsx';
 import { SLIDE_W, SLIDE_H, clamp } from './boardConstants.js';
 
 const RENDERERS = {
@@ -16,6 +17,7 @@ const RENDERERS = {
   poll: PollBlock,
   iframe: IframeWindow,
   shape: ShapeBlock,
+  media: MediaBlock,
 };
 
 /**
@@ -175,10 +177,16 @@ export default function BoardElement({
         onUpdateElement={(patch) => onUpdate(element.id, patch)}
         votes={votes}
         bumpVote={bumpVote}
+        castPollVote={castPollVote}
+        removePollVote={removePollVote}
         boardId={boardId}
         members={members}
         getScale={getScale}
       />
+      {/* Intercept pointer events from iframe during drag so pointermove reaches window */}
+      {dragging && element.type === 'iframe' && (
+        <div className="absolute inset-0 z-10" style={{ cursor: 'move' }} />
+      )}
 
       {/* Delete + resize affordances (editor only, when selected) */}
       {selected && editable && !connectMode && (

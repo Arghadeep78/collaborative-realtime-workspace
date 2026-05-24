@@ -326,7 +326,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
 
   useEffect(() => {
     if (editing && titleRef.current) {
-      titleRef.current.focus();
+      titleRef.current.focus({ preventScroll: true });
     }
   }, [editing]);
 
@@ -435,51 +435,51 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
             if (isActive) {
               // Inline Edit Mode
               return (
-                <div key={s.id} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md ring-2 ring-blue-500 overflow-hidden flex flex-col shrink-0 relative" onPointerDown={stop}>
-                  
-                  {/* Save/Close Button */}
-                  <button
-                    onClick={() => setActiveCardId(null)}
-                    title="Save and close (Esc)"
-                    className="absolute top-3 right-3 px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center z-10 transition shadow-sm font-semibold text-[12px] gap-1"
-                  >
-                    <Check className="w-3.5 h-3.5" /> Save
-                  </button>
+                <div key={s.id} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md ring-2 ring-blue-500 flex flex-col shrink-0" onPointerDown={stop}>
+                  {coverImage && <div className="overflow-hidden rounded-t-xl"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
+                  {!coverImage && s.coverColor && <div className="w-full h-10 rounded-t-xl shrink-0" style={{ backgroundColor: s.coverColor }} />}
 
-                  {coverImage && <img src={coverImage} className="w-full h-24 object-cover" alt="" />}
-                  {!coverImage && s.coverColor && <div className="w-full h-10 shrink-0" style={{ backgroundColor: s.coverColor }} />}
-                  
-                  <div className="p-3 pb-2 flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2 pr-8">
-                      <span className="text-[12px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Editing</span>
-                      <div className="flex items-center gap-1 shrink-0" ref={colorPickerRef}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowListColorPicker(!showListColorPicker); }}
-                          onPointerDown={stop}
-                          title="Change card cover color"
-                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
-                        >
-                          <Sparkles className="w-4 h-4 text-teal-600" />
-                        </button>
-                        {showListColorPicker && (
-                          <div className="absolute top-full right-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl p-2 rounded-lg flex flex-col gap-2 z-20 w-48" onClick={stop} onPointerDown={stop}>
-                            <div className="text-[11px] font-bold text-slate-500 px-2 pt-1">Cover Color</div>
-                            <div className="grid grid-cols-4 gap-1 px-2 pb-2">
-                              {LABEL_COLORS.map(c => (
-                                <button key={c} onClick={() => { patchSubcard(s.id, { coverColor: c }); setShowListColorPicker(false); }} className={`w-full aspect-[4/3] rounded ${s.coverColor === c ? 'ring-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />
-                              ))}
+                  <div className="p-3 pb-3 flex flex-col gap-2">
+                    {/* Header: EDITING label + sparkles cover picker + Save button */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Editing</span>
+                        <div className="relative" ref={colorPickerRef}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowListColorPicker(!showListColorPicker); }}
+                            onPointerDown={stop}
+                            title="Cover color"
+                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                          </button>
+                          {showListColorPicker && (
+                            <div className="absolute top-full left-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-xl p-2 rounded-lg flex flex-col gap-2 z-20 w-44" onClick={stop} onPointerDown={stop}>
+                              <div className="text-[11px] font-bold text-slate-500 px-1 pt-0.5">Cover Color</div>
+                              <div className="grid grid-cols-4 gap-1.5 px-1 pb-1">
+                                {LABEL_COLORS.map(c => (
+                                  <button key={c} onClick={() => { patchSubcard(s.id, { coverColor: c }); setShowListColorPicker(false); }} className={`w-full aspect-4/3 rounded ${s.coverColor === c ? 'ring-2 ring-blue-500' : ''}`} style={{ backgroundColor: c }} />
+                                ))}
+                              </div>
+                              {s.coverColor && (
+                                <button onClick={() => { patchSubcard(s.id, { coverColor: null }); setShowListColorPicker(false); }} className="mx-1 mb-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 py-1 px-2 rounded transition">Remove</button>
+                              )}
                             </div>
-                            {s.coverColor && (
-                              <button onClick={() => { patchSubcard(s.id, { coverColor: null }); setShowListColorPicker(false); }} className="mx-2 mb-2 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 py-1 px-2 rounded transition">Remove</button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={() => setActiveCardId(null)}
+                        title="Save"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold text-[13px] transition shadow-sm"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Save
+                      </button>
                     </div>
 
-                    {/* Small Color Dashes */}
+                    {/* Label dashes */}
                     {(s.labels && s.labels.length > 0) && (
-                      <div className="flex flex-wrap gap-1 pr-8">
+                      <div className="flex flex-wrap gap-1">
                         {s.labels.map(c => <div key={c} className="h-1.5 w-8 rounded-full" style={{ backgroundColor: c }} />)}
                       </div>
                     )}
@@ -490,36 +490,33 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                       onChange={(e) => patchSubcard(s.id, { title: e.target.value })}
                       placeholder="Card title..."
                       rows={1}
-                      className="w-full bg-transparent outline-none resize-none text-[22px] font-medium text-[#172b4d] dark:text-[#b6c2cf] pr-8 leading-snug"
+                      className="w-full bg-transparent outline-none resize-none text-[20px] font-medium text-[#172b4d] dark:text-[#b6c2cf] leading-snug"
                       onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                     />
-                    
-                    {/* Inline Badges Row */}
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+
+                    {/* Badges + action row */}
+                    <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-100 dark:border-slate-700/50">
                       <div className="flex items-center gap-2 flex-wrap">
                         {due && (
-                          <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[16px] font-semibold ${due.badgeCls}`}>
-                             <Clock className="w-4 h-4" />
-                             {due.label}
+                          <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] font-semibold ${due.badgeCls}`}>
+                            <Clock className="w-3.5 h-3.5" /> {due.label}
                           </div>
                         )}
                         {hasChecklist && (
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[16px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                             <CheckSquare className="w-4 h-4" />
-                             {doneCount}/{s.checklist.length}
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[14px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                            <CheckSquare className="w-3.5 h-3.5" /> {doneCount}/{s.checklist.length}
                           </div>
                         )}
                         {(s.members && s.members.length > 0) && (
                           <div className="flex items-center -space-x-1">
-                             {s.members.slice(0,3).map(m => <Avatar key={m} name={m} size={20} />)}
+                            {s.members.slice(0,3).map(m => <Avatar key={m} name={m} size={20} />)}
                           </div>
                         )}
                       </div>
-                      
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <button onClick={() => setModalCardId(s.id)} className="text-[11px] font-bold bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/50 px-2 py-1 rounded transition">Details</button>
-                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded transition" title="Delete card">
-                           <X className="w-4 h-4" />
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        <button onClick={() => setModalCardId(s.id)} className="text-[13px] font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[#172b4d] dark:text-[#b6c2cf] px-3 py-1.5 rounded-lg transition">Details</button>
+                        <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition" title="Delete card">
+                          <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -533,10 +530,10 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               <div
                 key={s.id}
                 onClick={() => { if(editable) setActiveCardId(s.id); }}
-                className="bg-white dark:bg-[#22272b] rounded-lg shadow-sm overflow-hidden flex flex-col group/card shrink-0 cursor-pointer hover:ring-1 hover:ring-blue-400 transition-all border border-transparent dark:border-slate-700"
+                className="bg-white dark:bg-[#22272b] rounded-lg shadow-sm flex flex-col group/card shrink-0 cursor-pointer hover:ring-1 hover:ring-blue-400 transition-all border border-transparent dark:border-slate-700"
               >
-                {coverImage && <img src={coverImage} className="w-full h-24 object-cover" alt="" />}
-                {!coverImage && s.coverColor && <div className="w-full h-8 shrink-0" style={{ backgroundColor: s.coverColor }} />}
+                {coverImage && <div className="overflow-hidden rounded-t-lg"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
+                {!coverImage && s.coverColor && <div className="w-full h-8 rounded-t-lg shrink-0" style={{ backgroundColor: s.coverColor }} />}
                 <div className="px-3 py-2.5 flex flex-col gap-1.5">
                   {(s.labels && s.labels.length > 0) && (
                     <div className="flex flex-wrap gap-1">
@@ -546,55 +543,60 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                   <div className={`text-[20px] font-medium leading-snug break-words ${s.done ? 'line-through text-slate-500' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>
                     {s.title ? s.title : <span className="text-slate-400 italic">Untitled card</span>}
                   </div>
-                  
+
                   {/* Badges */}
-                  {(due || hasChecklist || s.members?.length > 0 || s.description || s.images?.length > 1) && (
-                      <div className="flex items-center gap-2 mt-1 text-slate-500 dark:text-slate-400 flex-wrap">
+                  {(due || hasChecklist || s.members?.length > 0 || s.description || s.images?.length > 0 || s.location) && (
+                    <div className="flex flex-col gap-1 mt-0.5">
+                      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 flex-wrap">
                         {due && (
-                           <div className={`flex items-center gap-1 px-1 rounded text-[16px] font-semibold ${due.badgeCls}`}>
-                             <Clock className="w-4 h-4" /> {due.label}
-                           </div>
+                          <div className={`flex items-center gap-1 px-1 rounded text-[15px] font-semibold ${due.badgeCls}`}>
+                            <Clock className="w-3.5 h-3.5" /> {due.label}
+                          </div>
                         )}
                         {s.description && <AlignLeft className="w-4 h-4" title="Has description" />}
                         {hasChecklist && (
-                           <div className="relative group/chkb">
-                             <button onPointerDown={stop} onClick={(e) => { e.stopPropagation(); setOpenChecklistId(openChecklistId === s.id ? null : s.id); }} className={`flex items-center gap-1 text-[16px] font-medium hover:opacity-80 transition cursor-pointer ${doneCount === s.checklist.length ? 'bg-[#1f845a] text-white px-1 rounded' : ''}`}>
-                               <CheckSquare className="w-4 h-4" /> {doneCount}/{s.checklist.length}
-                             </button>
-                             {openChecklistId === s.id && (
-                                <div onClick={stop} onPointerDown={stop} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-2xl rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[14px] font-bold text-[#172b4d] dark:text-[#b6c2cf] uppercase tracking-wide">Checklist</span>
-                                    <button onClick={() => setOpenChecklistId(null)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded transition"><X className="w-4 h-4 text-slate-500" /></button>
-                                  </div>
-                                  <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-1">
-                                    {s.checklist.map(chk => (
-                                      <label key={chk.id} className="flex items-center gap-2.5 cursor-pointer group/chkitem py-0.5 px-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded transition">
-                                        <input type="checkbox" checked={chk.done} onChange={() => patchSubcard(s.id, { checklist: s.checklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })} className="mt-0.5" />
-                                        <span className={`text-[15px] flex-1 leading-snug ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>{chk.text}</span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                </div>
-                             )}
-                           </div>
+                          <button
+                            onPointerDown={stop}
+                            onClick={(e) => { e.stopPropagation(); setOpenChecklistId(openChecklistId === s.id ? null : s.id); }}
+                            className={`flex items-center gap-1 text-[15px] font-medium hover:opacity-80 transition ${doneCount === s.checklist.length ? 'bg-[#1f845a] text-white px-1.5 py-0.5 rounded' : ''}`}
+                          >
+                            <CheckSquare className="w-3.5 h-3.5" /> {doneCount}/{s.checklist.length}
+                          </button>
                         )}
                         {s.location && (
-                           <div className="flex items-center gap-1 text-[16px] font-medium max-w-[120px] truncate" title={s.location}>
-                              <MapPin className="w-4 h-4" /> {s.location}
-                           </div>
+                          <div className="flex items-center gap-1 text-[15px] font-medium max-w-[120px] truncate" title={s.location}>
+                            <MapPin className="w-3.5 h-3.5" /> {s.location}
+                          </div>
                         )}
                         {(s.images && s.images.length > 0) && (
-                           <div className="flex items-center gap-1 text-[16px] font-medium">
-                             <ImageIcon className="w-4 h-4" /> {s.images.length}
-                           </div>
+                          <div className="flex items-center gap-1 text-[15px] font-medium">
+                            <ImageIcon className="w-3.5 h-3.5" /> {s.images.length}
+                          </div>
                         )}
                         {(s.members && s.members.length > 0) && (
                           <div className="flex items-center -space-x-1 ml-auto">
-                             {s.members.slice(0,3).map(m => <Avatar key={m} name={m} size={18} />)}
+                            {s.members.slice(0,3).map(m => <Avatar key={m} name={m} size={18} />)}
                           </div>
                         )}
-                     </div>
+                      </div>
+
+                      {/* Inline checklist expansion — avoids overflow-hidden clipping */}
+                      {openChecklistId === s.id && hasChecklist && (
+                        <div onClick={stop} onPointerDown={stop} className="flex flex-col gap-1 mt-0.5 pt-1.5 border-t border-slate-100 dark:border-slate-700/50">
+                          {s.checklist.map(chk => (
+                            <label key={chk.id} className="flex items-center gap-2 cursor-pointer py-0.5 px-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded transition">
+                              <input
+                                type="checkbox"
+                                checked={chk.done}
+                                onChange={() => patchSubcard(s.id, { checklist: s.checklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })}
+                                className="mt-0.5 shrink-0"
+                              />
+                              <span className={`text-[14px] flex-1 leading-snug ${chk.done ? 'line-through text-slate-400' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>{chk.text || <span className="italic text-slate-400">Empty item</span>}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

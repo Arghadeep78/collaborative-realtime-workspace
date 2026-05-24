@@ -150,12 +150,13 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           textAlign={textAlign}
           textColor={textColor}
           scale={scale}
+          elementY={element.y}
         />
       )}
 
       {/* ── Shape style panel (when selected, not editing) ─────────────────── */}
       {selected && editable && !editing && (
-        <FloatBar scale={scale}>
+        <FloatBar scale={scale} elementY={element.y}>
           {/* Shape type */}
           <Popover
             title="Shape"

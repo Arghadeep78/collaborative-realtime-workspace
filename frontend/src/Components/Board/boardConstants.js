@@ -35,6 +35,7 @@ export const TOOLS = [
   { id: 'poll',      key: '6', label: 'Poll Block' },
   { id: 'iframe',    key: '7', label: 'iFrame Window' },
   { id: 'shape',     key: '8', label: 'Shape' },
+  { id: 'media',     key: '9', label: 'Media' },
   { id: 'laser',     key: 'L', label: 'Laser Pointer' },
 ];
 
@@ -68,6 +69,7 @@ export const ELEMENT_DEFAULTS = {
     },
   },
   iframe: { w: 440, h: 300, props: { url: '', title: '' } },
+  media: { w: 400, h: 300, props: { url: '', mediaType: 'image', caption: '' } },
   shape: {
     w: 220, h: 180,
     props: {
@@ -88,7 +90,7 @@ export const ELEMENT_DEFAULTS = {
 
 // Tools that drop a fresh element where the user clicks empty canvas. Connector
 // and laser are excluded — they don't spawn persistent elements.
-export const SPAWN_TOOLS = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape'];
+export const SPAWN_TOOLS = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape', 'media'];
 
 export const MIN_W = 80;
 export const MIN_H = 48;

@@ -40,6 +40,7 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
           textAlign={textAlign}
           textColor={textColor}
           scale={scale}
+          elementY={element.y}
         />
       )}
 

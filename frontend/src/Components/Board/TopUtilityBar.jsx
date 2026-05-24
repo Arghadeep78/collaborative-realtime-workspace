@@ -1,19 +1,20 @@
 import { useState } from 'react';
-import { UI, TOOLS, LAYOUT_MODES } from './boardConstants.js';
+import { UI, TOOLS } from './boardConstants.js';
 
 const BG_PATTERNS = [
-  { id: 'dots',  label: 'Dots',  preview: 'radial-gradient(circle, rgba(15,23,42,0.15) 1.5px, transparent 1.5px)', size: '12px 12px' },
-  { id: 'grid',  label: 'Grid',  preview: 'linear-gradient(to right,rgba(15,23,42,0.1) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,23,42,0.1) 1px,transparent 1px)', size: '12px 12px' },
-  { id: 'lines', label: 'Lines', preview: 'linear-gradient(to bottom,rgba(15,23,42,0.1) 1px,transparent 1px)', size: '12px 12px' },
-  { id: 'none',  label: 'Clean', preview: 'none', size: 'auto' },
+  { id: 'dots',  label: 'Dots',  preview: 'radial-gradient(circle, rgba(15,23,42,0.25) 1.5px, transparent 1.5px)', darkPreview: 'radial-gradient(circle, rgba(255,255,255,0.2) 1.5px, transparent 1.5px)', size: '12px 12px' },
+  { id: 'grid',  label: 'Grid',  preview: 'linear-gradient(to right,rgba(15,23,42,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to right,rgba(255,255,255,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
+  { id: 'lines', label: 'Lines', preview: 'linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
+  { id: 'none',  label: 'Clean', preview: 'none', darkPreview: 'none', size: 'auto' },
 ];
 
+// Neutrals light→dark, then hues arranged by spectrum, rainbow last
 const BG_COLORS = [
-  '#ffffff', '#f1f5f9', '#0f172a', '#eff6ff', 
-  '#f0fdf4', '#fefce8', '#fef2f2',
+  '#ffffff', '#f8fafc', '#e2e8f0', '#94a3b8', '#475569', '#1e293b', '#0f172a',
+  '#dbeafe', '#bbf7d0', '#fef08a', '#fed7aa', '#fecaca', '#e9d5ff', '#fbcfe8',
 ];
 
-function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
+function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) {
   const [open, setOpen] = useState(false);
   const [imgUrl, setImgUrl] = useState('');
   const bg = activePage?.background;
@@ -28,115 +29,126 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
       <button
         onClick={() => setOpen((o) => !o)}
         title="Board background"
-        className={`${UI.iconBtn} ${open ? UI.iconBtnActive : ''}`}
+        className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition
+          ${open
+            ? 'border-violet-400/60 bg-violet-500/15 text-violet-600 dark:text-violet-300 ring-1 ring-violet-400/40'
+            : 'border-slate-900/10 dark:border-white/10 hover:bg-white dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+          }`}
       >
-        <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+        {/* Paint-palette icon — 3 colour dots + handle, communicates "theme/style" */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8z"
+            stroke="currentColor" strokeWidth="1.8" className="text-slate-500 dark:text-slate-400" />
+          <circle cx="6.5"  cy="11.5" r="1.5" fill="#f87171" stroke="none" />
+          <circle cx="9.5"  cy="7.5"  r="1.5" fill="#fb923c" stroke="none" />
+          <circle cx="14.5" cy="7.5"  r="1.5" fill="#34d399" stroke="none" />
+          <circle cx="17.5" cy="11.5" r="1.5" fill="#60a5fa" stroke="none" />
         </svg>
       </button>
 
       {open && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className={`absolute top-full mt-2 right-0 w-64 rounded-2xl p-4 z-50 flex flex-col gap-3 ${UI.surfaceSolid}`}
+            className="absolute top-full mt-2 right-0 w-72 rounded-2xl z-50 overflow-hidden"
+            style={{ boxShadow: '0 8px 24px rgba(12,18,36,0.14), 0 1px 4px rgba(12,18,36,0.08)' }}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Pattern</p>
-            <div className="grid grid-cols-4 gap-2">
-              {BG_PATTERNS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => set({ type: p.id, value: bg?.value || '' })}
-                  title={p.label}
-                  className={`flex flex-col items-center gap-1 rounded-xl p-1.5 border-2 transition ${
-                    currentType === p.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
-                  }`}
-                >
-                  <div
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600"
-                    style={{ height: 36, backgroundImage: p.preview, backgroundSize: p.size, backgroundColor: 'white' }}
+            <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60">
+
+              {/* Pattern */}
+              <div className="px-4 pt-4 pb-3">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Pattern</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {BG_PATTERNS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => set({ type: p.id, value: bg?.value || '' })}
+                      title={p.label}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl p-1.5 border-2 transition-all ${
+                        currentType === p.id
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                          : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                      }`}
+                    >
+                      <div
+                        className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700"
+                        style={{ height: 34, backgroundImage: isDark ? p.darkPreview : p.preview, backgroundSize: p.size }}
+                      />
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700/60 mx-4" />
+
+              {/* Color */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Color</p>
+                {/* 7 cols × 2 rows = 14 swatches + rainbow fits exactly */}
+                <div className="grid grid-cols-8 gap-1.5">
+                  {BG_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => set({ type: currentType === 'image' ? 'solid' : currentType, value: c })}
+                      title={c}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${
+                        bg?.value === c ? 'border-blue-500 scale-110 shadow-sm' : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  {/* Custom colour — must be 15th cell so it lands in row 2, col 7 */}
+                  <label
+                    title="Custom color"
+                    className={`relative w-6 h-6 rounded-full border-2 cursor-pointer transition-all overflow-hidden ${
+                      bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 hover:scale-105'
+                    }`}
+                    style={{ background: 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8a00 60deg, #ffe500 120deg, #14ff00 180deg, #00a3ff 240deg, #0500ff 300deg, #ff0000 360deg)' }}
+                  >
+                    <input
+                      type="color"
+                      value={bg?.value && bg.value.startsWith('#') ? bg.value : '#ffffff'}
+                      onChange={(e) => set({ type: currentType === 'image' ? 'solid' : currentType, value: e.target.value })}
+                      className="opacity-0 w-[150%] h-[150%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700/60 mx-4" />
+
+              {/* Image URL */}
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Image URL</p>
+                <div className="flex gap-2">
+                  <input
+                    value={imgUrl}
+                    onChange={(e) => setImgUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
+                    placeholder="https://…"
+                    className="flex-1 text-[12px] bg-slate-50 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition"
                   />
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{p.label}</span>
-                </button>
-              ))}
-            </div>
+                  <button
+                    onClick={() => { if (imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
+                    className="px-3 py-1.5 rounded-xl text-[12px] font-semibold bg-blue-500 hover:bg-blue-600 text-white transition-colors shrink-0"
+                  >
+                    Set
+                  </button>
+                </div>
 
-            <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Color</p>
-            <div className="grid grid-cols-8 gap-1.5 items-center relative">
-              {BG_COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => set({ type: currentType === 'image' || currentType === 'solid' ? 'solid' : currentType, value: c })}
-                  title={c}
-                  className={`w-7 h-7 rounded-full border-2 transition ${
-                    bg?.value === c ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300'
-                  }`}
-                  style={{ backgroundColor: c, boxShadow: c === '#ffffff' ? '0 0 0 1px #e2e8f0 inset' : undefined }}
-                />
-              ))}
-              
-              {/* Custom Color Wheel */}
-              <label 
-                title="Custom Color"
-                className={`relative w-7 h-7 rounded-full border-2 cursor-pointer transition flex items-center justify-center overflow-hidden shrink-0 ${
-                  bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300'
-                }`}
-                style={{
-                  background: 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8a00 60deg, #ffe500 120deg, #14ff00 180deg, #00a3ff 240deg, #0500ff 300deg, #ff0000 360deg)'
-                }}
-              >
-                <input
-                  type="color"
-                  value={bg?.value || '#ffffff'}
-                  onChange={(e) => set({ type: currentType === 'image' || currentType === 'solid' ? 'solid' : currentType, value: e.target.value })}
-                  className="opacity-0 w-[150%] h-[150%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
-                />
-              </label>
-            </div>
+                {currentType === 'image' && bg?.value && (
+                  <button
+                    onClick={() => set({ type: 'dots', value: '' })}
+                    className="mt-2.5 text-[11px] text-rose-500 hover:text-rose-600 font-medium transition-colors"
+                  >
+                    Remove image
+                  </button>
+                )}
+              </div>
 
-            <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Image URL</p>
-            <div className="flex gap-2">
-              <input
-                value={imgUrl}
-                onChange={(e) => setImgUrl(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
-                placeholder="https://…"
-                className={`flex-1 text-[12px] ${UI.input} py-1.5`}
-              />
-              <button
-                onClick={() => { if (imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
-                className={`${UI.primaryBtn} px-3 py-1.5 rounded-xl text-[12px] font-semibold`}
-              >
-                Set
-              </button>
             </div>
-            
-            <div className="flex items-center gap-2 mt-1">
-              {[
-                { id: 'clouds', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80', label: 'Clouds' },
-                { id: 'watercolor', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=800&q=80', label: 'Watercolor' },
-                { id: 'abstract', url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800&q=80', label: 'Abstract' },
-                { id: 'stars', url: 'https://images.unsplash.com/photo-1534796636912-36528502c5c0?w=800&q=80', label: 'Stars' }
-              ].map((img) => (
-                <button
-                  key={img.id}
-                  title={img.label}
-                  onClick={() => set({ type: 'image', value: img.url })}
-                  className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition ${
-                    bg?.value === img.url ? 'border-blue-500 scale-105 shadow-md' : 'border-transparent hover:border-slate-300'
-                  }`}
-                  style={{ backgroundImage: `url(${img.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-                />
-              ))}
-            </div>
-
-            {currentType === 'image' && bg?.value && (
-              <button onClick={() => set({ type: 'dots', value: '' })} className="self-start text-[12px] text-rose-500 hover:text-rose-600 font-medium mt-1">
-                Remove image
-              </button>
-            )}
           </div>
         </>
       )}
@@ -144,7 +156,6 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable }) {
   );
 }
 
-// Inline tool glyphs (we own our chrome — no library icon set).
 function ToolGlyph({ id }) {
   const common = { className: 'w-[18px] h-[18px]', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
   switch (id) {
@@ -164,6 +175,13 @@ function ToolGlyph({ id }) {
       return <svg {...common}><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 9h18M8 14h4" /></svg>;
     case 'shape':
       return <svg {...common}><rect x="4" y="4" width="7" height="7" rx="1" /><circle cx="17" cy="7" r="3" /><polygon points="12,16 16,22 8,22" /></svg>;
+    case 'media':
+      return (
+        <svg {...common}>
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
+        </svg>
+      );
     case 'laser':
       return (
         <svg {...common} strokeWidth="2.5">
@@ -177,11 +195,6 @@ function ToolGlyph({ id }) {
   }
 }
 
-/**
- * Fixed top bar: board identity (left), the element toolbar + layout-engine
- * toggle (centre), and presence / account / share (right). All bespoke chrome —
- * the only thing borrowed is the existing ShareModal it opens.
- */
 export default function TopUtilityBar({
   board,
   role,
@@ -193,8 +206,6 @@ export default function TopUtilityBar({
   setEditTitle,
   activeTool,
   onSelectTool,
-  layoutMode,
-  onSelectLayout,
   peers,
   userData,
   showUserMenu,
@@ -242,12 +253,11 @@ export default function TopUtilityBar({
         {role === 'viewer' && <span className={UI.chip}>View Only</span>}
       </div>
 
-      {/* ── Centre: element toolbar + layout engine ────────────────── */}
+      {/* ── Centre: element toolbar ─────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center gap-2">
         <div className={`flex items-center gap-1 rounded-2xl p-1.5 ${UI.surface}`}>
           {TOOLS.map((tool) => {
             const active = activeTool === tool.id;
-            // Laser is always available (viewers can use it too); everything else requires editor role.
             const disabled = tool.disabled || (!editable && tool.id !== 'pointer' && tool.id !== 'laser');
             return (
               <button
@@ -268,27 +278,8 @@ export default function TopUtilityBar({
           })}
         </div>
 
-        {/* Layout engine toggle */}
-        <div className={`hidden md:flex items-center gap-0.5 rounded-2xl p-1 ${UI.surface}`}>
-          {LAYOUT_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              disabled={mode.disabled || !editable}
-              onClick={() => onSelectLayout(mode.id)}
-              title={mode.disabled ? `${mode.label} (coming soon)` : `${mode.label} layout`}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                layoutMode === mode.id
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-900/5 dark:hover:bg-white/5'
-              } ${mode.disabled || !editable ? 'opacity-40 cursor-not-allowed' : ''}`}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
-
         {/* Background picker */}
-        <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} />
+        <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />
       </div>
 
       {/* ── Right: presence + account + share ──────────────────────── */}
@@ -356,12 +347,12 @@ export default function TopUtilityBar({
           )}
         </div>
 
-        <button onClick={onPresent} className={`text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all`}>
+        <button onClick={onPresent} className="text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-colors">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
           Present
         </button>
 
-        <button onClick={onShare} className={`text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all`}>
+        <button onClick={onShare} className="text-sm font-semibold px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
           Share
         </button>
