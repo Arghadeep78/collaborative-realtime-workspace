@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
-import { getBoardTypes, makeId, LOCAL_ORIGIN, TRANSIENT_ORIGIN } from './boardConstants.js';
+import { getBoardTypes, makeId, LOCAL_ORIGIN } from './boardConstants.js';
 
 // Transaction origin tag for local edits. Shared with the per-user UndoManager
 // so it can track only the transactions this client authored.
@@ -144,22 +144,55 @@ export function useBoardSync(ydoc) {
     doc.transact(() => doc.getMap('elements').delete(id), LOCAL);
   }, []);
 
-  /** Bring an element to the front (max z + 1) on the active page. */
-  const bringToFront = useCallback((id) => {
+  /**
+   * Reorder one element within its page's z-stack. `mode` is 'front' | 'back' |
+   * 'forward' | 'backward'. The whole page is normalized to contiguous 1..n z
+   * values in a single transaction, so concurrent reorders from different
+   * clients converge on the same stack (per-key LWW) instead of colliding on a
+   * shared max. The z ordering is back→front (higher z renders on top).
+   */
+  const applyLayerOrder = useCallback((id, mode) => {
     const doc = ydocRef.current;
     if (!doc) return;
     const yElements = doc.getMap('elements');
-    const prev = yElements.get(id);
-    if (!prev) return;
-    let maxZ = 0;
-    yElements.forEach((v) => {
-      if (v.pageId === prev.pageId && (v.z ?? 0) > maxZ) maxZ = v.z;
+    const target = yElements.get(id);
+    if (!target) return;
+
+    const siblings = [];
+    yElements.forEach((v, key) => {
+      if (v.pageId === target.pageId && v.type !== 'connector') {
+        siblings.push({ key, z: v.z ?? 0 });
+      }
     });
-    if ((prev.z ?? 0) >= maxZ) return;
-    // Transient origin: bring-to-front rides on selection, so keep it off the
-    // undo stack while still syncing the new z-order to peers.
-    doc.transact(() => yElements.set(id, { ...prev, z: maxZ + 1 }), TRANSIENT_ORIGIN);
+    // Deterministic tiebreak on id so every client normalizes identically.
+    siblings.sort((a, b) => a.z - b.z || (a.key < b.key ? -1 : 1));
+
+    const idx = siblings.findIndex((s) => s.key === id);
+    if (idx === -1) return;
+    let newIdx;
+    if (mode === 'front') newIdx = siblings.length - 1;
+    else if (mode === 'back') newIdx = 0;
+    else if (mode === 'forward') newIdx = Math.min(siblings.length - 1, idx + 1);
+    else if (mode === 'backward') newIdx = Math.max(0, idx - 1);
+    else return;
+    if (newIdx === idx) return;
+
+    const [moved] = siblings.splice(idx, 1);
+    siblings.splice(newIdx, 0, moved);
+
+    doc.transact(() => {
+      siblings.forEach((s, i) => {
+        const z = i + 1;
+        const prev = yElements.get(s.key);
+        if (prev && (prev.z ?? 0) !== z) yElements.set(s.key, { ...prev, z });
+      });
+    }, LOCAL);
   }, []);
+
+  const bringToFront  = useCallback((id) => applyLayerOrder(id, 'front'),    [applyLayerOrder]);
+  const sendToBack    = useCallback((id) => applyLayerOrder(id, 'back'),     [applyLayerOrder]);
+  const bringForward  = useCallback((id) => applyLayerOrder(id, 'forward'),  [applyLayerOrder]);
+  const sendBackward  = useCallback((id) => applyLayerOrder(id, 'backward'), [applyLayerOrder]);
 
   // ── Page mutations ─────────────────────────────────────────────────────────
 
@@ -292,6 +325,9 @@ export function useBoardSync(ydoc) {
     bulkUpdate,
     removeElement,
     bringToFront,
+    sendToBack,
+    bringForward,
+    sendBackward,
     addPage,
     updatePage,
     renamePage,

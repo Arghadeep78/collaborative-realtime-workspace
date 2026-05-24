@@ -128,11 +128,6 @@ export const Yjs = Y;
 // (remote peers' transactions carry the provider's origin and are left alone).
 export const LOCAL_ORIGIN = 'board-local';
 
-// Origin for incidental local writes that should still sync to peers but must
-// NOT land on the undo stack — e.g. the z-order bump that happens just from
-// selecting an element. The UndoManager doesn't track this origin.
-export const TRANSIENT_ORIGIN = 'board-transient';
-
 // ── Tailwind tokens for our own chrome (glassy surfaces, buttons, inputs) ────
 export const UI = {
   surface:

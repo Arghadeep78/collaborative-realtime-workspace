@@ -48,7 +48,7 @@ export default function BoardElement({
   onUpdate,
   onUpdateProps,
   onDelete,
-  onBringToFront,
+  onContextMenu,
   // Connector link-mode
   connectMode,
   connectSource,
@@ -114,7 +114,6 @@ export default function BoardElement({
           // Tiny movement = click on group member → collapse to single selection
           onGroupDragEnd?.();
           onSelect(element.id);
-          onBringToFront(element.id);
         }
       }
       dragOriginRef.current = null;
@@ -216,7 +215,6 @@ export default function BoardElement({
       isGroupAnchor.current = false;
       dragOriginRef.current = null;
       onSelect(element.id);
-      onBringToFront(element.id);
     }
 
     const now = performance.now();
@@ -244,6 +242,13 @@ export default function BoardElement({
         pointerEvents: (!editable || (activeTool && activeTool !== 'pointer' && !connectMode && !editing)) ? 'none' : 'auto',
       }}
       onPointerDown={handleBodyPointerDown}
+      onContextMenu={(e) => {
+        if (!editable || connectMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onSelect(element.id);
+        onContextMenu?.(element.id, e.clientX, e.clientY);
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation();
         if (editable && !connectMode) onStartEdit(element.id);

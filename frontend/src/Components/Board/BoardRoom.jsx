@@ -15,6 +15,7 @@ import Sidebar from './Sidebar.jsx';
 import TopUtilityBar from './TopUtilityBar.jsx';
 import SlideCanvas from './SlideCanvas.jsx';
 import ShareModal from './ShareModal.jsx';
+import ElementContextMenu from './ElementContextMenu.jsx';
 
 /**
  * The 3-pane discussion board: slide sidebar · top utility bar · slide canvas.
@@ -41,6 +42,9 @@ export default function BoardRoom() {
     bulkUpdate,
     removeElement,
     bringToFront,
+    sendToBack,
+    bringForward,
+    sendBackward,
     addPage,
     updatePage,
     renamePage,
@@ -111,6 +115,7 @@ export default function BoardRoom() {
 
   const [connectFromId, setConnectFromId] = useState(null); // pending connector source
   const [graduationTargetId, setGraduationTargetId] = useState(null); // kanban drop target
+  const [contextMenu, setContextMenu] = useState(null); // { id, x, y } layering menu
 
   // ── Presence ─────────────────────────────────────────────────────────────
   const [peers, setPeers] = useState([]);
@@ -367,6 +372,37 @@ export default function BoardRoom() {
   useEffect(() => {
     if (activeTool !== 'connector') setConnectFromId(null);
   }, [activeTool]);
+
+  // ── Layering (right-click) ──────────────────────────────────────────────────
+  const handleElementContextMenu = useCallback((id, x, y) => {
+    setContextMenu({ id, x, y });
+  }, []);
+
+  const handleLayerAction = useCallback((mode) => {
+    const id = contextMenu?.id;
+    if (!id) return;
+    if (mode === 'front') bringToFront(id);
+    else if (mode === 'back') sendToBack(id);
+    else if (mode === 'forward') bringForward(id);
+    else if (mode === 'backward') sendBackward(id);
+  }, [contextMenu, bringToFront, sendToBack, bringForward, sendBackward]);
+
+  // Whether the menu's target is already at the top/bottom of its page stack,
+  // so the menu can disable the no-op directions.
+  const contextMenuFlags = useMemo(() => {
+    const el = contextMenu && elements[contextMenu.id];
+    if (!el) return { atFront: false, atBack: false };
+    const siblings = Object.values(elements)
+      .filter((e) => e.pageId === el.pageId && e.type !== 'connector')
+      .sort((a, b) => (a.z ?? 0) - (b.z ?? 0) || (a.id < b.id ? -1 : 1));
+    const idx = siblings.findIndex((s) => s.id === contextMenu.id);
+    return { atFront: idx === siblings.length - 1, atBack: idx === 0 };
+  }, [contextMenu, elements]);
+
+  // Close the layering menu if its target disappears (deleted by anyone).
+  useEffect(() => {
+    if (contextMenu && !elements[contextMenu.id]) setContextMenu(null);
+  }, [contextMenu, elements]);
 
   // ── Layout engine ──────────────────────────────────────────────────────────
   const applyLayout = useCallback((mode) => {
@@ -661,7 +697,7 @@ export default function BoardRoom() {
             onUpdate={updateElement}
             onUpdateProps={updateElementProps}
             onDelete={handleDelete}
-            onBringToFront={bringToFront}
+            onElementContextMenu={handleElementContextMenu}
             onCreate={handleCreate}
             peers={peers}
             onCursor={broadcastCursor}
@@ -714,6 +750,17 @@ export default function BoardRoom() {
           </div>
         </div>
       </div>
+
+      {contextMenu && editable && (
+        <ElementContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          atFront={contextMenuFlags.atFront}
+          atBack={contextMenuFlags.atBack}
+          onAction={handleLayerAction}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
 
       {showShare && <ShareModal boardId={boardId} board={board} onClose={() => setShowShare(false)} />}
       {showWorkspacePicker && (

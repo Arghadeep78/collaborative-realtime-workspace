@@ -87,7 +87,7 @@ export default function SlideCanvas({
   onUpdate,
   onUpdateProps,
   onDelete,
-  onBringToFront,
+  onElementContextMenu,
   onCreate,
   peers,
   onCursor,
@@ -433,7 +433,7 @@ export default function SlideCanvas({
             onUpdate={onUpdate}
             onUpdateProps={onUpdateProps}
             onDelete={onDelete}
-            onBringToFront={onBringToFront}
+            onContextMenu={onElementContextMenu}
             connectMode={connectMode}
             connectSource={connectFromId === el.id}
             onConnectClick={onConnectClick}

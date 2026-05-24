@@ -170,7 +170,7 @@ const Login = () => {
         <div className="text-center mb-8 flex flex-col items-center">
           <div className="mb-3"><LogoIcon /></div>
           <h1 className="text-gray-900 dark:text-white text-2xl font-bold tracking-tight">CollabBoard</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Real-time collaborative whiteboards</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Real-time collaborative Workspace</p>
         </div>
 
         {/* Card */}
