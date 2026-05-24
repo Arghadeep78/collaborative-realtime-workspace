@@ -195,6 +195,83 @@ function ToolGlyph({ id }) {
   }
 }
 
+function PeersMenu({ peers, board }) {
+  const [open, setOpen] = useState(false);
+
+  const getRole = (email) => {
+    if (!email) return 'viewer';
+    if (board?.owner === email) return 'editor';
+    const collab = board?.collaborators?.find((c) => c.email === email);
+    if (collab) return collab.role;
+    return board?.publicRole || 'viewer';
+  };
+
+  if (!peers || peers.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center -space-x-1.5 hover:opacity-90 transition-opacity"
+        title="View collaborators"
+      >
+        {peers.slice(0, 3).map((peer, i) => (
+          <div
+            key={peer.clientId}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white dark:border-slate-800 shadow-sm overflow-hidden z-10"
+            style={{ backgroundColor: peer.color, zIndex: 10 - i }}
+          >
+            {peer.profilePic ? (
+              <img src={peer.profilePic} alt={peer.name} className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = peer.name?.[0]?.toUpperCase() || '?'; }} />
+            ) : (
+              peer.name?.[0]?.toUpperCase() || '?'
+            )}
+          </div>
+        ))}
+        {peers.length > 3 && (
+          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold border-2 border-white dark:border-slate-800 shadow-sm z-0">
+            +{peers.length - 3}
+          </div>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute top-full mt-2 right-0 w-64 rounded-2xl z-50 overflow-hidden bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 shadow-xl"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
+              <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">Active Members ({peers.length})</h3>
+            </div>
+            <div className="max-h-60 overflow-y-auto px-2 py-2 flex flex-col gap-1">
+              {peers.map((peer) => (
+                <div key={peer.clientId} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/40 transition">
+                  <div
+                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden"
+                    style={{ backgroundColor: peer.color }}
+                  >
+                    {peer.profilePic ? (
+                      <img src={peer.profilePic} alt={peer.name} className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = peer.name?.[0]?.toUpperCase() || '?'; }} />
+                    ) : (
+                      peer.name?.[0]?.toUpperCase() || '?'
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{peer.name}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">{getRole(peer.email)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function TopUtilityBar({
   board,
   role,
@@ -329,18 +406,9 @@ export default function TopUtilityBar({
       </div>
 
       {/* ── Right: presence + account + share ──────────────────────── */}
-      <div className={`flex items-center gap-2 rounded-2xl pl-2.5 pr-1.5 py-1.5 shrink-0 ml-auto lg:ml-0 ${UI.surface}`}>
-        <div className="hidden sm:flex items-center -space-x-1.5">
-          {peers.slice(0, 4).map((peer) => (
-            <div
-              key={peer.clientId}
-              title={peer.name}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white dark:border-slate-800 shadow-sm"
-              style={{ backgroundColor: peer.color }}
-            >
-              {peer.name?.[0]?.toUpperCase() || '?'}
-            </div>
-          ))}
+      <div className={`relative z-20 flex items-center gap-2 rounded-2xl pl-2.5 pr-1.5 py-1.5 shrink-0 ml-auto lg:ml-0 ${UI.surface}`}>
+        <div className="hidden sm:flex items-center mr-1">
+          <PeersMenu peers={peers} board={board} />
         </div>
 
         {/* Theme toggle moved out from user menu */}
@@ -362,8 +430,12 @@ export default function TopUtilityBar({
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-1 bg-emerald-50/80 dark:bg-emerald-900/30 pl-1.5 pr-1 py-1 rounded-full border border-emerald-100/80 dark:border-emerald-800/50 shadow-sm hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 transition"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-[11px] font-bold">
-              {userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'}
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-[11px] font-bold overflow-hidden">
+              {(userData.profilePic || userData.profilePicture) ? (
+                <img src={userData.profilePic || userData.profilePicture} alt={userData.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'; }} />
+              ) : (
+                userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'
+              )}
             </div>
             <svg className={`w-3 h-3 text-slate-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -394,14 +466,12 @@ export default function TopUtilityBar({
           )}
         </div>
 
-        <button onClick={onPresent} className="text-sm font-semibold px-3 lg:px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-colors" title="Present (fullscreen)">
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
-          <span className="hidden lg:inline">Present</span>
+        <button onClick={onPresent} className="w-8 h-8 rounded-full flex items-center justify-center bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-colors shadow-sm" title="Present (fullscreen)">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
         </button>
 
-        <button onClick={onShare} className="text-sm font-semibold px-3 lg:px-4 py-1.5 rounded-full flex items-center gap-1.5 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors" title="Share board">
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-          <span className="hidden lg:inline">Share</span>
+        <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share board">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
         </button>
       </div>
 

@@ -7,7 +7,7 @@ import RadialMenu from './RadialMenu.jsx';
 
 const FIT_PADDING = 64; // breathing room around the slide within the viewport
 
-function getSlideBackground(bg, isDark) {
+export function getSlideBackground(bg, isDark) {
   const defaultBg = isDark ? '#282e33' : '#ffffff';
   const bgColor = bg?.value || defaultBg;
   const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.07)';

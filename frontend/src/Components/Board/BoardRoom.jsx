@@ -45,6 +45,7 @@ export default function BoardRoom() {
     updatePage,
     renamePage,
     deletePage,
+    movePage,
     ensureFirstPage,
   } = useBoardSync(ydoc);
 
@@ -246,6 +247,7 @@ export default function BoardRoom() {
       name: userData.name || userData.email || 'Anonymous',
       color: myColor,
       email: userData.email || '',
+      profilePic: userData.profilePic || userData.profilePicture || '',
     });
 
     const update = () => {
@@ -551,7 +553,7 @@ export default function BoardRoom() {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: titleInput }),
-    }).catch(() => {});
+    }).catch(() => { });
   }, [titleInput, board, boardId, ydoc]);
 
   const handleSignOut = useCallback(() => {
@@ -563,120 +565,121 @@ export default function BoardRoom() {
   // ── Loading gate ───────────────────────────────────────────────────────────
   if (!synced) {
     return (
-    <div ref={boardRoomRef} className={`w-screen h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <div className="relative">
-          <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 rounded-full" />
-          <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
-        </div>
-        <div className="text-center">
-          <p className="font-medium">Joining board…</p>
-          <p className="text-slate-500 text-sm mt-1">Syncing with collaborators</p>
+      <div ref={boardRoomRef} className={`w-screen h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <div className="relative">
+            <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 rounded-full" />
+            <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
+          </div>
+          <div className="text-center">
+            <p className="font-medium">Joining board…</p>
+            <p className="text-slate-500 text-sm mt-1">Syncing with collaborators</p>
+          </div>
         </div>
       </div>
-    </div>
     );
   }
 
   return (
     <div ref={boardRoomRef} className={`${boardShellClass} flex flex-col w-screen h-screen ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`} onClick={() => showUserMenu && setShowUserMenu(false)}>
       {!presentationMode && (
-      <TopUtilityBar
-        board={board}
-        role={role}
-        editable={editable}
-        isEditingTitle={isEditingTitle}
-        titleInput={titleInput}
-        setTitleInput={setTitleInput}
-        saveTitle={saveTitle}
-        setEditTitle={setEditTitle}
-        activeTool={activeTool}
-        onSelectTool={setActiveTool}
-        onPickShape={handlePickShape}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        layoutMode={layoutMode}
-        onSelectLayout={applyLayout}
-        peers={peers}
-        userData={userData}
-        showUserMenu={showUserMenu}
-        setShowUserMenu={setShowUserMenu}
-        navigate={navigate}
-        onSignOut={handleSignOut}
-        onShare={() => setShowShare(true)}
-        isDark={isDark}
-        toggleTheme={toggleTheme}
-        activePage={activePage}
-        onUpdateBackground={handleUpdateBackground}
-        onPresent={() => boardRoomRef.current?.requestFullscreen().catch(e => console.error(e))}
-      />
+        <TopUtilityBar
+          board={board}
+          role={role}
+          editable={editable}
+          isEditingTitle={isEditingTitle}
+          titleInput={titleInput}
+          setTitleInput={setTitleInput}
+          saveTitle={saveTitle}
+          setEditTitle={setEditTitle}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          onPickShape={handlePickShape}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          layoutMode={layoutMode}
+          onSelectLayout={applyLayout}
+          peers={peers}
+          userData={userData}
+          showUserMenu={showUserMenu}
+          setShowUserMenu={setShowUserMenu}
+          navigate={navigate}
+          onSignOut={handleSignOut}
+          onShare={() => setShowShare(true)}
+          isDark={isDark}
+          toggleTheme={toggleTheme}
+          activePage={activePage}
+          onUpdateBackground={handleUpdateBackground}
+          onPresent={() => boardRoomRef.current?.requestFullscreen().catch(e => console.error(e))}
+        />
       )}
 
       <div className="flex-1 flex min-h-0 relative">
         {!presentationMode && (
           <Sidebar
-          pages={pages}
-          elements={elements}
-          activePageId={activePageId}
-          editable={editable}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
-          onSelectPage={selectPage}
-          onAddPage={() => { const id = addPage(); if (id) selectPage(id); }}
-          onRenamePage={renamePage}
-          onDeletePage={deletePage}
+            pages={pages}
+            elements={elements}
+            activePageId={activePageId}
+            editable={editable}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+            onSelectPage={selectPage}
+            onAddPage={() => { const id = addPage(); if (id) selectPage(id); }}
+            onRenamePage={renamePage}
+            onDeletePage={deletePage}
+            onMovePage={movePage}
           />
         )}
 
         <div className="flex-1 relative min-w-0 flex flex-col">
           <SlideCanvas
             elements={elements}
-          activePageId={activePageId}
-          editable={editable}
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          onToolConsumed={() => setActiveTool('pointer')}
-          selectedId={selectedId}
-          editingId={editingId}
-          selectedIds={selectedIds}
-          onSelect={(id) => setSelectedIds(id ? new Set([id]) : new Set())}
-          onToggleSelect={(id) => setSelectedIds((prev) => {
-            const n = new Set(prev);
-            if (n.has(id)) n.delete(id); else n.add(id);
-            return n;
-          })}
-          onSelectGroup={handleSelectGroup}
-          groupDragOffset={groupDragOffset}
-          onGroupDragPreview={handleGroupDragPreview}
-          onGroupDragCommit={handleGroupDragCommit}
-          onGroupDragEnd={handleGroupDragEnd}
-          onGroupDragCancel={handleGroupDragCancel}
-          onStartEdit={setEditingId}
-          onStopEdit={() => setEditingId(null)}
-          onUpdate={updateElement}
-          onUpdateProps={updateElementProps}
-          onDelete={handleDelete}
-          onBringToFront={bringToFront}
-          onCreate={handleCreate}
-          peers={peers}
-          onCursor={broadcastCursor}
-          onCursorLeave={clearCursor}
-          connectFromId={connectFromId}
-          onConnectClick={handleConnectClick}
-          onConnectCancel={() => setConnectFromId(null)}
-          snapStep={snapStep}
-          graduationTargetId={graduationTargetId}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          votes={votes}
-          castPollVote={castPollVote}
-          removePollVote={removePollVote}
-          boardId={boardId}
-          members={members}
-          activePage={activePage}
-          isDark={isDark}
+            activePageId={activePageId}
+            editable={editable}
+            activeTool={activeTool}
+            onSelectTool={setActiveTool}
+            onToolConsumed={() => setActiveTool('pointer')}
+            selectedId={selectedId}
+            editingId={editingId}
+            selectedIds={selectedIds}
+            onSelect={(id) => setSelectedIds(id ? new Set([id]) : new Set())}
+            onToggleSelect={(id) => setSelectedIds((prev) => {
+              const n = new Set(prev);
+              if (n.has(id)) n.delete(id); else n.add(id);
+              return n;
+            })}
+            onSelectGroup={handleSelectGroup}
+            groupDragOffset={groupDragOffset}
+            onGroupDragPreview={handleGroupDragPreview}
+            onGroupDragCommit={handleGroupDragCommit}
+            onGroupDragEnd={handleGroupDragEnd}
+            onGroupDragCancel={handleGroupDragCancel}
+            onStartEdit={setEditingId}
+            onStopEdit={() => setEditingId(null)}
+            onUpdate={updateElement}
+            onUpdateProps={updateElementProps}
+            onDelete={handleDelete}
+            onBringToFront={bringToFront}
+            onCreate={handleCreate}
+            peers={peers}
+            onCursor={broadcastCursor}
+            onCursorLeave={clearCursor}
+            connectFromId={connectFromId}
+            onConnectClick={handleConnectClick}
+            onConnectCancel={() => setConnectFromId(null)}
+            snapStep={snapStep}
+            graduationTargetId={graduationTargetId}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            votes={votes}
+            castPollVote={castPollVote}
+            removePollVote={removePollVote}
+            boardId={boardId}
+            members={members}
+            activePage={activePage}
+            isDark={isDark}
           />
 
           {/* Slide Navigation (Bottom Center) */}
@@ -692,11 +695,11 @@ export default function BoardRoom() {
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            
+
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 min-w-[3rem] text-center select-none">
               {pages.findIndex((p) => p.id === activePageId) + 1} / {pages.length}
             </span>
-            
+
             <button
               onClick={() => {
                 const idx = pages.findIndex((p) => p.id === activePageId);
@@ -740,7 +743,7 @@ function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
     fetch(`${BACKEND_URL}/workspaces/list`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => setWorkspaces(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -784,7 +787,7 @@ function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
         {done ? (
           <div className="flex flex-col items-center gap-3 py-2">
             <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center text-green-600 dark:text-green-400">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
             <p className="text-gray-900 dark:text-white font-semibold">Board saved to workspace!</p>
           </div>
@@ -820,7 +823,7 @@ function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
                 )}
                 <button onClick={() => setMode('create')}
                   className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-dashed border-gray-300 dark:border-white/15 hover:border-gray-400 dark:hover:border-white/30 rounded-lg transition-colors mb-3">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                   New workspace
                 </button>
               </>

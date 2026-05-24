@@ -232,7 +232,8 @@ const Profile = () => {
                                         src={isEditing ? editedData.profilePic : userData.profilePic}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
-                                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = ''; }}
+                                        crossOrigin="anonymous"
+                                        onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = `<span class="text-white text-2xl font-bold">${userData.name?.[0]?.toUpperCase() || 'U'}</span>`; }}
                                     />
                                 ) : (
                                     <span className="text-white text-2xl font-bold">{userData.name?.[0]?.toUpperCase() || 'U'}</span>

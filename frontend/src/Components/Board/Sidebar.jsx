@@ -80,11 +80,14 @@ export default function Sidebar({
   onAddPage,
   onRenamePage,
   onDeletePage,
+  onMovePage,
 }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
   const [customWidth, setCustomWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
+  const [draggedPageId, setDraggedPageId] = useState(null);
+  const [dragOverPageId, setDragOverPageId] = useState(null);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -114,16 +117,14 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`relative shrink-0 flex flex-col m-3 mr-0 rounded-2xl overflow-hidden ${UI.surface} ${
-        !isResizing ? 'transition-[width,opacity] duration-300 ease-in-out' : ''
-      } ${collapsed ? 'opacity-80' : 'opacity-100'}`}
+      className={`relative shrink-0 flex flex-col m-3 mr-0 rounded-2xl overflow-hidden ${UI.surface} ${!isResizing ? 'transition-[width,opacity] duration-300 ease-in-out' : ''
+        } ${collapsed ? 'opacity-80' : 'opacity-100'}`}
       style={{ width: collapsed ? 40 : customWidth }}
     >
       {!collapsed && (
-        <div 
-          className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-20 transition-colors ${
-            isResizing ? 'bg-blue-500/80' : 'hover:bg-blue-400/50'
-          }`}
+        <div
+          className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-20 transition-colors ${isResizing ? 'bg-blue-500/80' : 'hover:bg-blue-400/50'
+            }`}
           onMouseDown={(e) => {
             e.preventDefault();
             setIsResizing(true);
@@ -156,16 +157,37 @@ export default function Sidebar({
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {pages.map((page, i) => {
               const active = page.id === activePageId;
+              const isDragOver = dragOverPageId === page.id && draggedPageId !== page.id;
               return (
                 <div
                   key={page.id}
                   onClick={() => onSelectPage(page.id)}
                   onDoubleClick={() => startRename(page)}
+                  draggable={editable}
+                  onDragStart={(e) => {
+                    setDraggedPageId(page.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedPageId && draggedPageId !== page.id) setDragOverPageId(page.id);
+                  }}
+                  onDragLeave={() => setDragOverPageId(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverPageId(null);
+                    if (draggedPageId && draggedPageId !== page.id) onMovePage(draggedPageId, page.id);
+                    setDraggedPageId(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedPageId(null);
+                    setDragOverPageId(null);
+                  }}
                   className={`group relative rounded-xl border px-2.5 py-2 cursor-pointer transition ${
                     active
                       ? 'border-blue-400/60 bg-blue-500/10'
                       : 'border-transparent hover:bg-slate-900/5 dark:hover:bg-white/5'
-                  }`}
+                  } ${isDragOver ? 'ring-2 ring-blue-500 scale-[1.02] shadow-md z-10' : ''} ${draggedPageId === page.id ? 'opacity-40 scale-95' : ''}`}
                 >
                   <SlideThumbnail elements={elements} page={page} sidebarWidth={customWidth} />
 
@@ -196,7 +218,7 @@ export default function Sidebar({
                   {editable && pages.length > 1 && (
                     <button
                       onClick={(e) => { e.stopPropagation(); if (window.confirm('Delete this slide? This cannot be undone.')) onDeletePage(page.id); }}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-md bg-white/90 dark:bg-slate-800/80 text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 opacity-0 group-hover:opacity-100 shadow-sm flex items-center justify-center transition"
+                      className="absolute top-2 left-2 w-8 h-8 rounded-md bg-white/90 dark:bg-slate-800/80 text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 opacity-0 group-hover:opacity-100 shadow-sm flex items-center justify-center transition"
                       title="Delete slide"
                       aria-label={`Delete slide ${i + 1}`}
                     >

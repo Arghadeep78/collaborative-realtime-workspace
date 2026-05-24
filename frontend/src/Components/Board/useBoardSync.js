@@ -204,6 +204,47 @@ export function useBoardSync(ydoc) {
     }, LOCAL);
   }, []);
 
+  const movePage = useCallback((draggedId, targetId) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const arr = yPages.toArray();
+    
+    const sorted = [...arr].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const dragIdx = sorted.findIndex((p) => p.id === draggedId);
+    const targetIdx = sorted.findIndex((p) => p.id === targetId);
+    
+    if (dragIdx === -1 || targetIdx === -1 || dragIdx === targetIdx) return;
+
+    let newOrder;
+    if (dragIdx < targetIdx) {
+      // Place after targetIdx
+      const afterTarget = sorted[targetIdx + 1];
+      if (afterTarget) {
+        newOrder = ((sorted[targetIdx].order ?? 0) + (afterTarget.order ?? 0)) / 2;
+      } else {
+        newOrder = (sorted[targetIdx].order ?? 0) + 1;
+      }
+    } else {
+      // Place before targetIdx
+      const beforeTarget = sorted[targetIdx - 1];
+      if (beforeTarget) {
+        newOrder = ((sorted[targetIdx].order ?? 0) + (beforeTarget.order ?? 0)) / 2;
+      } else {
+        newOrder = (sorted[targetIdx].order ?? 0) - 1;
+      }
+    }
+
+    const actualDragIdx = arr.findIndex((p) => p.id === draggedId);
+    if (actualDragIdx !== -1) {
+      const item = arr[actualDragIdx];
+      doc.transact(() => {
+        yPages.delete(actualDragIdx, 1);
+        yPages.insert(actualDragIdx, [{ ...item, order: newOrder }]);
+      }, LOCAL);
+    }
+  }, []);
+
   const deletePage = useCallback((id) => {
     const doc = ydocRef.current;
     if (!doc) return;
@@ -255,6 +296,7 @@ export function useBoardSync(ydoc) {
     updatePage,
     renamePage,
     deletePage,
+    movePage,
     ensureFirstPage,
   };
 }

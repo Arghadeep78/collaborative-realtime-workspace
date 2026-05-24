@@ -11,6 +11,10 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
   const autoSize = Math.max(20, Math.min(46, Math.round(element.w / 9)));
   const fontSize = props.fontSize || autoSize;
 
+  // padding is 20px (p-5), so total padding is 40px top/bottom.
+  // bottom fold corner is a bit intrusive but doesn't take much vertical space
+  const maxLines = Math.max(1, Math.floor((element.h - 40) / (fontSize * 1.375)));
+
   const taRef = useRef(null);
   useEffect(() => {
     if (editing && taRef.current) {
@@ -74,12 +78,16 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
           />
         ) : (
           <div
-            className={`flex-1 w-full whitespace-pre-wrap break-words leading-snug overflow-hidden z-10 font-medium transition-opacity ${!props.text ? 'opacity-40' : ''}`}
+            className={`w-full whitespace-pre-wrap break-words leading-snug overflow-hidden z-10 font-medium transition-opacity text-content-container ${!props.text ? 'opacity-40' : ''}`}
             style={{
               fontSize,
               color: textColor,
               fontWeight: bold ? 700 : 600,
               fontStyle: italic ? 'italic' : 'normal',
+              maxHeight: '100%',
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: maxLines,
             }}
           >
             {props.text || 'Empty note'}
