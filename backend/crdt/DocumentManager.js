@@ -90,10 +90,10 @@ class DocumentManager {
    * per-key write chains). Returns the original doc unchanged when it's too
    * small to bother with or when the rebuild wouldn't save enough space.
    *
-   * Assumes top-level types hold plain JSON-safe values (no nested Yjs types),
-   * which holds for this app's schema: tldraw_records / tldraw / system / votes
-   * are Y.Maps of strings/numbers/plain objects, comments is a Y.Array of
-   * plain objects.
+   * Nested Yjs types are reconstructed (not flattened to plain JSON): the
+   * `votes` map holds a Y.Map per poll so concurrent voters merge, and
+   * flattening it to a plain object would break the client's vote mutations
+   * after a cold load. `clone` recurses to preserve that structure.
    *
    * @param {string} boardId @param {Y.Doc} ydoc @returns {Y.Doc}
    */
@@ -106,7 +106,27 @@ class DocumentManager {
     }
     if (originalSize < this.COMPACT_MIN_BYTES) return ydoc;
 
-    const clone = (v) => (v instanceof Y.AbstractType ? v.toJSON() : v);
+    // Deep-clone a value, rebuilding nested Yjs types as fresh (detached)
+    // instances so they re-integrate into the compacted doc with their
+    // structure — and their CRDT merge semantics — intact.
+    const clone = (v) => {
+      if (v instanceof Y.Map) {
+        const m = new Y.Map();
+        v.forEach((val, key) => m.set(key, clone(val)));
+        return m;
+      }
+      if (v instanceof Y.Array) {
+        const a = new Y.Array();
+        a.push(v.toArray().map(clone));
+        return a;
+      }
+      if (v instanceof Y.Text) {
+        const t = new Y.Text();
+        t.insert(0, v.toString());
+        return t;
+      }
+      return v instanceof Y.AbstractType ? v.toJSON() : v;
+    };
     const fresh = new Y.Doc();
     try {
       fresh.transact(() => {

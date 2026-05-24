@@ -57,7 +57,12 @@ export function useBoardSync(ydoc) {
     doc.transact(() => {
       let yPoll = yVotes.get(pollId);
       if (!(yPoll instanceof Y.Map)) {
+        // Server-side history compaction flattens nested Y.Maps to plain
+        // objects on cold load. Rehydrate into a Y.Map, carrying any existing
+        // votes across, so a vote after compaction doesn't wipe the others.
+        const prev = yPoll && typeof yPoll === 'object' ? yPoll : null;
         yPoll = new Y.Map();
+        if (prev) Object.entries(prev).forEach(([k, v]) => yPoll.set(k, v));
         yVotes.set(pollId, yPoll);
       }
       yPoll.set(user.email, { optionId, ...user });
@@ -69,9 +74,14 @@ export function useBoardSync(ydoc) {
     if (!doc) return;
     const yVotes = doc.getMap('votes');
     doc.transact(() => {
-      const yPoll = yVotes.get(pollId);
+      let yPoll = yVotes.get(pollId);
       if (yPoll instanceof Y.Map) {
         yPoll.delete(email);
+      } else if (yPoll && typeof yPoll === 'object' && email in yPoll) {
+        // Compaction-flattened poll: rebuild a Y.Map without the removed vote.
+        const next = new Y.Map();
+        Object.entries(yPoll).forEach(([k, v]) => { if (k !== email) next.set(k, v); });
+        yVotes.set(pollId, next);
       }
     }, LOCAL);
   }, []);
