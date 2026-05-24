@@ -21,6 +21,17 @@ const Profile = () => {
     const [error, setError] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
+    const syncStoredUser = (data) => {
+        const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
+        const nextUser = {
+            ...currentUser,
+            ...data,
+            profilePic: data.profilePic ?? data.profilePicture ?? currentUser.profilePic ?? currentUser.profilePicture ?? '',
+            profilePicture: data.profilePicture ?? data.profilePic ?? currentUser.profilePicture ?? currentUser.profilePic ?? '',
+        };
+        localStorage.setItem('userData', JSON.stringify(nextUser));
+    };
+
     // Fetch user profile on component mount
     useEffect(() => {
         const fetchUserProfile = async () => {
@@ -35,8 +46,13 @@ const Profile = () => {
                     throw new Error('Failed to fetch user profile.');
                 }
                 const data = await response.json();
-                setUserData(data);
-                setEditedData(data);
+                const normalizedData = {
+                    ...data,
+                    profilePic: data.profilePic ?? data.profilePicture ?? '',
+                };
+                setUserData(normalizedData);
+                setEditedData(normalizedData);
+                syncStoredUser(normalizedData);
             } catch (err) {
                 setError(err.message);
                 const dummyData = { name: 'Unknown User', profilePic: '' };
@@ -87,8 +103,13 @@ const Profile = () => {
             }
 
             const updatedUser = await response.json();
-            setUserData(updatedUser.user);
-            setEditedData(updatedUser.user);
+            const normalizedUser = {
+                ...updatedUser.user,
+                profilePic: updatedUser.user.profilePic ?? updatedUser.user.profilePicture ?? '',
+            };
+            setUserData(normalizedUser);
+            setEditedData(normalizedUser);
+            syncStoredUser(normalizedUser);
             setIsEditing(false);
             toast.success('Profile updated successfully!');
 
@@ -130,6 +151,7 @@ const Profile = () => {
 
             const data = await response.json();
             handleInputChange('profilePic', data.url);
+            syncStoredUser({ profilePic: data.url });
             toast.success('Profile picture updated!');
         } catch (error) {
             console.error('Error uploading profile picture:', error);
@@ -210,7 +232,7 @@ const Profile = () => {
                                         src={isEditing ? editedData.profilePic : userData.profilePic}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
-                                        onError={(e) => { e.target.onerror = null; e.target.src = ''; }}
+                                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = ''; }}
                                     />
                                 ) : (
                                     <span className="text-white text-2xl font-bold">{userData.name?.[0]?.toUpperCase() || 'U'}</span>

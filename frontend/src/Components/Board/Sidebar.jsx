@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { UI, SLIDE_W, SLIDE_H, STICKY_COLORS } from './boardConstants.js';
 
 // Flat fill used to telegraph each element type in the miniature preview.
@@ -11,12 +11,16 @@ const SWATCH = {
 };
 
 import BoardElement from './BoardElement.jsx';
+import { useTheme } from '../../contexts/ThemeContext.jsx';
+import { getSlideBackground } from './SlideCanvas.jsx';
 
 /**
  * A live, scaled-down render of one slide. Elements are positioned by percentage
  * of the slide (1600×900) so the preview tracks the box size with no scale math.
  */
-function SlideThumbnail({ elements, pageId }) {
+function SlideThumbnail({ elements, page, sidebarWidth }) {
+  const { isDark } = useTheme();
+  const pageId = page.id;
   const items = useMemo(
     () =>
       Object.values(elements)
@@ -25,16 +29,16 @@ function SlideThumbnail({ elements, pageId }) {
     [elements, pageId],
   );
 
-  // Width is approx 202px inside the container. Scale is ~0.126
-  const scale = 0.126;
+  // Calculate dynamic scale based on sidebar width minus padding/borders (~38px)
+  const thumbnailWidth = Math.max(sidebarWidth - 38, 100);
+  const scale = thumbnailWidth / SLIDE_W;
+
+  const slideBg = getSlideBackground(page?.background, isDark);
 
   return (
     <div
-      className="relative w-full aspect-video rounded-md overflow-hidden bg-white ring-1 ring-black/10 select-none pointer-events-none"
-      style={{
-        backgroundImage: 'radial-gradient(circle, rgba(15,23,42,0.06) 1px, transparent 1px)',
-        backgroundSize: '10px 10px',
-      }}
+      className="relative w-full aspect-video rounded-md overflow-hidden ring-1 ring-black/10 select-none pointer-events-none"
+      style={slideBg}
     >
       <div
         className="absolute top-0 left-0 origin-top-left pointer-events-none"
@@ -79,6 +83,24 @@ export default function Sidebar({
 }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
+  const [customWidth, setCustomWidth] = useState(240);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const onMouseMove = (e) => {
+      // m-3 left margin is 12px
+      const newWidth = Math.max(160, Math.min(e.clientX - 12, 260));
+      setCustomWidth(newWidth);
+    };
+    const onMouseUp = () => setIsResizing(false);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isResizing]);
 
   const startRename = (page) => {
     if (!editable) return;
@@ -92,10 +114,22 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`shrink-0 flex flex-col m-3 mr-0 rounded-2xl overflow-hidden ${UI.surface} transition-[width,opacity] duration-300 ease-in-out ${
-        collapsed ? 'w-10 opacity-80' : 'w-60 opacity-100'
-      }`}
+      className={`relative shrink-0 flex flex-col m-3 mr-0 rounded-2xl overflow-hidden ${UI.surface} ${
+        !isResizing ? 'transition-[width,opacity] duration-300 ease-in-out' : ''
+      } ${collapsed ? 'opacity-80' : 'opacity-100'}`}
+      style={{ width: collapsed ? 40 : customWidth }}
     >
+      {!collapsed && (
+        <div 
+          className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-20 transition-colors ${
+            isResizing ? 'bg-blue-500/80' : 'hover:bg-blue-400/50'
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+        />
+      )}
       {collapsed ? (
         /* ── Collapsed: single expand button ── */
         <div className="flex flex-col items-center py-2">
@@ -133,7 +167,7 @@ export default function Sidebar({
                       : 'border-transparent hover:bg-slate-900/5 dark:hover:bg-white/5'
                   }`}
                 >
-                  <SlideThumbnail elements={elements} pageId={page.id} />
+                  <SlideThumbnail elements={elements} page={page} sidebarWidth={customWidth} />
 
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="shrink-0 w-5 h-5 rounded bg-slate-900/5 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-slate-400">

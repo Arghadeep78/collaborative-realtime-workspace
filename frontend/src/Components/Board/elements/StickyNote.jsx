@@ -63,7 +63,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
             value={props.text}
             onChange={(e) => onEditProps({ text: e.target.value })}
             onPointerDown={(e) => e.stopPropagation()}
-            className="flex-1 w-full bg-transparent resize-none outline-none placeholder:text-black/25 dark:placeholder:text-white/30 leading-snug z-10 pt-5 font-medium"
+            className="flex-1 w-full bg-transparent resize-none outline-none placeholder:text-black/25 dark:placeholder:text-white/30 leading-snug z-10 pt-5 font-medium break-words whitespace-pre-wrap"
             style={{
               fontSize,
               color: textColor,
@@ -74,7 +74,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
           />
         ) : (
           <div
-            className={`flex-1 w-full whitespace-pre-wrap wrap-break-word leading-snug overflow-hidden z-10 font-medium transition-opacity ${!props.text ? 'opacity-40' : ''}`}
+            className={`flex-1 w-full whitespace-pre-wrap break-words leading-snug overflow-hidden z-10 font-medium transition-opacity ${!props.text ? 'opacity-40' : ''}`}
             style={{
               fontSize,
               color: textColor,

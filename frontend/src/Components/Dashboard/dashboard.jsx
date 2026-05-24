@@ -329,6 +329,8 @@ export default function Dashboard({ logout }) {
 
   const token    = () => localStorage.getItem('token');
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+  const profileImage = userData.profilePic || userData.profilePicture || '';
+  const profileInitial = userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || 'U';
 
   // ── Fetch boards ────────────────────────────────────────────────────────────
   const fetchBoards = async () => {
@@ -632,9 +634,25 @@ export default function Dashboard({ logout }) {
             >
               {isDark ? <SunIcon /> : <MoonIcon />}
             </button>
-            <div className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 dark:bg-white/10 dark:border-white/15 flex items-center justify-center text-sm font-semibold text-indigo-700 dark:text-white shadow-sm cursor-pointer">
-              {userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || 'U'}
-            </div>
+            <button
+              onClick={() => navigate('/profile')}
+              className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 dark:bg-white/10 dark:border-white/15 flex items-center justify-center overflow-hidden text-sm font-semibold text-indigo-700 dark:text-white shadow-sm cursor-pointer"
+              title="Open profile"
+            >
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = '';
+                  }}
+                />
+              ) : (
+                profileInitial
+              )}
+            </button>
           </div>
         </header>
 

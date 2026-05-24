@@ -53,7 +53,11 @@ const Login = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Google login failed');
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || {}));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || {}),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Google sign-in failed. Please try again.');
@@ -131,7 +135,11 @@ const Login = () => {
   
       // Save token and user profile data
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || { email: formData.email }));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || { email: formData.email }),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
   
       navigate('/dashboard');
     } catch (err) {

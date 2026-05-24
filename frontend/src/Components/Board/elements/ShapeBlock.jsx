@@ -128,7 +128,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
   const clipShape = !!getShapeClipPath(shapeType);
   const textPadding = getTextPadding(shapeType, strokeWidth, w, h);
   // leading-snug = 1.375; compute how many lines fit in the padded safe area
-  const maxLines = clipShape ? Math.max(1, Math.floor((h - 2 * textPadding) / (fontSize * 1.375))) : undefined;
+  const maxLines = Math.max(1, Math.floor((h - 2 * textPadding) / (fontSize * 1.375)));
 
   return (
     <div className="relative w-full h-full select-none" style={{ opacity }}>
@@ -164,18 +164,16 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
         ) : (
           text && (
             <div
-              className={`w-full leading-snug ${clipShape ? 'overflow-hidden wrap-break-word' : 'overflow-y-auto whitespace-pre-wrap wrap-break-word'}`}
+              className={`w-full leading-snug overflow-hidden whitespace-pre-wrap break-words text-content-container`}
               style={{
                 fontSize, color: textColor, textAlign,
                 fontWeight: bold ? 700 : 400,
                 fontStyle: italic ? 'italic' : 'normal',
                 maxHeight: '100%',
                 pointerEvents: 'auto',
-                ...(clipShape && {
-                  display: '-webkit-box',
-                  WebkitBoxOrient: 'vertical',
-                  WebkitLineClamp: maxLines,
-                }),
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: maxLines,
               }}
             >
               {text}

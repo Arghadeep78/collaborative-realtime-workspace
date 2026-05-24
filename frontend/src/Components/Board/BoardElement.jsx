@@ -132,8 +132,11 @@ export default function BoardElement({
     return null;
   };
 
-  const scaleFontSize = (origFs, origW, origH, newW, newH) =>
-    Math.max(MIN_FONT, Math.round(origFs * Math.sqrt((newW * newH) / (origW * origH))));
+  const scaleFontSize = (origFs, origW, origH, newW, newH, isOverflowing) => {
+    const scale = Math.sqrt((newW * newH) / (origW * origH));
+    if (isOverflowing && scale > 1) return origFs;
+    return Math.max(MIN_FONT, Math.round(origFs * scale));
+  };
 
   const elementMinDims = ELEMENT_MIN_DIMS[element.type] ?? {};
   const { resizing, startResize } = useElementResize({
@@ -142,8 +145,18 @@ export default function BoardElement({
     onPreview: (w, h) => {
       const fw = fitW(w), fh = fitH(h);
       const origin = resizeOriginRef.current;
+      
+      if (origin?.isOverflowing && origin.textContainer) {
+        const stillOverflowing = origin.textContainer.scrollHeight > origin.textContainer.clientHeight + 2 || origin.textContainer.scrollWidth > origin.textContainer.clientWidth + 2;
+        if (!stillOverflowing && fw >= origin.origW && fh >= origin.origH) {
+          origin.origW = fw;
+          origin.origH = fh;
+          origin.isOverflowing = false;
+        }
+      }
+
       const propsPatch = origin?.fontInfo
-        ? { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh) }
+        ? { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh, origin.isOverflowing) }
         : null;
       setLive((p) => ({ ...p, w: fw, h: fh, ...(propsPatch && { props: propsPatch }) }));
     },
@@ -152,7 +165,7 @@ export default function BoardElement({
       onUpdate(element.id, { w: fw, h: fh });
       const origin = resizeOriginRef.current;
       if (origin?.fontInfo) {
-        onUpdateProps(element.id, { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh) });
+        onUpdateProps(element.id, { [origin.fontInfo.prop]: scaleFontSize(origin.fontInfo.fs, origin.origW, origin.origH, fw, fh, origin.isOverflowing) });
       }
     },
   });
@@ -310,7 +323,18 @@ export default function BoardElement({
           </button>
           <div
             onPointerDown={(e) => {
-              resizeOriginRef.current = { origW: element.w, origH: element.h, fontInfo: getFontInfo(element) };
+              const elNode = e.target.closest('.absolute.select-none');
+              const textContainer = elNode?.querySelector('.text-content-container');
+              // Check if scrollHeight is strictly greater than clientHeight. Also check scrollWidth.
+              // We use a small epsilon (e.g. 2px) to avoid false positives from browser subpixel rendering.
+              const isOverflowing = textContainer ? textContainer.scrollHeight > textContainer.clientHeight + 2 || textContainer.scrollWidth > textContainer.clientWidth + 2 : false;
+              resizeOriginRef.current = { 
+                origW: element.w, 
+                origH: element.h, 
+                fontInfo: getFontInfo(element), 
+                isOverflowing,
+                textContainer
+              };
               startResize(e, element);
             }}
             className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-sm bg-white border-2 border-blue-500 cursor-nwse-resize shadow"

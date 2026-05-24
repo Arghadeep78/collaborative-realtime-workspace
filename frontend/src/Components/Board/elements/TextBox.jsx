@@ -56,7 +56,7 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
         />
       ) : (
         <div
-          className="w-full h-full whitespace-pre-wrap break-words leading-tight overflow-hidden"
+          className="w-full h-full whitespace-pre-wrap break-words leading-tight overflow-hidden text-content-container"
           style={textStyle}
         >
           {props.text || <span className="text-slate-400 font-normal" style={{ fontSize, fontStyle: 'normal' }}>Text</span>}
