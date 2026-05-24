@@ -1,8 +1,8 @@
-# Architecture Document: Collaborative Whiteboard Platform
+# Architecture Document: Collaborative Realtime Workspace
 
 ## 1. System Overview
 
-The Collaborative Whiteboard Platform is a full-stack, real-time application designed to allow multiple users to ideate, map, and organize information on an infinite canvas. The system leverages Conflict-free Replicated Data Types (CRDTs) to ensure seamless synchronization across concurrent clients.
+The Collaborative Realtime Workspace is a full-stack, real-time application that lets multiple users ideate, map, and organize information on a shared, multi-page canvas. The system leverages Conflict-free Replicated Data Types (CRDTs) to ensure seamless synchronization across concurrent clients.
 
 The architecture is split into a distinct **Frontend** (Client) and **Backend** (Server), housed in a monorepo structure.
 
@@ -11,8 +11,8 @@ The architecture is split into a distinct **Frontend** (Client) and **Backend** 
 ## 2. Technology Stack
 
 ### 2.1 Frontend (Client-Side)
-- **Framework:** React 18 with Vite for fast bundling and development.
-- **Canvas Engine:** [Tldraw](https://tldraw.dev/) - Provides the infinite canvas UI, drawing tools, and standard whiteboard capabilities (shapes, sticky notes, etc.).
+- **Framework:** React 19 with Vite for fast bundling and development.
+- **Canvas Engine:** A **custom SVG canvas** built in-house — a self-contained element registry (sticky notes, Kanban cards, text, connectors, polls, embeds, shapes, media) with no third-party canvas library. Element coordinates live in fixed "slide units" so rendering is zoom-independent.
 - **Real-Time Sync Engine:** Yjs + `y-websocket` - Handles CRDT-based state synchronization across multiple clients.
 - **Styling:** Tailwind CSS / Vanilla CSS.
 
@@ -39,7 +39,7 @@ The architecture is split into a distinct **Frontend** (Client) and **Backend** 
 graph TD
     subgraph Client [Frontend - React/Vite]
         UI[React UI Components]
-        Canvas[Tldraw Canvas]
+        Canvas[Custom SVG Canvas]
         YjsClient[Yjs Client State]
         SocketIO_Client[Socket.IO Client]
         
@@ -87,7 +87,7 @@ graph TD
 
 ### 4.1 Real-Time Synchronization (Yjs CRDT)
 The core collaborative experience is powered by Yjs.
-1. **Local Mutations:** When a user draws or edits, the local Tldraw instance updates the local Yjs document (`Y.Doc`).
+1. **Local Mutations:** When a user adds or edits an element, the custom canvas updates the local Yjs document (`Y.Doc`).
 2. **Broadcasting:** The local `Y.Doc` calculates the delta (changes) and sends it over WebSockets (`y-websocket`) to the backend.
 3. **Server Resolution:** The backend Yjs server receives the update, merges it, and broadcasts it to all other connected clients in the same room. Redis Pub/Sub ensures that even if users are connected to different Node.js server instances, they receive the updates.
 4. **Conflict Resolution:** Because Yjs uses CRDTs, conflicting edits (e.g., two people editing the same sticky note) are resolved automatically and consistently across all clients without a centralized locking mechanism.
@@ -117,11 +117,11 @@ Tasks that are computationally expensive or non-blocking are offloaded to backgr
 
 ## 5. Directory Structure Mapping
 
-- `/frontend/src/Components`: React UI elements (WhiteboardRoom, Modals, Auth).
-- `/frontend/src/crdt`: Yjs integration logic with Tldraw (`useYjsBoard.js`).
+- `/frontend/src/Components/Board`: The custom canvas — `BoardRoom`, the SVG element renderers (`elements/`), connectors, presence layer, context menus, and sync hooks.
+- `/frontend/src/crdt`: Yjs board integration (`useYjsBoard.js`, `useBoardHistory.js`).
 - `/backend/models`: Mongoose schemas for Users, Boards, etc.
 - `/backend/Routes & /Controllers`: Express REST API endpoints.
-- `/backend/socket & /crdt`: WebSocket and Yjs server-side logic.
+- `/backend/crdt`: Yjs WebSocket server (`WSServer.js`), document manager, and the write-behind persistence worker + scheduler.
 - `/backend/jobs`: BullMQ worker definitions and queue processing logic.
 - `/backend/RedisHelperFunctions`: Utility functions for Redis pub/sub and state management.
 - `/backend/cache`: Redis-backed board-metadata cache (`boardCache.js`) with role resolution and invalidation helpers.
@@ -136,4 +136,4 @@ Tasks that are computationally expensive or non-blocking are offloaded to backgr
 - **Shared State Over Per-Process State:** Rate-limit counters and board-access metadata are stored in Redis rather than process memory, so they remain consistent as the fleet scales. The app trusts the first proxy hop (`trust proxy`) so per-client rate limiting keys on the real client IP behind the load balancer.
 - **DB Load Shedding:** The board-metadata cache removes a MongoDB read from the hot WebSocket connection path; only cold rooms (no in-memory `Y.Doc`) fall through to the database.
 - **Health-Aware Routing:** `/health` and `/ready` let the load balancer / orchestrator route around degraded or not-yet-ready nodes instead of sending them traffic.
-- **Document Size limits:** As boards grow, the CRDT history can become large. The system should periodically "garbage collect" or compact Yjs states when saving to MongoDB to keep initial load times fast.
+- **Document Compaction:** As boards grow, the CRDT update history accumulates. The persistence layer compacts Yjs state when writing to MongoDB to keep initial load times fast, and the client rehydrates nested CRDT types (e.g. the per-element `votes` map) correctly after a compacted load.

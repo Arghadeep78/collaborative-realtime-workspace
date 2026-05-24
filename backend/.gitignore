@@ -38,7 +38,8 @@ build/
 
 # dotenv environment files (if more than one)
 .env.*
-!.env.example  # Optional: track this if you want to show format
+# Keep the example file tracked (no inline comment — it breaks the negation)
+!.env.example
 
 # Miscellaneous system files
 .DS_Store
