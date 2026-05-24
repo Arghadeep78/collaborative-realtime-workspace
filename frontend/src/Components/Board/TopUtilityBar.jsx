@@ -301,7 +301,7 @@ export default function TopUtilityBar({
   onPresent,
 }) {
   const toolbar = (
-    <div className="flex items-center gap-2 px-1">
+    <div className="flex flex-wrap items-center justify-center gap-2 px-1">
       <div className={`flex items-center gap-1 rounded-2xl p-1.5 shrink-0 ${UI.surface}`}>
         {TOOLS.map((tool) => {
           const active = activeTool === tool.id;

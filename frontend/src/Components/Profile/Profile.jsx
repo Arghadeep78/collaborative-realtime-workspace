@@ -222,8 +222,8 @@ const Profile = () => {
                 {error && <p className="bg-red-900/30 border-b border-red-800 text-red-400 text-sm px-6 py-3">{error}</p>}
                 
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800/50">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-gray-800/50">
+                    <div className="flex items-center gap-4 min-w-0">
                         {/* Avatar */}
                         <div className="relative group">
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden border-2 border-gray-800 shadow-lg shadow-indigo-500/20">

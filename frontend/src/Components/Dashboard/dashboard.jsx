@@ -56,6 +56,9 @@ const LogoIcon = () => (
 const BuildingIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
 );
+const MenuIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+);
 
 // ── Cute Thumbnails ───────────────────────────────────────────────────────────
 const CUTE_THUMBNAILS = [
@@ -320,6 +323,7 @@ export default function Dashboard({ logout }) {
   const [renameVal, setRenameVal]         = useState('');
   const [pickerBoard, setPickerBoard]     = useState(null);
   const [showWsDropdown, setShowWsDropdown] = useState(false);
+  const [sidebarOpen, setSidebarOpen]     = useState(false); // off-canvas drawer (below lg)
   const [showCreateWs, setShowCreateWs]   = useState(false);
   const [renamingWs, setRenamingWs]       = useState(false);
   const [wsRenameVal, setWsRenameVal]     = useState('');
@@ -517,8 +521,16 @@ export default function Dashboard({ logout }) {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-[#212121] text-gray-900 dark:text-[#ededed] font-sans overflow-hidden selection:bg-indigo-500/30 dark:selection:bg-white/20">
 
+      {/* Drawer backdrop — only below lg, when the sidebar is open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className="w-[240px] flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#212121] py-5 px-4 shadow-sm z-10">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-[240px] flex flex-col border-r border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#212121] py-5 px-4 shadow-xl transition-transform duration-300 ease-in-out lg:static lg:z-10 lg:flex-shrink-0 lg:translate-x-0 lg:shadow-sm ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-2 mb-8 cursor-pointer select-none">
           <LogoIcon />
@@ -561,7 +573,7 @@ export default function Dashboard({ logout }) {
             <WorkspaceDropdown
               workspaces={workspaces}
               activeWorkspace={activeWorkspace}
-              onSelect={(ws) => { setActiveWs(ws); setShowWsDropdown(false); setActiveView('all'); }}
+              onSelect={(ws) => { setActiveWs(ws); setShowWsDropdown(false); setActiveView('all'); setSidebarOpen(false); }}
               onCreate={() => { setShowCreateWs(true); setShowWsDropdown(false); }}
             />
           )}
@@ -579,14 +591,14 @@ export default function Dashboard({ logout }) {
         {/* Nav */}
         <nav className="flex-1 space-y-1">
           <button
-            onClick={() => setActiveView('all')}
+            onClick={() => { setActiveView('all'); setSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'all' ? 'bg-gray-100 dark:bg-white/[0.07] text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04]'}`}
           >
             <LayoutIcon />
             Team collab boards
           </button>
           <button
-            onClick={() => setActiveView('favorites')}
+            onClick={() => { setActiveView('favorites'); setSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'favorites' ? 'bg-gray-100 dark:bg-white/[0.07] text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04]'}`}
           >
             <StarIcon filled={activeView === 'favorites'} />
@@ -612,8 +624,16 @@ export default function Dashboard({ logout }) {
       {/* ── Main ────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-[#212121]">
         {/* Top bar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-8 py-4 bg-white dark:bg-[#212121] border-b border-gray-200 dark:border-white/[0.07] z-0">
-          <div className="relative group w-96">
+        <header className="flex-shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-4 bg-white dark:bg-[#212121] border-b border-gray-200 dark:border-white/[0.07] z-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden flex-shrink-0 p-2 -ml-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/10 rounded-lg transition-colors"
+            title="Open menu"
+            aria-label="Open menu"
+          >
+            <MenuIcon />
+          </button>
+          <div className="relative group flex-1 min-w-0 max-w-md">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-white/30 group-focus-within:text-indigo-500 dark:group-focus-within:text-white/60 transition-colors">
               <SearchIcon />
             </div>
@@ -624,7 +644,7 @@ export default function Dashboard({ logout }) {
               className="w-full bg-gray-100 dark:bg-white/[0.04] text-gray-900 dark:text-white text-sm pl-10 pr-4 py-2.5 rounded-lg border-none dark:border dark:border-white/[0.08] outline-none focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 dark:focus:border-white/20 dark:focus:bg-white/[0.06] transition-all placeholder:text-gray-500 dark:placeholder:text-white/25"
             />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 ml-auto">
             <div className="w-px h-6 bg-gray-200 dark:bg-white/10" />
             <button
               onClick={toggleTheme}
@@ -657,8 +677,8 @@ export default function Dashboard({ logout }) {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto px-8 py-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-6">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-6">
             {activeView === 'favorites' ? 'Favorite boards' : 'Team collab boards'}
           </h1>
 
