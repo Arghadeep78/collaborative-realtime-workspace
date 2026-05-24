@@ -329,7 +329,7 @@ export default function Dashboard({ logout }) {
         method: 'POST',
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          title: 'Untitled Board',
+          title: 'Untitled Collab Board',
           thumbnail: randomThumbnail
         }),
       });
@@ -343,7 +343,7 @@ export default function Dashboard({ logout }) {
   };
 
   const deleteBoard = async (id) => {
-    if (!window.confirm('Delete this board?')) return;
+    if (!window.confirm('Delete this collab board?')) return;
     await fetch(`${BACKEND_URL}/boards/delete/${id}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
     });
@@ -386,7 +386,7 @@ export default function Dashboard({ logout }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-2 mb-8 cursor-pointer select-none">
           <LogoIcon />
-          <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-white">Board</span>
+          <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-white">Collab Board</span>
         </div>
 
         {/* Workspace Selector (Stub) */}
@@ -408,11 +408,11 @@ export default function Dashboard({ logout }) {
         <nav className="flex-1 space-y-1">
           <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-100 dark:bg-white/[0.07] text-gray-900 dark:text-white text-sm font-medium">
             <LayoutIcon />
-            Team boards
+            Team collab boards
           </button>
           <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04] text-sm font-medium transition-colors">
             <StarIcon />
-            Favorite boards
+            Favorite collab boards
           </button>
         </nav>
 
@@ -439,7 +439,7 @@ export default function Dashboard({ logout }) {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search boards..."
+              placeholder="Search collab boards..."
               className="w-full bg-gray-100 dark:bg-white/[0.04] text-gray-900 dark:text-white text-sm pl-10 pr-4 py-2.5 rounded-lg border-none dark:border dark:border-white/[0.08] outline-none focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 dark:focus:border-white/20 dark:focus:bg-white/[0.06] transition-all placeholder:text-gray-500 dark:placeholder:text-white/25"
             />
           </div>
@@ -465,7 +465,7 @@ export default function Dashboard({ logout }) {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto px-8 py-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-6">Team boards</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-6">Team collab boards</h1>
           
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -490,7 +490,7 @@ export default function Dashboard({ logout }) {
                 <div className="w-12 h-12 rounded-full border-2 border-white/30 group-hover:border-white/60 flex items-center justify-center transition-all group-hover:scale-110">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </div>
-                <span className="text-base font-semibold">{creating ? 'Creating...' : 'New board'}</span>
+                <span className="text-base font-semibold">{creating ? 'Creating...' : 'New collab board'}</span>
               </button>
 
               {filtered.map(board => (
@@ -515,7 +515,7 @@ export default function Dashboard({ logout }) {
               {!loading && filtered.length === 0 && search && (
                 <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-500 dark:text-white/40">
                   <SearchIcon />
-                  <p className="mt-3 text-sm">No boards found matching "{search}"</p>
+                  <p className="mt-3 text-sm">No collab boards found matching "{search}"</p>
                 </div>
               )}
             </div>

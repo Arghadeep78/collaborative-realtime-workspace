@@ -8,7 +8,7 @@ import Login from './Components/AuthPages/Login.jsx';
 import Dashboard from './Components/Dashboard/dashboard.jsx';
 import { BACKEND_URL } from './constants/apiConfig.js';
 import Profile from './Components/Profile/Profile.jsx';
-import WhiteboardRoom from './Components/Whiteboard/WhiteboardRoom.jsx';
+import BoardRoom from './Components/Board/BoardRoom.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 
 // Logout function
@@ -152,7 +152,7 @@ function App() {
           path="/board/:id"
           element={
             <ProtectedRoute>
-              <WhiteboardRoom />
+              <BoardRoom />
             </ProtectedRoute>
           }
         />
@@ -174,7 +174,7 @@ function App() {
           duration: 3000,
           className: 'dark:bg-[#1e293b] dark:text-[#f1f5f9] bg-white text-gray-900 border border-gray-200 dark:border-white/10 shadow-lg',
           style: {
-            fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+            fontFamily: '"Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
             fontSize: '14px',
             fontWeight: 500,
             padding: '10px 14px',
