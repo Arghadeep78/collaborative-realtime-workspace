@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { useYjsBoard } from '../../crdt/useYjsBoard.js';
+import { useBoardHistory } from '../../crdt/useBoardHistory.js';
 import { useBoardSync } from './useBoardSync.js';
 import { convertLegacyBoard } from './convertLegacyBoard.js';
 import { arrangeElements } from './layout.js';
@@ -47,6 +48,9 @@ export default function BoardRoom() {
     ensureFirstPage,
   } = useBoardSync(ydoc);
 
+  // Per-user undo/redo: only reverses work this client authored.
+  const { undo, redo, canUndo, canRedo } = useBoardHistory(ydoc);
+
   // ── Board metadata / role ───────────────────────────────────────────────
   const [board, setBoard] = useState(null);
   const [role, setRole] = useState('editor');
@@ -58,8 +62,11 @@ export default function BoardRoom() {
   const [activePageId, setActivePageId] = useState(null);
   const [activeTool, setActiveTool] = useState('pointer');
   const [layoutMode, setLayoutMode] = useState('freeform');
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [editingId, setEditingId] = useState(null);
+  const [groupDragOffset, setGroupDragOffset] = useState(null);
+  // Derive single selectedId for ConnectorLayer and editing compatibility
+  const selectedId = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 1024);
   const [presentationMode, setPresentationMode] = useState(false);
   const boardRoomRef = useRef(null);
@@ -263,7 +270,7 @@ export default function BoardRoom() {
       props: { ...def.props },
       createdBy: userData.email || userData.name || 'anon',
     });
-    setSelectedId(id);
+    setSelectedIds(new Set([id]));
     setEditingId(id); // drop straight into text entry
   }, [addElement, nextZ, userData.email, userData.name]);
 
@@ -302,7 +309,7 @@ export default function BoardRoom() {
         removeElement(e.id);
       }
     });
-    setSelectedId((s) => (s === id ? null : s));
+    setSelectedIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setEditingId((ed) => (ed === id ? null : ed));
   }, [removeElement, elements]);
 
@@ -372,7 +379,7 @@ export default function BoardRoom() {
         }
       });
       removeElement(id);
-      setSelectedId(newId);
+      setSelectedIds(new Set([newId]));
     }
     setGraduationTargetId(null);
   }, [elements, graduationTargetId, addElement, removeElement, updateElementProps, nextZ, userData.email, userData.name]);
@@ -382,11 +389,24 @@ export default function BoardRoom() {
     const onKey = (e) => {
       const tag = document.activeElement?.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
-      if (e.key === 'Escape') { setSelectedId(null); setEditingId(null); setActiveTool('pointer'); return; }
+      if (e.key === 'Escape') { setSelectedIds(new Set()); setEditingId(null); setActiveTool('pointer'); return; }
       if (typing) return;
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && editable) {
+      // Undo / redo — ⌘/Ctrl+Z, with Shift (or Ctrl+Y) for redo.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        if (!editable) return;
         e.preventDefault();
-        handleDelete(selectedId);
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
+        if (!editable) return;
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0 && editable) {
+        e.preventDefault();
+        [...selectedIds].forEach(id => handleDelete(id));
         return;
       }
       const map = { 1: 'pointer', 2: 'sticky', 3: 'kanban', 4: 'text', 5: 'connector', 6: 'poll', 7: 'iframe', 8: 'shape', l: 'laser', L: 'laser' };
@@ -394,13 +414,45 @@ export default function BoardRoom() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, editable, handleDelete]);
+  }, [selectedIds, editable, handleDelete, undo, redo]);
 
   // Switching slides clears transient selection/edit.
   const selectPage = useCallback((id) => {
     setActivePageId(id);
-    setSelectedId(null);
+    setSelectedIds(new Set());
     setEditingId(null);
+  }, []);
+
+  // ── Multi-select group drag ────────────────────────────────────────────────
+  const handleSelectGroup = useCallback((ids) => {
+    setSelectedIds(new Set(ids));
+  }, []);
+
+  const handleGroupDragPreview = useCallback((_anchorId, dx, dy) => {
+    setGroupDragOffset({ dx, dy });
+  }, []);
+
+  const handleGroupDragCommit = useCallback((anchorId, dx, dy) => {
+    const updates = [];
+    selectedIds.forEach(id => {
+      if (id === anchorId) return;
+      const el = elements[id];
+      if (!el) return;
+      updates.push({
+        id,
+        x: clamp(el.x + dx, 0, SLIDE_W - el.w),
+        y: clamp(el.y + dy, 0, SLIDE_H - el.h),
+      });
+    });
+    if (updates.length) bulkUpdate(updates);
+  }, [selectedIds, elements, bulkUpdate]);
+
+  const handleGroupDragEnd = useCallback(() => {
+    setGroupDragOffset(null);
+  }, []);
+
+  const handleGroupDragCancel = useCallback(() => {
+    setGroupDragOffset(null);
   }, []);
 
   // ── Title save ─────────────────────────────────────────────────────────────
@@ -454,6 +506,10 @@ export default function BoardRoom() {
         setEditTitle={setEditTitle}
         activeTool={activeTool}
         onSelectTool={setActiveTool}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
         layoutMode={layoutMode}
         onSelectLayout={applyLayout}
         peers={peers}
@@ -498,7 +554,19 @@ export default function BoardRoom() {
           onToolConsumed={() => setActiveTool('pointer')}
           selectedId={selectedId}
           editingId={editingId}
-          onSelect={setSelectedId}
+          selectedIds={selectedIds}
+          onSelect={(id) => setSelectedIds(id ? new Set([id]) : new Set())}
+          onToggleSelect={(id) => setSelectedIds((prev) => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id); else n.add(id);
+            return n;
+          })}
+          onSelectGroup={handleSelectGroup}
+          groupDragOffset={groupDragOffset}
+          onGroupDragPreview={handleGroupDragPreview}
+          onGroupDragCommit={handleGroupDragCommit}
+          onGroupDragEnd={handleGroupDragEnd}
+          onGroupDragCancel={handleGroupDragCancel}
           onStartEdit={setEditingId}
           onStopEdit={() => setEditingId(null)}
           onUpdate={updateElement}

@@ -18,6 +18,10 @@ const LIST_COLORS = {
 };
 
 const LABEL_COLORS = Object.keys(LIST_COLORS);
+
+// Pastel bg → label color (for inline color picker swatches)
+const BG_TO_LABEL = Object.fromEntries(Object.entries(LIST_COLORS).map(([k, v]) => [v, k]));
+const PICKER_COLORS = [null, ...Object.values(LIST_COLORS)];
 const AV_COLORS = ['#0b69ff', '#0a9d62', '#f5821f', '#7c4dff', '#e0457b', '#0bb4c4'];
 const avatarColor = (s = '') => AV_COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
 const initialOf = (s = '') => (s.trim()[0] || '?').toUpperCase();
@@ -331,7 +335,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
   }, [editing]);
 
   // ── mutations ────────────────────────────────────────────────────────────
-  const setListColor = (color) => onEditProps({ labels: [{ color, text: '' }] });
+  const setListColor = (color) => onEditProps({ labels: color ? [{ color, text: '' }] : [] });
   
   const addSubcard = () => {
     const newId = makeId('sub');
@@ -379,7 +383,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               onChange={(e) => onEditProps({ title: e.target.value })}
               onPointerDown={stop}
               placeholder="List title..."
-              className="flex-1 bg-white/50 focus:bg-white rounded px-2 py-1 outline-none text-[28px] font-bold text-[#172b4d] placeholder:text-[#172b4d]/50 transition-colors"
+              className="flex-1 min-w-0 bg-white/50 focus:bg-white rounded px-2 py-1 outline-none text-[28px] font-bold text-[#172b4d] placeholder:text-[#172b4d]/50 transition-colors"
             />
           ) : (
             <div className="font-bold text-[28px] text-[#172b4d] px-2">{props.title || 'Untitled'}</div>
@@ -399,27 +403,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
             }} className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors">
               <ArrowRightLeft className="w-4 h-4 text-[#172b4d]" />
             </button>
-            <div className="relative" ref={colorPickerRef}>
-              <button onPointerDown={stop} onClick={() => setShowListColorPicker(!showListColorPicker)} className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors">
-                <MoreHorizontal className="w-5 h-5 text-[#172b4d]" />
-              </button>
-              {showListColorPicker && (
-                 <div className="absolute top-full right-0 mt-1 bg-white dark:bg-[#282e33] border border-slate-200 dark:border-slate-700 shadow-2xl p-4 rounded-xl flex flex-col gap-3 z-50 w-64" onPointerDown={stop}>
-                   <div className="flex items-center justify-between mb-1">
-                     <span className="text-[17px] font-bold text-[#172b4d] dark:text-[#b6c2cf]">Change list color</span>
-                     <button onClick={() => setShowListColorPicker(false)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded transition"><X className="w-4 h-4 text-slate-500" /></button>
-                   </div>
-                   <div className="grid grid-cols-4 gap-2">
-                     {LABEL_COLORS.map(c => (
-                       <button key={c} onClick={() => { setListColor(c); setShowListColorPicker(false); }} className={`w-full aspect-[4/3] rounded-lg shadow-sm ${labelColor === c ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-[#282e33]' : ''}`} style={{ backgroundColor: c }} />
-                     ))}
-                   </div>
-                   <button onClick={() => { setListColor(null); setShowListColorPicker(false); }} className="mt-2 w-full border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 text-[#172b4d] dark:text-[#b6c2cf] text-[17px] font-semibold py-2 rounded-lg flex items-center justify-center gap-2 transition">
-                      <X className="w-5 h-5" /> Remove color
-                   </button>
-                 </div>
-              )}
-            </div>
+            {/* removed redundant three-dot menu (MoreHorizontal) per UX request */}
           </div>
         </div>
 
@@ -606,6 +590,23 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
 
         {/* ── Footer ──────────────────────────────────────────────────────── */}
         <div className="mt-1 px-1 shrink-0">
+          {editing && (
+            <div className="flex items-center gap-2 px-2 py-2 border-t border-black/10" onPointerDown={stop}>
+              <span className="text-[15px] font-medium text-[#172b4d]/60 mr-1">Color:</span>
+              {PICKER_COLORS.map((pastel) => (
+                <button
+                  key={pastel || 'default'}
+                  onClick={() => setListColor(pastel ? BG_TO_LABEL[pastel] : null)}
+                  onPointerDown={stop}
+                  className={`w-6 h-6 rounded-full border transition-all ${bgColor === pastel ? 'ring-2 ring-blue-500 ring-offset-2 border-transparent' : 'border-slate-300 hover:scale-110'}`}
+                  style={{ backgroundColor: pastel || 'transparent' }}
+                  title={pastel ? 'Color' : 'Default'}
+                >
+                  {!pastel && <div className="w-full h-full rounded-full bg-[#f1f2f4] border border-slate-300" />}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onPointerDown={stop}
             onClick={addSubcard}

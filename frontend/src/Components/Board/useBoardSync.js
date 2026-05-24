@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
-import { getBoardTypes, makeId } from './boardConstants.js';
+import { getBoardTypes, makeId, LOCAL_ORIGIN, TRANSIENT_ORIGIN } from './boardConstants.js';
 
-// Transaction origin tag for local edits. We don't *need* it for correctness
-// (values are plain JSON, observed shallowly), but tagging keeps intent legible
-// and lets future code distinguish local vs remote transactions if needed.
-const LOCAL = 'board-local';
+// Transaction origin tag for local edits. Shared with the per-user UndoManager
+// so it can track only the transactions this client authored.
+const LOCAL = LOCAL_ORIGIN;
 
 /**
  * Bridges the new document schema (`pages` Y.Array + `elements` Y.Map) to React
@@ -147,7 +146,9 @@ export function useBoardSync(ydoc) {
       if (v.pageId === prev.pageId && (v.z ?? 0) > maxZ) maxZ = v.z;
     });
     if ((prev.z ?? 0) >= maxZ) return;
-    doc.transact(() => yElements.set(id, { ...prev, z: maxZ + 1 }), LOCAL);
+    // Transient origin: bring-to-front rides on selection, so keep it off the
+    // undo stack while still syncing the new z-order to peers.
+    doc.transact(() => yElements.set(id, { ...prev, z: maxZ + 1 }), TRANSIENT_ORIGIN);
   }, []);
 
   // ── Page mutations ─────────────────────────────────────────────────────────

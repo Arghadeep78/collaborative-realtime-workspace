@@ -29,20 +29,20 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
       <button
         onClick={() => setOpen((o) => !o)}
         title="Board background"
-        className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border transition
+        className={`relative overflow-hidden inline-flex items-center justify-center w-9 h-9 rounded-xl border transition-colors duration-200
           ${open
-            ? 'border-violet-400/60 bg-violet-500/15 text-violet-600 dark:text-violet-300 ring-1 ring-violet-400/40'
-            : 'border-slate-900/10 dark:border-white/10 hover:bg-white dark:hover:bg-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+            ? 'border-lime-400/60 bg-lime-100 text-lime-800 shadow-sm dark:border-lime-500/40 dark:bg-lime-950/30 dark:text-lime-200'
+            : 'border-slate-900/10 bg-lime-50 text-lime-700 shadow-sm hover:border-lime-300 hover:bg-lime-100 hover:text-lime-800 dark:border-white/10 dark:bg-lime-950/20 dark:text-lime-300 dark:hover:border-lime-500/40 dark:hover:bg-lime-950/30 dark:hover:text-lime-200'
           }`}
       >
-        {/* Paint-palette icon — 3 colour dots + handle, communicates "theme/style" */}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {/* Paint-palette icon — subtle, professional cue for background settings */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8z"
-            stroke="currentColor" strokeWidth="1.8" className="text-slate-500 dark:text-slate-400" />
-          <circle cx="6.5"  cy="11.5" r="1.5" fill="#f87171" stroke="none" />
-          <circle cx="9.5"  cy="7.5"  r="1.5" fill="#fb923c" stroke="none" />
-          <circle cx="14.5" cy="7.5"  r="1.5" fill="#34d399" stroke="none" />
-          <circle cx="17.5" cy="11.5" r="1.5" fill="#60a5fa" stroke="none" />
+            stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="7" cy="11" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="10" cy="7.5" r="1.2" fill="currentColor" stroke="none" opacity="0.8" />
+          <circle cx="14.5" cy="7.5" r="1.2" fill="currentColor" stroke="none" opacity="0.6" />
+          <circle cx="17.5" cy="11" r="1.2" fill="currentColor" stroke="none" opacity="0.8" />
         </svg>
       </button>
 
@@ -206,6 +206,10 @@ export default function TopUtilityBar({
   setEditTitle,
   activeTool,
   onSelectTool,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   peers,
   userData,
   showUserMenu,
@@ -277,6 +281,42 @@ export default function TopUtilityBar({
             );
           })}
         </div>
+
+        {/* Undo / redo — reverses only your own changes */}
+        {editable && (
+          <div className={`flex items-center gap-1 rounded-2xl p-1.5 ${UI.surface}`}>
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo your last change (⌘Z)"
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+                canUndo
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+                  : 'text-slate-400 opacity-35 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 14 4 9l5-5" />
+                <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+              </svg>
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo (⌘⇧Z)"
+              className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+                canRedo
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+                  : 'text-slate-400 opacity-35 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 14l5-5-5-5" />
+                <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Background picker */}
         <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />

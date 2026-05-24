@@ -53,7 +53,7 @@ function getSlideBackground(bg, isDark) {
       backgroundImage: bg.value ? `url(${bg.value})` : undefined,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      backgroundColor: defaultBg, // Keep defaultBg for images to avoid weird tinting behind transparent images unless desired
+      backgroundColor: defaultBg,
     };
   }
   return { backgroundColor: bgColor, backgroundImage: `radial-gradient(circle, ${gridColor} 1px, transparent 1px)`, backgroundSize: '32px 32px' };
@@ -65,6 +65,9 @@ function getSlideBackground(bg, isDark) {
  * slide units. Also handles empty-canvas clicks (deselect / tool-spawn /
  * connector cancel), draws connector edges, and broadcasts this user's cursor in
  * slide coordinates for the PresenceLayer.
+ *
+ * Pointer tool drag on empty canvas draws a marquee selection rectangle; on
+ * pointer-up all overlapping elements are added to selectedIds.
  */
 export default function SlideCanvas({
   elements,
@@ -74,8 +77,11 @@ export default function SlideCanvas({
   onSelectTool,
   onToolConsumed,
   selectedId,
+  selectedIds,
   editingId,
   onSelect,
+  onToggleSelect,
+  onSelectGroup,
   onStartEdit,
   onStopEdit,
   onUpdate,
@@ -86,6 +92,12 @@ export default function SlideCanvas({
   peers,
   onCursor,
   onCursorLeave,
+  // Multi-select group drag
+  groupDragOffset,
+  onGroupDragPreview,
+  onGroupDragCommit,
+  onGroupDragEnd,
+  onGroupDragCancel,
   // Connector link-mode
   connectFromId,
   onConnectClick,
@@ -126,6 +138,10 @@ export default function SlideCanvas({
   connectRef.current = { on: connectMode, from: connectFromId };
   activeToolRef.current = activeTool;
 
+  // Marquee selection state (slide coordinates)
+  const [marquee, setMarquee] = useState(null); // { start: {x,y}, end: {x,y} }
+  const marqueeCleanup = useRef(null);
+
   // Clear laser dot when tool changes away
   useEffect(() => { if (!laserMode) setLaserPos(null); }, [laserMode]);
 
@@ -135,7 +151,6 @@ export default function SlideCanvas({
     if (!el) return;
     const recompute = () => {
       const { clientWidth: cw, clientHeight: ch } = el;
-      // Scale to fit height; if slide is wider than container it becomes scrollable.
       const heightFit = (ch - FIT_PADDING) / SLIDE_H;
       const widthFit = (cw - FIT_PADDING) / SLIDE_W;
       const next = clamp(Math.min(heightFit, widthFit), 0.35, 2);
@@ -158,6 +173,10 @@ export default function SlideCanvas({
       pageConnectors: all.filter((e) => e.type === 'connector'),
     };
   }, [elements, activePageId]);
+
+  // Keep a ref so the marquee pointerup closure sees the latest elements
+  const pageElementsRef = useRef(pageElements);
+  pageElementsRef.current = pageElements;
 
   // Convert a screen point to slide coordinates via the slide's live rect.
   const toSlide = useCallback((clientX, clientY) => {
@@ -189,15 +208,29 @@ export default function SlideCanvas({
   );
 
   useEffect(() => () => cursorRaf.current && cancelAnimationFrame(cursorRaf.current), []);
-  // Clear the rubber-band when we leave link-mode or finish a link.
   useEffect(() => { if (!connectMode || !connectFromId) setLinkPoint(null); }, [connectMode, connectFromId]);
 
-  // Empty-canvas pointer: cancel an in-progress link, spawn the active tool's
-  // element, or clear selection.
-  const handleSlidePointerDown = (e) => {
+  // Cancel active marquee when switching away from pointer tool
+  useEffect(() => {
+    if (activeTool !== 'pointer' && marqueeCleanup.current) {
+      marqueeCleanup.current();
+      marqueeCleanup.current = null;
+      setMarquee(null);
+    }
+  }, [activeTool]);
+
+  // Unified pointer-down handler attached to the outer container so drags can
+  // start from the grey area outside the slide, not just on the white surface.
+  // Element clicks never reach here because BoardElement calls stopPropagation.
+  const handleContainerPointerDown = (e) => {
+    if (e.button !== 0) return;
+
+    const pt = toSlide(e.clientX, e.clientY);
+    const isOnSlide = pt && pt.x >= 0 && pt.x <= SLIDE_W && pt.y >= 0 && pt.y <= SLIDE_H;
+
     if (connectMode) {
-      onConnectCancel();
-      onSelect(null);
+      // Cancel connect from anywhere; only meaningful if click was on slide
+      if (isOnSlide) { onConnectCancel(); onSelect(null); }
       return;
     }
     if (!editable) {
@@ -205,14 +238,61 @@ export default function SlideCanvas({
       onStopEdit();
       return;
     }
-    const pt = toSlide(e.clientX, e.clientY);
-    if (activeTool && SPAWN_TOOLS.includes(activeTool) && pt) {
+
+    // Spawn tools only place elements on the slide surface
+    if (activeTool && SPAWN_TOOLS.includes(activeTool) && isOnSlide && pt) {
       onCreate(activeTool, pt.x, pt.y);
       onToolConsumed();
-    } else {
-      onSelect(null);
-      onStopEdit();
+      return;
     }
+
+    // Pointer tool: start a marquee drag from anywhere in the container
+    if ((!activeTool || activeTool === 'pointer') && pt) {
+      onStopEdit();
+      let end = { ...pt };
+      setMarquee({ start: { ...pt }, end });
+
+      const onMove = (ev) => {
+        const movePt = toSlide(ev.clientX, ev.clientY);
+        if (!movePt) return;
+        end = movePt;
+        setMarquee((m) => (m ? { start: m.start, end: movePt } : null));
+      };
+
+      const onUp = () => {
+        cleanup();
+        const w = Math.abs(end.x - pt.x);
+        const h = Math.abs(end.y - pt.y);
+        setMarquee(null);
+        if (w < 5 && h < 5) {
+          // Tiny drag = click → deselect all
+          onSelect(null);
+        } else {
+          const left  = Math.min(pt.x, end.x);
+          const top   = Math.min(pt.y, end.y);
+          const right = Math.max(pt.x, end.x);
+          const bot   = Math.max(pt.y, end.y);
+          const ids = pageElementsRef.current
+            .filter((el) => el.x < right && el.x + el.w > left && el.y < bot && el.y + el.h > top)
+            .map((el) => el.id);
+          onSelectGroup(ids);
+        }
+      };
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        marqueeCleanup.current = null;
+      };
+
+      marqueeCleanup.current = cleanup;
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      return;
+    }
+
+    onSelect(null);
+    onStopEdit();
   };
 
   const creating = editable && SPAWN_TOOLS.includes(activeTool);
@@ -232,13 +312,11 @@ export default function SlideCanvas({
     <div
       ref={containerRef}
       className="relative flex-1 h-full overflow-auto"
-      style={{ scrollbarGutter: 'stable' }}
+      style={{ scrollbarGutter: 'stable', cursor: creating || connectMode ? 'crosshair' : undefined }}
+      onPointerDown={handleContainerPointerDown}
       onPointerMove={handlePointerMove}
       onPointerLeave={onCursorLeave}
     >
-      {/* Centering wrapper: min-width/min-height ensure the scrollable area is
-          at least as big as the slide so the container always scrolls correctly.
-          When the slide fits in the viewport it stays centred; when wider it scrolls. */}
       <div
         style={{
           display: 'flex',
@@ -251,7 +329,6 @@ export default function SlideCanvas({
       <div className="relative shrink-0" style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }}>
       <div
         ref={slideRef}
-        onPointerDown={handleSlidePointerDown}
         onDoubleClick={handleSlideDoubleClick}
         className="absolute top-0 left-0 rounded-2xl shadow-[0_30px_80px_rgba(15,23,42,0.25)] ring-1 ring-black/5"
         style={{
@@ -282,10 +359,11 @@ export default function SlideCanvas({
             key={el.id}
             element={el}
             getScale={getScale}
-            selected={selectedId === el.id}
+            selectedIds={selectedIds}
             editing={editingId === el.id}
             editable={editable}
             onSelect={onSelect}
+            onToggleSelect={onToggleSelect}
             onStartEdit={onStartEdit}
             onUpdate={onUpdate}
             onUpdateProps={onUpdateProps}
@@ -298,6 +376,10 @@ export default function SlideCanvas({
             graduationTarget={graduationTargetId === el.id}
             onDragMove={onDragMove}
             onDragEnd={onDragEnd}
+            groupDragOffset={groupDragOffset}
+            onGroupDragPreview={onGroupDragPreview}
+            onGroupDragCommit={onGroupDragCommit}
+            onGroupDragEnd={onGroupDragEnd}
             votes={votes}
             bumpVote={bumpVote}
             castPollVote={castPollVote}
@@ -324,6 +406,24 @@ export default function SlideCanvas({
             }}
           />
         )}
+
+        {/* Marquee selection rectangle — clamped to slide bounds since drag
+            may have started in the grey area outside the slide surface */}
+        {marquee && (() => {
+          const left  = clamp(Math.min(marquee.start.x, marquee.end.x), 0, SLIDE_W);
+          const top   = clamp(Math.min(marquee.start.y, marquee.end.y), 0, SLIDE_H);
+          const right = clamp(Math.max(marquee.start.x, marquee.end.x), 0, SLIDE_W);
+          const bot   = clamp(Math.max(marquee.start.y, marquee.end.y), 0, SLIDE_H);
+          const w = right - left;
+          const h = bot - top;
+          if (w < 1 || h < 1) return null;
+          return (
+            <div
+              className="absolute pointer-events-none rounded border border-blue-500 bg-blue-400/10"
+              style={{ left, top, width: w, height: h, zIndex: 9500 }}
+            />
+          );
+        })()}
       </div>
       </div>
       </div>

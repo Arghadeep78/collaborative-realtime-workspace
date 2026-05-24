@@ -116,6 +116,16 @@ export const getBoardTypes = (ydoc) => ({
 // Re-exported so call sites don't each import yjs just for an origin tag.
 export const Yjs = Y;
 
+// Transaction origin tag for this client's own edits. The per-user UndoManager
+// tracks only this origin, so each browser can undo solely the work it authored
+// (remote peers' transactions carry the provider's origin and are left alone).
+export const LOCAL_ORIGIN = 'board-local';
+
+// Origin for incidental local writes that should still sync to peers but must
+// NOT land on the undo stack — e.g. the z-order bump that happens just from
+// selecting an element. The UndoManager doesn't track this origin.
+export const TRANSIENT_ORIGIN = 'board-transient';
+
 // ── Tailwind tokens for our own chrome (glassy surfaces, buttons, inputs) ────
 export const UI = {
   surface:

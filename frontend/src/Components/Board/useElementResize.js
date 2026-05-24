@@ -50,7 +50,11 @@ export function useElementResize({ getScale, onPreview, onCommit }) {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
         const s = ref.current;
-        if (s) onCommit(s.latest.w, s.latest.h);
+        // Skip the final write when nothing changed, so a click on the handle
+        // doesn't create a no-op (and undoable) Yjs transaction.
+        if (s && (s.latest.w !== s.origW || s.latest.h !== s.origH)) {
+          onCommit(s.latest.w, s.latest.h);
+        }
         ref.current = null;
         setResizing(false);
       };

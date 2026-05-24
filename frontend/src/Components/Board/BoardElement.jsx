@@ -26,14 +26,24 @@ const RENDERERS = {
  * delete affordance. During a gesture it renders from local `live` geometry for
  * smooth motion while throttled writes flow to Yjs underneath; once the gesture
  * ends, `live` clears and the element renders straight from synced state.
+ *
+ * Multi-select: when selectedIds contains >1 element and this element is one of
+ * them, dragging it mirrors the displacement to all other selected elements via
+ * onGroupDragPreview/onGroupDragCommit. Non-dragged group members show the
+ * offset as a positional shift (groupDragOffset applied to left/top).
  */
 export default function BoardElement({
   element,
   getScale,
-  selected,
+  selectedIds,
+  groupDragOffset,
+  onGroupDragPreview,
+  onGroupDragCommit,
+  onGroupDragEnd,
   editing,
   editable,
   onSelect,
+  onToggleSelect,
   onStartEdit,
   onUpdate,
   onUpdateProps,
@@ -58,14 +68,18 @@ export default function BoardElement({
   members,
   activeTool,
 }) {
-  const [live, setLive] = useState(null); // { x?, y?, w?, h? } gesture override
-  const lastClickRef = useRef({ time: 0, x: 0, y: 0 }); // track clicks for double-click detection
+  const selected       = selectedIds?.has(element.id) ?? false;
+  const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
 
-  // Keep elements inside the slide so content never flows off the page.
+  const [live, setLive] = useState(null); // { x?, y?, w?, h? } gesture override
+  const lastClickRef   = useRef({ time: 0, x: 0, y: 0 });
+  const isGroupAnchor  = useRef(false);   // true when this element is driving the group drag
+  const dragOriginRef  = useRef(null);    // {x,y} of this element at drag start
+
   const clampX = (x) => clamp(x, 0, Math.max(0, SLIDE_W - element.w));
   const clampY = (y) => clamp(y, 0, Math.max(0, SLIDE_H - element.h));
-  const fitW = (w) => Math.min(w, SLIDE_W - element.x);
-  const fitH = (h) => Math.min(h, SLIDE_H - element.y);
+  const fitW   = (w) => Math.min(w, SLIDE_W - element.x);
+  const fitH   = (h) => Math.min(h, SLIDE_H - element.y);
 
   const { dragging, startDrag } = useElementDrag({
     getScale,
@@ -75,9 +89,38 @@ export default function BoardElement({
       const cy = clampY(y);
       setLive((p) => ({ ...p, x: cx, y: cy }));
       onDragMove?.(element.id, cx, cy);
+      if (isGroupAnchor.current && dragOriginRef.current) {
+        onGroupDragPreview?.(
+          element.id,
+          cx - dragOriginRef.current.x,
+          cy - dragOriginRef.current.y,
+        );
+      }
     },
-    onCommit: (x, y) => onUpdate(element.id, { x: clampX(x), y: clampY(y) }),
-    onEnd: (x, y) => onDragEnd?.(element.id, clampX(x), clampY(y)),
+    onCommit: (x, y) => {
+      onUpdate(element.id, { x: clampX(x), y: clampY(y) });
+    },
+    onEnd: (x, y) => {
+      const cx = clampX(x);
+      const cy = clampY(y);
+      if (isGroupAnchor.current && dragOriginRef.current) {
+        const dx = cx - dragOriginRef.current.x;
+        const dy = cy - dragOriginRef.current.y;
+        const actuallyMoved = Math.abs(dx) > 2 || Math.abs(dy) > 2;
+        if (actuallyMoved) {
+          onGroupDragCommit?.(element.id, dx, dy);
+          onGroupDragEnd?.();
+        } else {
+          // Tiny movement = click on group member → collapse to single selection
+          onGroupDragEnd?.();
+          onSelect(element.id);
+          onBringToFront(element.id);
+        }
+      }
+      dragOriginRef.current = null;
+      isGroupAnchor.current = false;
+      onDragEnd?.(element.id, cx, cy);
+    },
   });
 
   const { resizing, startResize } = useElementResize({
@@ -86,14 +129,17 @@ export default function BoardElement({
     onCommit: (w, h) => onUpdate(element.id, { w: fitW(w), h: fitH(h) }),
   });
 
-  // Once both gestures settle, drop the local override (synced value now matches).
   useEffect(() => {
     if (!dragging && !resizing) setLive(null);
   }, [dragging, resizing]);
 
+  // Non-anchor group members show their offset via shifted left/top.
+  const groupShiftX = (isMultiSelected && !dragging && groupDragOffset) ? groupDragOffset.dx : 0;
+  const groupShiftY = (isMultiSelected && !dragging && groupDragOffset) ? groupDragOffset.dy : 0;
+
   const geom = {
-    x: live?.x ?? element.x,
-    y: live?.y ?? element.y,
+    x: (live?.x ?? element.x) + groupShiftX,
+    y: (live?.y ?? element.y) + groupShiftY,
     w: live?.w ?? element.w,
     h: live?.h ?? element.h,
   };
@@ -102,26 +148,38 @@ export default function BoardElement({
   if (!Renderer) return null;
 
   const handleBodyPointerDown = (e) => {
-    // Stop the slide background from treating this as an empty-canvas click
-    // (which would deselect or spawn a new element).
     e.stopPropagation();
-    // Connector tool: clicking an element picks it as a link endpoint instead
-    // of selecting/dragging.
+
     if (connectMode) {
       onConnectClick(element.id);
       return;
     }
-    onSelect(element.id);
-    onBringToFront(element.id);
 
-    // Prevent drag from starting on the first click of a double-click
-    // (300ms threshold, ~20px distance threshold)
+    // Shift+click: toggle this element in/out of the selection
+    if (e.shiftKey && editable) {
+      onToggleSelect?.(element.id);
+      return;
+    }
+
+    // If already in a multi-selection, defer selection collapse to onEnd
+    // so a drag moves all members without collapsing the selection first.
+    if (isMultiSelected) {
+      isGroupAnchor.current = true;
+      dragOriginRef.current = { x: element.x, y: element.y };
+    } else {
+      isGroupAnchor.current = false;
+      dragOriginRef.current = null;
+      onSelect(element.id);
+      onBringToFront(element.id);
+    }
+
     const now = performance.now();
     const lastClick = lastClickRef.current;
     const timeSinceLastClick = now - lastClick.time;
-    const distSinceLastClick = Math.sqrt(Math.pow(e.clientX - lastClick.x, 2) + Math.pow(e.clientY - lastClick.y, 2));
+    const distSinceLastClick = Math.sqrt(
+      Math.pow(e.clientX - lastClick.x, 2) + Math.pow(e.clientY - lastClick.y, 2),
+    );
     const isDoubleClickCandidate = timeSinceLastClick < 300 && distSinceLastClick < 20;
-
     lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
 
     if (editable && !editing && !isDoubleClickCandidate) startDrag(e, element);
@@ -145,9 +203,17 @@ export default function BoardElement({
         if (editable && !connectMode) onStartEdit(element.id);
       }}
     >
-      {/* Selection ring */}
+      {/* Selection ring — solid blue for single, dashed for multi-member */}
       {selected && !connectMode && (
-        <div className="absolute -inset-0.75 rounded-[9px] ring-2 ring-blue-500/80 pointer-events-none" />
+        <div
+          className="absolute -inset-0.75 rounded-[9px] pointer-events-none"
+          style={{
+            outline: isMultiSelected
+              ? '2px dashed rgba(59,130,246,0.9)'
+              : '2px solid rgba(59,130,246,0.8)',
+            outlineOffset: '-1px',
+          }}
+        />
       )}
       {/* Connector affordance: highlight the chosen source / hint targets */}
       {connectMode && (

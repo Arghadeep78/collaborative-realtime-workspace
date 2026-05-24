@@ -63,7 +63,12 @@ export function useElementDrag({ getScale, onPreview, onCommit, onEnd, snapStep 
       window.removeEventListener('pointerup', onUp);
       const s = ref.current;
       if (s) {
-        cb.current.onCommit(s.latest.x, s.latest.y); // guaranteed final write
+        // Only write if the element actually moved — a plain click (pointer
+        // down/up with no motion) must not push a no-op Yjs transaction, or it
+        // would show up as an undoable step.
+        if (s.latest.x !== s.origX || s.latest.y !== s.origY) {
+          cb.current.onCommit(s.latest.x, s.latest.y); // guaranteed final write
+        }
         cb.current.onEnd?.(s.latest.x, s.latest.y);
       }
       ref.current = null;
