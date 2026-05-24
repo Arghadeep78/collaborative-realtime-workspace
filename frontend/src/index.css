@@ -4,6 +4,16 @@
 @variant dark (&:where(.dark, .dark *));
 
 /*
+ * App typeface. Plus Jakarta Sans is loaded via <link> in index.html; here we
+ * point Tailwind's `--font-sans` token at it so every `font-sans` element —
+ * including the whole board, which only inherits the body font — uses it.
+ */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+/*
  * Lightweight enter animations.
  *
  * The components previously used `animate-in fade-in zoom-in-95 ...` style

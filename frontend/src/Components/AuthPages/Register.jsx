@@ -46,7 +46,11 @@ const Register = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Google login failed');
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || {}));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || {}),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Google sign-in failed. Please try again.');
@@ -138,7 +142,11 @@ const Register = () => {
 
       // Save token and user profile data
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || { name: formData.name, email: formData.email }));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || { name: formData.name, email: formData.email }),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
   
       navigate('/dashboard');
     } catch (err) {
@@ -154,7 +162,7 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#212121] flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
       {/* Theme Toggle */}
       <button 
         onClick={toggleTheme}

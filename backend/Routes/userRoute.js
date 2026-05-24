@@ -9,7 +9,7 @@ import {
 } from "../Controllers/userController.js";
 import express from "express";
 import authMiddleware from "../middleware/AuthenticationMIddleware.js";
-import { imageUpload } from "../Controllers/imageUpload.js";
+import { imageUpload, mediaUpload } from "../Controllers/imageUpload.js";
 import multer from "multer";
 const upload = multer({ dest: "uploads/" }); // Temporary storage for uploaded files
 const router = express.Router();
@@ -26,6 +26,13 @@ router.post(
   authMiddleware,
   upload.single("image"),
   imageUpload
+);
+
+router.post(
+  "/media/upload",
+  authMiddleware,
+  upload.single("file"),
+  mediaUpload
 );
 
 export default router;

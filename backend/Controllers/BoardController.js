@@ -32,7 +32,11 @@ export const getAllUserBoards = async (req, res) => {
       ]
     }).select('-yjsState').sort({ updatedAt: -1 }).lean();
 
-    return res.status(200).json(boards);
+    const result = boards.map(b => ({
+      ...b,
+      isFavorited: Array.isArray(b.favoritedBy) && b.favoritedBy.includes(email),
+    }));
+    return res.status(200).json(result);
   } catch (err) {
     console.error('getAllUserBoards error:', err);
     return res.status(500).json({ error: 'Failed to fetch boards' });
@@ -129,6 +133,26 @@ export const updateBoardTitle = async (req, res) => {
   } catch (err) {
     console.error('updateBoardTitle error:', err);
     return res.status(500).json({ error: 'Failed to update title' });
+  }
+};
+
+// ── toggleFavorite ────────────────────────────────────────────────────────────
+// No body needed — toggles the calling user's favorite status on the board.
+export const toggleFavorite = async (req, res) => {
+  try {
+    const email = req.email;
+    const board = await Whiteboard.findOne({ id: req.params.id });
+    if (!board) return res.status(404).json({ error: 'Board not found' });
+
+    const idx = board.favoritedBy.indexOf(email);
+    if (idx === -1) board.favoritedBy.push(email);
+    else board.favoritedBy.splice(idx, 1);
+
+    await board.save();
+    return res.status(200).json({ isFavorited: idx === -1 });
+  } catch (err) {
+    console.error('toggleFavorite error:', err);
+    return res.status(500).json({ error: 'Failed to toggle favorite' });
   }
 };
 

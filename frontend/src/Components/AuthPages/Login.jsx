@@ -53,7 +53,11 @@ const Login = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Google login failed');
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || {}));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || {}),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Google sign-in failed. Please try again.');
@@ -131,7 +135,11 @@ const Login = () => {
   
       // Save token and user profile data
       localStorage.setItem('token', data.token);
-      localStorage.setItem('userData', JSON.stringify(data.user || { email: formData.email }));
+      localStorage.setItem('userData', JSON.stringify({
+        ...(data.user || { email: formData.email }),
+        profilePic: data.user?.profilePic ?? data.user?.profilePicture ?? '',
+        profilePicture: data.user?.profilePicture ?? data.user?.profilePic ?? '',
+      }));
   
       navigate('/dashboard');
     } catch (err) {
@@ -147,11 +155,11 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#212121] flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
       {/* Theme Toggle */}
-      <button 
+      <button
         onClick={toggleTheme}
-        className="absolute top-6 right-6 p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-full transition-colors"
+        className="absolute top-6 right-6 p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-full transition-colors cursor-pointer"
         title="Toggle theme"
       >
         {isDark ? <SunIcon /> : <MoonIcon />}
@@ -175,7 +183,7 @@ const Login = () => {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleLoading || !gsiReady}
-            className="w-full flex items-center justify-center gap-3 py-2.5 bg-white border border-gray-200 dark:border-transparent dark:bg-white hover:bg-gray-50 dark:hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed text-gray-800 font-medium text-sm rounded-xl transition-colors mb-4"
+            className="w-full flex items-center justify-center gap-3 py-2.5 bg-white border border-gray-200 dark:border-transparent dark:bg-white hover:bg-gray-50 dark:hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-gray-800 font-medium text-sm rounded-xl transition-colors mb-4"
           >
             {googleLoading ? (
               <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -227,7 +235,7 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -243,7 +251,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium text-sm rounded-xl transition-all mt-1 flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium text-sm rounded-xl transition-all mt-1 flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
             >
               {loading && <div className="w-4 h-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />}
               {loading ? 'Signing in…' : 'Sign in'}
@@ -252,7 +260,7 @@ const Login = () => {
 
           <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-5">
             No account?{' '}
-            <button type="button" onClick={navigateToRegister} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium transition-colors">Create one</button>
+            <button type="button" onClick={navigateToRegister} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium transition-colors cursor-pointer">Create one</button>
           </p>
         </div>
       </div>

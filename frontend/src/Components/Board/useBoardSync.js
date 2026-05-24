@@ -1,0 +1,302 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Y from 'yjs';
+import { getBoardTypes, makeId, LOCAL_ORIGIN, TRANSIENT_ORIGIN } from './boardConstants.js';
+
+// Transaction origin tag for local edits. Shared with the per-user UndoManager
+// so it can track only the transactions this client authored.
+const LOCAL = LOCAL_ORIGIN;
+
+/**
+ * Bridges the new document schema (`pages` Y.Array + `elements` Y.Map) to React
+ * state, and exposes mutation helpers that write plain-JSON values back to Yjs.
+ *
+ * This replaces the old tldraw store ↔ Yjs bridge with something much smaller:
+ * element values are plain objects (no nested Yjs types), so a shallow observe
+ * on each shared type is enough — any add / delete / value-replace re-syncs.
+ *
+ * @param {import('yjs').Doc|null} ydoc
+ * @returns pages, elements, and CRUD helpers
+ */
+export function useBoardSync(ydoc) {
+  const [pages, setPages] = useState([]);
+  const [elements, setElements] = useState({});
+  const [votes, setVotes] = useState({});
+  const ydocRef = useRef(ydoc);
+  ydocRef.current = ydoc;
+
+  useEffect(() => {
+    if (!ydoc) return;
+    const { yPages, yElements, yVotes } = getBoardTypes(ydoc);
+
+    const syncPages = () => {
+      const arr = yPages.toArray().map((p) => ({ ...p }));
+      arr.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      setPages(arr);
+    };
+    const syncElements = () => setElements(yElements.toJSON());
+    const syncVotes = () => setVotes(yVotes.toJSON());
+
+    syncPages();
+    syncElements();
+    syncVotes();
+    yPages.observe(syncPages);
+    yElements.observe(syncElements);
+    yVotes.observeDeep(syncVotes); // Use observeDeep so nested Map changes trigger re-sync!
+
+    return () => {
+      yPages.unobserve(syncPages);
+      yElements.unobserve(syncElements);
+      yVotes.unobserveDeep(syncVotes);
+    };
+  }, [ydoc]);
+
+  const castPollVote = useCallback((pollId, optionId, user) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yVotes = doc.getMap('votes');
+    doc.transact(() => {
+      let yPoll = yVotes.get(pollId);
+      if (!(yPoll instanceof Y.Map)) {
+        // Server-side history compaction flattens nested Y.Maps to plain
+        // objects on cold load. Rehydrate into a Y.Map, carrying any existing
+        // votes across, so a vote after compaction doesn't wipe the others.
+        const prev = yPoll && typeof yPoll === 'object' ? yPoll : null;
+        yPoll = new Y.Map();
+        if (prev) Object.entries(prev).forEach(([k, v]) => yPoll.set(k, v));
+        yVotes.set(pollId, yPoll);
+      }
+      yPoll.set(user.email, { optionId, ...user });
+    }, LOCAL);
+  }, []);
+
+  const removePollVote = useCallback((pollId, email) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yVotes = doc.getMap('votes');
+    doc.transact(() => {
+      let yPoll = yVotes.get(pollId);
+      if (yPoll instanceof Y.Map) {
+        yPoll.delete(email);
+      } else if (yPoll && typeof yPoll === 'object' && email in yPoll) {
+        // Compaction-flattened poll: rebuild a Y.Map without the removed vote.
+        const next = new Y.Map();
+        Object.entries(yPoll).forEach(([k, v]) => { if (k !== email) next.set(k, v); });
+        yVotes.set(pollId, next);
+      }
+    }, LOCAL);
+  }, []);
+
+  // ── Element mutations ──────────────────────────────────────────────────────
+
+  /** Create an element. Caller supplies type/pageId/geometry/props/createdBy. */
+  const addElement = useCallback((el) => {
+    const doc = ydocRef.current;
+    if (!doc) return null;
+    const id = el.id || makeId(el.type || 'el');
+    const record = { z: 1, props: {}, ...el, id };
+    doc.transact(() => doc.getMap('elements').set(id, record), LOCAL);
+    return id;
+  }, []);
+
+  /**
+   * Apply many element patches in a single transaction (one Yjs update / one
+   * socket frame) — used by the layout engine to re-arrange a whole slide.
+   * Each entry is `{ id, ...patch }`.
+   */
+  const bulkUpdate = useCallback((updates) => {
+    const doc = ydocRef.current;
+    if (!doc || !updates?.length) return;
+    const yElements = doc.getMap('elements');
+    doc.transact(() => {
+      updates.forEach(({ id, ...patch }) => {
+        const prev = yElements.get(id);
+        if (prev) yElements.set(id, { ...prev, ...patch });
+      });
+    }, LOCAL);
+  }, []);
+
+  /** Shallow-merge a patch into an existing element (whole value replaced). */
+  const updateElement = useCallback((id, patch) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yElements = doc.getMap('elements');
+    const prev = yElements.get(id);
+    if (!prev) return;
+    doc.transact(() => yElements.set(id, { ...prev, ...patch }), LOCAL);
+  }, []);
+
+  /** Merge into an element's `props` sub-object specifically. */
+  const updateElementProps = useCallback((id, propsPatch) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yElements = doc.getMap('elements');
+    const prev = yElements.get(id);
+    if (!prev) return;
+    doc.transact(
+      () => yElements.set(id, { ...prev, props: { ...prev.props, ...propsPatch } }),
+      LOCAL,
+    );
+  }, []);
+
+  const removeElement = useCallback((id) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    doc.transact(() => doc.getMap('elements').delete(id), LOCAL);
+  }, []);
+
+  /** Bring an element to the front (max z + 1) on the active page. */
+  const bringToFront = useCallback((id) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yElements = doc.getMap('elements');
+    const prev = yElements.get(id);
+    if (!prev) return;
+    let maxZ = 0;
+    yElements.forEach((v) => {
+      if (v.pageId === prev.pageId && (v.z ?? 0) > maxZ) maxZ = v.z;
+    });
+    if ((prev.z ?? 0) >= maxZ) return;
+    // Transient origin: bring-to-front rides on selection, so keep it off the
+    // undo stack while still syncing the new z-order to peers.
+    doc.transact(() => yElements.set(id, { ...prev, z: maxZ + 1 }), TRANSIENT_ORIGIN);
+  }, []);
+
+  // ── Page mutations ─────────────────────────────────────────────────────────
+
+  const addPage = useCallback((title) => {
+    const doc = ydocRef.current;
+    if (!doc) return null;
+    const yPages = doc.getArray('pages');
+    const id = makeId('page');
+    const order = yPages.length
+      ? Math.max(...yPages.toArray().map((p) => p.order ?? 0)) + 1
+      : 0;
+    doc.transact(
+      () => yPages.push([{ id, title: title || `Slide ${yPages.length + 1}`, order }]),
+      LOCAL,
+    );
+    return id;
+  }, []);
+
+  const updatePage = useCallback((id, patch) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const idx = yPages.toArray().findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    doc.transact(() => {
+      const prev = yPages.get(idx);
+      yPages.delete(idx, 1);
+      yPages.insert(idx, [{ ...prev, ...patch }]);
+    }, LOCAL);
+  }, []);
+
+  const renamePage = useCallback((id, title) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const idx = yPages.toArray().findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    doc.transact(() => {
+      const prev = yPages.get(idx);
+      yPages.delete(idx, 1);
+      yPages.insert(idx, [{ ...prev, title }]);
+    }, LOCAL);
+  }, []);
+
+  const movePage = useCallback((draggedId, targetId) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const arr = yPages.toArray();
+    
+    const sorted = [...arr].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const dragIdx = sorted.findIndex((p) => p.id === draggedId);
+    const targetIdx = sorted.findIndex((p) => p.id === targetId);
+    
+    if (dragIdx === -1 || targetIdx === -1 || dragIdx === targetIdx) return;
+
+    let newOrder;
+    if (dragIdx < targetIdx) {
+      // Place after targetIdx
+      const afterTarget = sorted[targetIdx + 1];
+      if (afterTarget) {
+        newOrder = ((sorted[targetIdx].order ?? 0) + (afterTarget.order ?? 0)) / 2;
+      } else {
+        newOrder = (sorted[targetIdx].order ?? 0) + 1;
+      }
+    } else {
+      // Place before targetIdx
+      const beforeTarget = sorted[targetIdx - 1];
+      if (beforeTarget) {
+        newOrder = ((sorted[targetIdx].order ?? 0) + (beforeTarget.order ?? 0)) / 2;
+      } else {
+        newOrder = (sorted[targetIdx].order ?? 0) - 1;
+      }
+    }
+
+    const actualDragIdx = arr.findIndex((p) => p.id === draggedId);
+    if (actualDragIdx !== -1) {
+      const item = arr[actualDragIdx];
+      doc.transact(() => {
+        yPages.delete(actualDragIdx, 1);
+        yPages.insert(actualDragIdx, [{ ...item, order: newOrder }]);
+      }, LOCAL);
+    }
+  }, []);
+
+  const deletePage = useCallback((id) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const idx = yPages.toArray().findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    doc.transact(() => {
+      yPages.delete(idx, 1);
+      // Cascade: drop every element that lived on the removed slide.
+      const yElements = doc.getMap('elements');
+      const orphans = [];
+      yElements.forEach((v, key) => {
+        if (v.pageId === id) orphans.push(key);
+      });
+      orphans.forEach((key) => yElements.delete(key));
+    }, LOCAL);
+  }, []);
+
+  /**
+   * Ensure the board has at least one slide. Runs inside a transaction and
+   * re-checks length so concurrent clients don't each seed a page. Returns the
+   * id of the first page if it created one, else null.
+   */
+  const ensureFirstPage = useCallback(() => {
+    const doc = ydocRef.current;
+    if (!doc) return null;
+    const yPages = doc.getArray('pages');
+    if (yPages.length > 0) return null;
+    const id = makeId('page');
+    doc.transact(() => {
+      if (yPages.length === 0) yPages.push([{ id, title: 'Slide 1', order: 0 }]);
+    }, LOCAL);
+    return id;
+  }, []);
+
+  return {
+    pages,
+    elements,
+    votes,
+    castPollVote,
+    removePollVote,
+    addElement,
+    updateElement,
+    updateElementProps,
+    bulkUpdate,
+    removeElement,
+    bringToFront,
+    addPage,
+    updatePage,
+    renamePage,
+    deletePage,
+    movePage,
+    ensureFirstPage,
+  };
+}

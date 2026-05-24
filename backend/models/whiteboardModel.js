@@ -14,8 +14,9 @@ const whiteboardSchema = new mongoose.Schema({
   isPublic:   { type: Boolean, default: false },
   publicRole: { type: String, enum: ['viewer', 'commenter', 'editor'], default: 'viewer' },
   yjsState:   { type: Buffer, default: null },   // binary Yjs snapshot — full board state
-  thumbnail:  { type: String, default: null },   // base64 or URL for dashboard preview
-  createdAt:  { type: Date, default: Date.now }
+  thumbnail:   { type: String, default: null },   // base64 or URL for dashboard preview
+  favoritedBy: [{ type: String }],               // emails of users who favorited this board
+  createdAt:   { type: Date, default: Date.now }
 }, { timestamps: true });
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
