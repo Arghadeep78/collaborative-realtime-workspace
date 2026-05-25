@@ -2,12 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
-import { Server } from "socket.io";
 import { createClient } from "redis";
-import { createAdapter } from "@socket.io/redis-adapter";
 dotenv.config();
 import { connectToDatabase } from "./db.js";
-import { socketAuth } from "./middleware/socketAuth.js";
 import userRoute from "./Routes/userRoute.js";
 import boardRoute from "./Routes/boardRoutes.js";
 import aiRoutes from "./Routes/aiRoutes.js";
@@ -93,24 +90,6 @@ const startServer = async () => {
   // Distributed (Redis-backed) rate limiters — shared counters across instances.
   const { authLimiter, aiLimiter, apiLimiter } = createRateLimiters(pubClient);
 
-  const io = new Server(server, {
-    cors: {
-      origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
-          callback(null, true);
-        } else {
-          callback(new Error("Not allowed by CORS"));
-        }
-      },
-      methods: ["GET", "POST", "PUT"],
-      credentials: true,
-    },
-    // <-- 4. Tell Socket.IO to use the Redis adapter
-    adapter: createAdapter(pubClient, subClient, {
-      requestsTimeout: 5000, // time in ms (5 seconds)
-    }),
-  });
-
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -143,12 +122,6 @@ const startServer = async () => {
   app.use("/ai", aiLimiter, aiRoutes);
   app.use("/publish", apiLimiter, publishRoute);
   app.use("/workspaces", apiLimiter, workspaceRoute);
-  // Socket.io middleware for authentication (kept for future use / presence)
-  io.use(socketAuth);
-
-  // Make io available globally for use in other files
-  app.set("io", io);
-
   // ─── Yjs CRDT WebSocket server (co-exists on same HTTP server) ────────
   setupYjsWSServer(server, pubClient, subClient);
   console.log("✅ Yjs WebSocket server attached on /yjs path.");
@@ -193,7 +166,7 @@ const startServer = async () => {
 
   server.listen(PORT, () => {
     // console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log("✅ Redis adapter connected for Socket.IO scaling.");
+    console.log(`✅ Server listening on port ${PORT}`);
   });
 };
 

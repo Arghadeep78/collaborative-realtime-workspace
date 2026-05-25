@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { SLIDE_W, SLIDE_H, SPAWN_TOOLS, clamp } from './boardConstants.js';
 import BoardElement from './BoardElement.jsx';
 import ConnectorLayer from './ConnectorLayer.jsx';
@@ -134,7 +135,7 @@ export default function SlideCanvas({
   const connectMode = editable && activeTool === 'connector';
   const laserMode   = activeTool === 'laser';
   const [linkPoint, setLinkPoint] = useState(null);   // rubber-band pointer (slide coords)
-  const [laserPos, setLaserPos]   = useState(null);   // local laser dot (slide coords)
+  const [laserClient, setLaserClient] = useState(null); // local laser dot (screen coords)
   const connectRef = useRef({ on: false, from: null });
   const activeToolRef = useRef(activeTool);
   connectRef.current = { on: connectMode, from: connectFromId };
@@ -144,8 +145,15 @@ export default function SlideCanvas({
   const [marquee, setMarquee] = useState(null); // { start: {x,y}, end: {x,y} }
   const marqueeCleanup = useRef(null);
 
-  // Clear laser dot when tool changes away
-  useEffect(() => { if (!laserMode) setLaserPos(null); }, [laserMode]);
+  // Track the laser dot in screen coordinates at the window level so it floats
+  // above ALL UI — including the top toolbar, which lives in its own stacking
+  // context and would otherwise clip/cover a dot rendered inside the slide.
+  useEffect(() => {
+    if (!laserMode) { setLaserClient(null); return; }
+    const onMove = (e) => setLaserClient({ x: e.clientX, y: e.clientY });
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [laserMode]);
 
   // Fit the slide to the container whenever either resizes.
   useLayoutEffect(() => {
@@ -260,7 +268,6 @@ export default function SlideCanvas({
         if (!pt) return;
         onCursor(pt.x, pt.y, activeToolRef.current === 'laser');
         if (connectRef.current.on && connectRef.current.from) setLinkPoint(pt);
-        if (activeToolRef.current === 'laser') setLaserPos(pt);
       });
     },
     [toSlide, onCursor],
@@ -373,6 +380,22 @@ export default function SlideCanvas({
 
   return (
     <div className="relative flex-1 min-h-0">
+    {/* Local laser dot — portaled to <body> in screen coords so it floats above
+        every layer (toolbar included), never clipped by the slide or header. */}
+    {laserMode && laserClient && createPortal(
+      <div
+        className="fixed pointer-events-none rounded-full"
+        style={{
+          width: 20, height: 20,
+          left: laserClient.x - 10,
+          top: laserClient.y - 10,
+          background: '#FF4A4A',
+          boxShadow: '0 0 0 5px rgba(255,74,74,0.35), 0 0 20px 8px rgba(255,74,74,0.55)',
+          zIndex: 2147483000,
+        }}
+      />,
+      document.body,
+    )}
     <div
       ref={containerRef}
       className="absolute inset-0 overflow-auto"
@@ -454,21 +477,6 @@ export default function SlideCanvas({
         ))}
 
         <PresenceLayer peers={peers} activePageId={activePageId} scale={scale} />
-
-        {/* Local laser dot — only visible when the laser tool is active */}
-        {laserMode && laserPos && (
-          <div
-            className="absolute pointer-events-none rounded-full"
-            style={{
-              width: 20, height: 20,
-              left: laserPos.x - 10,
-              top: laserPos.y - 10,
-              background: '#FF4A4A',
-              boxShadow: '0 0 0 5px rgba(255,74,74,0.35), 0 0 20px 8px rgba(255,74,74,0.55)',
-              zIndex: 9000,
-            }}
-          />
-        )}
 
         {/* Marquee selection rectangle — clamped to slide bounds since drag
             may have started in the grey area outside the slide surface */}
