@@ -5,12 +5,109 @@ import * as awarenessProtocol from 'y-protocols/awareness.js';
 import * as encoding from 'lib0/encoding.js';
 import * as decoding from 'lib0/decoding.js';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import { URL } from 'url';
 import { documentManager } from './DocumentManager.js';
 import { getBoardMeta, resolveRole } from '../cache/boardCache.js';
 
+// Unique per-process id, prefixed onto every awareness frame we publish to
+// Redis so an instance can recognise and skip the echo of its own messages.
+const INSTANCE_ID = randomUUID();
+
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+
+// Reject client updates larger than this before parsing — a single legitimate
+// delta (one element moved/created) is a few hundred bytes; even a large paste
+// is well under this. Anything bigger is a buggy or hostile payload that could
+// stall the event loop or exhaust memory in Y.applyUpdate.
+const MAX_UPDATE_BYTES = 512 * 1024;
+
+/**
+ * Validate and apply a client's Yjs update to the shared doc.
+ *
+ * The server trusts no client byte stream: a buggy or hostile peer could send
+ * an oversized payload, malformed CRDT structs, or a pure replay of an old
+ * delta. We guard each of those before/around Y.applyUpdate so one bad frame
+ * can't stall the event loop, crash the process, or be silently mis-handled.
+ *
+ * @param {Y.Doc} ydoc
+ * @param {Uint8Array} update  - raw Yjs update bytes (already extracted)
+ * @param {import('ws').WebSocket} origin
+ * @param {string} userEmail
+ * @param {string} boardId
+ * @returns {boolean} whether the update was applied
+ */
+function applyClientUpdate(ydoc, update, origin, userEmail, boardId) {
+  if (update.byteLength > MAX_UPDATE_BYTES) {
+    console.warn(`[Yjs WS] Dropped oversized update (${update.byteLength}B) from ${userEmail} on ${boardId}`);
+    return false;
+  }
+
+  // Pure-replay check: an update's structs carry the clocks of the clients
+  // that produced them. If every clock is already covered by the doc's current
+  // state vector, the update adds nothing — applying it is a wasteful no-op
+  // (or, for a malicious replay, an attempt to look productive). Decoding the
+  // state vector is O(#clients), not O(doc size), so the check is cheap.
+  try {
+    const before = Y.encodeStateVector(ydoc);
+    if (isPureReplay(before, update)) {
+      console.warn(`[Yjs WS] Dropped pure-replay update from ${userEmail} on ${boardId}`);
+      return false;
+    }
+  } catch {
+    // A malformed update can throw while we inspect it. Treat it as garbage
+    // and drop it rather than handing it to applyUpdate.
+    console.warn(`[Yjs WS] Dropped unparseable update from ${userEmail} on ${boardId}`);
+    return false;
+  }
+
+  try {
+    Y.applyUpdate(ydoc, update, origin);
+    return true;
+  } catch (err) {
+    // applyUpdate can throw on corrupt struct data. Log and drop — never let a
+    // single bad frame take down the WebSocket server for every other peer.
+    console.error(`[Yjs WS] applyUpdate failed for ${userEmail} on ${boardId}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * True when the update carries no client clocks newer than the doc already has
+ * — i.e. it's entirely in the past relative to `stateVector`. Compares the
+ * update's embedded state vector (the "missing-from" clocks in its header)
+ * against the doc's current state vector.
+ *
+ * @param {Uint8Array} stateVector  - Y.encodeStateVector(ydoc)
+ * @param {Uint8Array} update
+ * @returns {boolean}
+ */
+function isPureReplay(stateVector, update) {
+  // The update's own state vector describes the highest clock per client it
+  // contains. Y.encodeStateVectorFromUpdate gives us that without applying.
+  const updateSV = Y.encodeStateVectorFromUpdate(update);
+  const have = decodeSVToMap(stateVector);
+  const incoming = decodeSVToMap(updateSV);
+  for (const [client, clock] of incoming) {
+    // This client carries a clock the doc hasn't seen yet → real new content.
+    if (clock > (have.get(client) || 0)) return false;
+  }
+  return true; // nothing newer than what we already have
+}
+
+/** Decode an encoded Yjs state vector into a Map<clientId, clock>. */
+function decodeSVToMap(encoded) {
+  const dec = decoding.createDecoder(encoded);
+  const size = decoding.readVarUint(dec);
+  const map = new Map();
+  for (let i = 0; i < size; i++) {
+    const client = decoding.readVarUint(dec);
+    const clock = decoding.readVarUint(dec);
+    map.set(client, clock);
+  }
+  return map;
+}
 
 /**
  * Attach a Yjs-protocol WebSocket server to the existing HTTP server.
@@ -25,8 +122,31 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
   /** @type {Map<string, awarenessProtocol.Awareness>} */
   const awarenessMap = new Map();
-  /** Track which docs already have an `update` listener wired */
-  const docListenersReady = new Set();
+  /** @type {Map<string, (update: Uint8Array, origin: any) => void>} The `update` listener wired per doc, kept so it can be moved when the doc instance is swapped (async compaction). */
+  const docUpdateListeners = new Map();
+
+  // Build (and register) the broadcast + Redis-fanout `update` listener for a
+  // board's Y.Doc. Extracted so it can be re-attached to a freshly compacted
+  // doc instance when DocumentManager swaps one in.
+  const makeUpdateListener = (boardId) => (update, origin) => {
+    documentManager.markDirty(boardId);
+
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_SYNC);
+    syncProtocol.writeUpdate(encoder, update);
+    const msg = encoding.toUint8Array(encoder);
+
+    documentManager.getConnections(boardId).forEach(conn => {
+      if (conn !== origin && conn.readyState === 1) conn.send(msg);
+    });
+
+    // Cross-instance fanout via Redis (skip if update originated from Redis)
+    if (origin !== 'redis') {
+      redisPub
+        .publish(`yjs:${boardId}`, Buffer.from(update).toString('base64'))
+        .catch(() => {});
+    }
+  };
 
   // ─── HTTP Upgrade routing ─────────────────────────────────────────────
   httpServer.on('upgrade', (request, socket, head) => {
@@ -131,29 +251,10 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     };
 
     // ── Per-doc broadcast + Redis publish (set up once) ─────────────────
-    if (!docListenersReady.has(boardId)) {
-      docListenersReady.add(boardId);
-
-      ydoc.on('update', (update, origin) => {
-        documentManager.markDirty(boardId);
-
-        // Broadcast delta to local WS peers (skip sender)
-        const encoder = encoding.createEncoder();
-        encoding.writeVarUint(encoder, MSG_SYNC);
-        syncProtocol.writeUpdate(encoder, update);
-        const msg = encoding.toUint8Array(encoder);
-
-        documentManager.getConnections(boardId).forEach(conn => {
-          if (conn !== origin && conn.readyState === 1) conn.send(msg);
-        });
-
-        // Cross-instance fanout via Redis (skip if update originated from Redis)
-        if (origin !== 'redis') {
-          redisPub
-            .publish(`yjs:${boardId}`, Buffer.from(update).toString('base64'))
-            .catch(() => {});
-        }
-      });
+    if (!docUpdateListeners.has(boardId)) {
+      const listener = makeUpdateListener(boardId);
+      docUpdateListeners.set(boardId, listener);
+      ydoc.on('update', listener);
     }
 
     // ── Send Sync Step 1 to the freshly-connected client ────────────────
@@ -215,16 +316,26 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
             const respEncoder = encoding.createEncoder();
             encoding.writeVarUint(respEncoder, MSG_SYNC);
 
+            // Resolve the doc fresh each message: async compaction can swap the
+            // Y.Doc instance out from under this connection, so the captured
+            // `ydoc` may be stale. The map always holds the live instance.
+            const doc = documentManager.docs.get(boardId) || ydoc;
+
             if (syncMessageType === syncProtocol.messageYjsSyncStep1) {
               // Read request: client asks for the doc state. Always permitted —
               // even viewers need the current board to render it.
-              syncProtocol.readSyncStep1(decoder, respEncoder, ydoc);
+              syncProtocol.readSyncStep1(decoder, respEncoder, doc);
             } else if (canWrite) {
               // Write paths (SyncStep2 / Update) apply the client's changes.
               if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
-                syncProtocol.readSyncStep2(decoder, ydoc, ws);
+                syncProtocol.readSyncStep2(decoder, doc, ws);
               } else if (syncMessageType === syncProtocol.messageYjsUpdate) {
-                syncProtocol.readUpdate(decoder, ydoc, ws);
+                // Pull the raw update bytes out ourselves (rather than letting
+                // syncProtocol.readUpdate apply them blindly) so we can guard
+                // against oversized, malformed, or pure-replay payloads before
+                // they touch the shared doc.
+                const update = decoding.readVarUint8Array(decoder);
+                applyClientUpdate(doc, update, ws, userEmail, boardId);
               }
             } else {
               // Viewer attempting a mutation — discard the update without
@@ -243,11 +354,25 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
             // Record which clientIds come from this socket so we can evict
             // them precisely on disconnect.
             extractClientIds(awarenessBytes).forEach(id => wsClientIds.add(id));
+            // Applying mutates the shared Awareness instance, which fires
+            // `onAwarenessChange` and relays to local peers (with `ws` as the
+            // origin so the sender is skipped).
             awarenessProtocol.applyAwarenessUpdate(
               awareness,
               awarenessBytes,
               ws
             );
+            // Fan the same frame out to other server instances so peers on a
+            // different Node process see this cursor/presence too. Payload is
+            // "<instanceId>|<base64 bytes>" — base64 because pub/sub messages
+            // are delivered as UTF-8 strings and would corrupt raw binary; the
+            // instance prefix lets us drop the echo of our own publish.
+            redisPub
+              .publish(
+                `awareness:${boardId}`,
+                `${INSTANCE_ID}|${Buffer.from(awarenessBytes).toString('base64')}`
+              )
+              .catch(() => {});
             break;
           }
         }
@@ -280,16 +405,28 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       if (wsClientIds.size > 0) {
         awarenessProtocol.removeAwarenessStates(awareness, [...wsClientIds], null);
 
-        // Directly push the removal to every remaining peer.
+        const removalUpdate = awarenessProtocol.encodeAwarenessUpdate(
+          awareness, [...wsClientIds]
+        );
+
+        // Publish the removal to other instances too. A disconnect cleanup is
+        // server-initiated, so it never flows through the MSG_AWARENESS publish
+        // path — without this, peers on a *different* instance would keep
+        // rendering this user's ghost cursor after they leave.
+        redisPub
+          .publish(
+            `awareness:${boardId}`,
+            `${INSTANCE_ID}|${Buffer.from(removalUpdate).toString('base64')}`
+          )
+          .catch(() => {});
+
+        // Directly push the removal to every remaining local peer.
         // The onAwarenessChange relay uses `conn !== ws` to skip the sender,
         // but for a server-initiated removal there is no sender — so the last
         // remaining peer (whose listener excludes itself) would never receive
         // the update.  Broadcasting here guarantees all peers see the removal.
         const remaining = documentManager.getConnections(boardId);
         if (remaining.size > 0) {
-          const removalUpdate = awarenessProtocol.encodeAwarenessUpdate(
-            awareness, [...wsClientIds]
-          );
           const enc = encoding.createEncoder();
           encoding.writeVarUint(enc, MSG_AWARENESS);
           encoding.writeVarUint8Array(enc, removalUpdate);
@@ -302,9 +439,9 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         }
       }
 
-      // NOTE: awarenessMap / docListenersReady are intentionally NOT cleared
+      // NOTE: awarenessMap / docUpdateListeners are intentionally NOT cleared
       // here. The Y.Doc (and its single `update` listener) survives the GC
-      // window, so clearing docListenersReady on an empty room would let a
+      // window, so clearing docUpdateListeners on an empty room would let a
       // reconnect within that window attach a duplicate `update` listener,
       // doubling every broadcast and Redis publish. Cleanup happens in
       // onDocEvicted, which fires only when the doc is actually evicted.
@@ -327,14 +464,61 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         console.error('[Yjs Redis] apply error:', err);
       }
     });
+
+    // Cross-instance awareness relay: presence (cursors, laser, user meta) is
+    // ephemeral and lived only on the instance a client was connected to.
+    // Without this, user A on instance 1 never sees user B's cursor on
+    // instance 2. We mirror remote awareness frames onto the local Awareness
+    // instance so they reach this instance's peers (and feed the snapshot sent
+    // to future joiners), skipping the echo of our own publishes.
+    crossSub.pSubscribe('awareness:*', (message, channel) => {
+      const boardId = channel.slice(10); // strip "awareness:"
+      const sep = message.indexOf('|');
+      if (sep === -1) return;
+      const senderInstance = message.slice(0, sep);
+      if (senderInstance === INSTANCE_ID) return; // our own frame, ignore
+
+      const awareness = awarenessMap.get(boardId);
+      if (!awareness) return; // no local peers on this board
+
+      try {
+        const bytes = new Uint8Array(Buffer.from(message.slice(sep + 1), 'base64'));
+        // origin is a non-WebSocket sentinel; the per-connection change relay
+        // then forwards it to every local peer on this board.
+        awarenessProtocol.applyAwarenessUpdate(awareness, bytes, 'redis-awareness');
+      } catch (err) {
+        console.error('[Yjs Redis] awareness apply error:', err);
+      }
+    });
   }).catch((err) => {
     console.error('[Yjs Redis] crossSub connect failed:', err);
   });
 
   // Eviction housekeeping
   documentManager.onDocEvicted = (boardId) => {
-    docListenersReady.delete(boardId);
+    docUpdateListeners.delete(boardId);
     awarenessMap.delete(boardId);
+  };
+
+  // Doc-swap rewiring (async compaction replaces the Y.Doc instance).
+  // The map already points at `newDoc` by the time this fires; we just move
+  // the `update` listener to it and bring every attached peer up to the
+  // compacted state with a fresh SyncStep2.
+  documentManager.onDocSwapped = (boardId, oldDoc, newDoc) => {
+    const listener = docUpdateListeners.get(boardId);
+    if (listener) {
+      oldDoc.off('update', listener);
+      newDoc.on('update', listener);
+    }
+
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, MSG_SYNC);
+    syncProtocol.writeSyncStep2(enc, newDoc);
+    const buf = encoding.toUint8Array(enc);
+    documentManager.getConnections(boardId).forEach(conn => {
+      if (conn.readyState === 1) conn.send(buf);
+    });
+    console.log(`[Yjs WS] Doc swapped after compaction for ${boardId}; re-synced ${documentManager.getConnections(boardId).size} peer(s)`);
   };
 
   return wss;

@@ -18,6 +18,7 @@ import { initPublishQueue } from "./jobs/publishQueue.js";
 import { initBoardCache } from "./cache/boardCache.js";
 import { createRateLimiters } from "./middleware/rateLimiters.js";
 import { createHealthRouter } from "./Routes/healthRoutes.js";
+import { documentManager } from "./crdt/DocumentManager.js";
 
 const PORT = process.env.PORT || 3030;
 
@@ -129,7 +130,7 @@ const startServer = async () => {
   // ─── BullMQ persistence (write-behind to MongoDB every 30s) ───────────
   const bullRedisOpts = parseRedisUrl(process.env.REDIS_URL);
   const persistWorker = startPersistenceWorker(bullRedisOpts);
-  const { stop: stopScheduler } = startPersistenceScheduler(bullRedisOpts);
+  const { queue: persistQueue, stop: stopScheduler } = startPersistenceScheduler(bullRedisOpts);
   console.log("✅ BullMQ persistence worker & scheduler started.");
 
   // ─── BullMQ publish worker (board publish jobs) ────────────────────
@@ -142,6 +143,8 @@ const startServer = async () => {
     createHealthRouter({
       redisClient: pubClient,
       getWorkers: () => [persistWorker, publishWorker],
+      persistQueue,
+      documentManager,
     })
   );
 

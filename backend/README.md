@@ -8,14 +8,15 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 
 - **CRDT synchronization** — a custom Yjs WebSocket server (`crdt/WSServer.js`) implements the full `y-protocols` binary sync handshake. Incoming document deltas are merged into the shared `Y.Doc` and rebroadcast to all peers; conflicting edits resolve automatically without central locking.
 - **Live presence** — the Yjs Awareness protocol broadcasts cursor positions, user metadata, and laser-pointer state to all peers on a board. Awareness states are cleaned up precisely per-connection on disconnect.
-- **Horizontal scaling** — Yjs document deltas fan out across server instances via **Redis pub/sub** (`yjs:<boardId>` channel), so users connected to different Node processes stay in sync.
+- **Horizontal scaling** — Yjs document deltas fan out across server instances via **Redis pub/sub** (`yjs:<boardId>` channel), so users connected to different Node processes stay in sync. Awareness frames relay over a parallel `awareness:<boardId>` channel (instance-id-prefixed to drop self-echoes), so cursors and presence work cross-instance too — including ghost-cursor cleanup when a peer on another instance disconnects.
+- **Hardened write path** — client updates are validated before `Y.applyUpdate`: a 512 KB size cap, a state-vector pure-replay check (`encodeStateVectorFromUpdate` vs the doc's state vector — O(#clients), drops updates that add nothing), and try/catch isolation so a malformed frame is logged and dropped instead of crashing the server.
 - **Write-behind persistence** — a **BullMQ** scheduler marks dirty docs every 30 seconds and enqueues persist jobs; a dedicated worker (concurrency 5) encodes and writes `Y.Doc` state to MongoDB. The dirty flag clears only after the job is durably enqueued, preventing silent data loss on crash.
-- **History compaction** — on cold load, `DocumentManager` compacts each `Y.Doc` by replaying current logical values into a fresh doc (dropping tombstones and per-key history). Only runs when compacted size is ≤ 80% of original; nested Y.Maps (votes, comments) are reconstructed rather than flattened so CRDT merge semantics survive.
+- **History compaction** — `DocumentManager` compacts each `Y.Doc` by replaying current logical values into a fresh doc (dropping tombstones and per-key history). Runs **asynchronously** (`setImmediate`) so it never blocks the first client's cold-load sync handshake; the rebuilt doc is swapped in atomically (the map updates first, an `onDocSwapped` callback moves the `update` listener and re-syncs peers, then the old doc is destroyed). Only runs when compacted size is ≤ 80% of original; nested Y.Maps (votes, comments) are reconstructed rather than flattened so CRDT merge semantics survive.
 - **Authorization at the trust boundary** — `viewer`/`commenter`/`editor` roles are enforced **per Yjs sync message**, so a viewer cannot mutate a board even over a raw WebSocket.
 - **Distributed rate limiting** — `express-rate-limit` + `rate-limit-redis` with shared Redis counters across instances, split into auth (50/15 min) / AI (40/15 min) / general (300/15 min) tiers.
 - **Board-metadata cache** — access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is Redis-cached (`board:meta:<id>`, 60 s TTL) with explicit invalidation, removing a cold MongoDB read from every WebSocket connection.
 - **External API resilience** — Gemini calls wrapped with a 10 s timeout, exponential-backoff retries (transient errors only), and a shared circuit breaker (5 failure threshold, 30 s cooldown).
-- **Health & readiness probes** — `GET /health` (MongoDB + Redis) and `GET /ready` (+ BullMQ worker running check).
+- **Health & readiness probes** — `GET /health` (MongoDB + Redis) and `GET /ready` (+ BullMQ workers running, persist-queue backpressure via `getWaitingCount`, and active-board count). `/ready` reports `not-ready` when the flush backlog exceeds the threshold so an orchestrator stops adding load until it drains.
 - **Async board publishing** — BullMQ queue + worker generate a read-only public snapshot off the request path.
 - **Graceful shutdown** — `SIGTERM`/`SIGINT`/`SIGUSR2` drain workers, close queues, and quit Redis clients before process exit.
 - **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens.
@@ -111,6 +112,12 @@ npm run dev
 ```
 
 The server starts on `PORT` (default `3030`). The Yjs WebSocket server is attached at the `/yjs` upgrade path on the same HTTP port.
+
+---
+
+## 🔭 Future Improvements
+
+- **Incremental update log.** The persistence worker currently writes a full `Y.encodeStateAsUpdate` snapshot per flush, so a single element move can cause a large MongoDB write (write amplification). The planned replacement appends raw per-update chunks (20–200 bytes) to a `yjsUpdates` collection on each `ydoc.on('update')`, replays them in `seq` order on cold load, and compacts the log into a snapshot once it exceeds a threshold (~50 entries) — the same approach used by `y-leveldb` and Hocuspocus persistence adapters. Touches `DocumentManager.js` + `persistenceWorker.js` and adds a `YjsUpdate` Mongoose model.
 
 ---
 

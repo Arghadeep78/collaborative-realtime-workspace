@@ -22,8 +22,12 @@ class DocumentManager {
     this.dirtyDocs = new Set();
     /** @type {Map<string, NodeJS.Timeout>} */
     this.gcTimers = new Map();
+    /** @type {Set<string>} - Boards with a compaction pass in flight (guards against double-compaction on concurrent cold loads) */
+    this.compacting = new Set();
     /** @type {((boardId: string) => void) | null} - Called when a doc is evicted from memory */
     this.onDocEvicted = null;
+    /** @type {((boardId: string, oldDoc: Y.Doc, newDoc: Y.Doc) => void) | null} - Called when a doc instance is swapped (e.g. after async compaction) so WSServer can rewire its `update` listener */
+    this.onDocSwapped = null;
     this.GC_DELAY_MS = 5 * 60 * 1000;
 
     // Compaction thresholds. Yjs docs grow monotonically: every erased shape
@@ -72,16 +76,54 @@ class DocumentManager {
       Y.applyUpdate(ydoc, new Uint8Array(board.yjsState.buffer));
     }
 
-    // Compact synchronously (no await before this, so no cross-instance Redis
-    // update can interleave and be lost). Safe here because no WS peer is
-    // attached to this freshly-loaded doc yet — the swap is invisible to
-    // clients, who adopt the compacted state via the normal sync handshake.
-    const compacted = this._compact(boardId, ydoc);
-    if (compacted !== ydoc) {
+    // Defer compaction off the cold-load path. Rebuilding a fresh doc
+    // (encode → deep-clone → re-encode) for a large board can block the event
+    // loop for 50–200ms; doing it here would make the first client wait — and
+    // queue every other board's WS traffic behind it. Instead we hand back the
+    // un-compacted doc immediately so the sync handshake can start, and run
+    // compaction after the current turn via setImmediate (see _scheduleCompaction).
+    this._scheduleCompaction(boardId);
+    return ydoc;
+  }
+
+  /**
+   * Run history compaction asynchronously, after the cold-load path has
+   * returned and the first client's sync handshake is underway.
+   *
+   * Why async: rebuilding a fresh doc (encode → deep-clone → re-encode) for a
+   * large board blocks the Node event loop for 50–200ms. Doing it on the cold
+   * load path makes the first client wait and queues every other board's WS
+   * traffic behind it. Running it in a later `setImmediate` turn lets the sync
+   * handshake go out first ("serve then optimize").
+   *
+   * The rebuilt doc is a *different* Y.Doc instance, so swapping it in requires
+   * rewiring every holder of the old reference. The `onDocSwapped` callback
+   * lets WSServer move its `update` listener and re-sync peers; the live
+   * read/write paths there resolve the doc fresh from `docs` on each message,
+   * so they pick up the new instance automatically. The `compacting` flag
+   * keeps two concurrent cold loads from scheduling the pass twice.
+   *
+   * @param {string} boardId
+   */
+  _scheduleCompaction(boardId) {
+    if (this.compacting.has(boardId)) return; // a pass is already pending
+    this.compacting.add(boardId);
+
+    setImmediate(() => {
+      this.compacting.delete(boardId);
+      const ydoc = this.docs.get(boardId);
+      if (!ydoc) return; // evicted before we got here
+
+      const compacted = this._compact(boardId, ydoc);
+      if (compacted === ydoc) return; // not worth it / failed — left as-is
+
+      // Atomic swap: update the map first so any message arriving after this
+      // point resolves the new doc, then let WSServer rewire its listener and
+      // push the compacted state to attached peers, then destroy the old doc.
       this.docs.set(boardId, compacted);
+      if (this.onDocSwapped) this.onDocSwapped(boardId, ydoc, compacted);
       ydoc.destroy();
-    }
-    return this.docs.get(boardId);
+    });
   }
 
   /**

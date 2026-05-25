@@ -5,6 +5,7 @@ import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
 
 export default function StickyNote({ element, editable, editing, selected, onEditProps, getScale }) {
+  const rootRef = useRef(null);
   const { isDark } = useTheme();
   const { props } = element;
   const color = props.color || STICKY_COLORS[0];
@@ -32,8 +33,8 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
   const scale = getScale?.() || 1;
 
   return (
-    <div className="relative w-full h-full">
-      {/* Text format toolbar — outside overflow-hidden so it's not clipped */}
+    <div ref={rootRef} className="relative w-full h-full">
+      {/* Text format toolbar — rendered via portal to escape element stacking context */}
       {(editing || selected) && editable && (
         <TextFormatToolbar
           onEditProps={onEditProps}
@@ -43,6 +44,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
           textColor={textColor}
           scale={scale}
           elementY={element.y}
+          anchorRef={rootRef}
         />
       )}
 

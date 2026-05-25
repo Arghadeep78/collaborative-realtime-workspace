@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import Whiteboard from '../models/whiteboardModel.js';
 import Workspace from '../models/workspaceModel.js';
 import { invalidateBoardMeta } from '../cache/boardCache.js';
+import { sendBoardInviteEmail } from '../utils/mailer.js';
 
 // Decode a Bearer token without rejecting the request when it's missing/invalid.
 // getBoardById is intentionally public, but we still want the caller's identity
@@ -148,6 +149,16 @@ export const shareBoard = async (req, res) => {
     }
     await board.save();
     await invalidateBoardMeta(board.id);
+
+    // Send invite email (fire-and-forget — don't fail the request if email errors)
+    sendBoardInviteEmail({
+      toEmail: email,
+      fromEmail: req.email,
+      boardTitle: board.title || 'Untitled Board',
+      boardId: board.id,
+      role,
+    }).catch(err => console.error('shareBoard email error:', err));
+
     return res.status(200).json({ message: 'Board shared', collaborators: board.collaborators });
   } catch (err) {
     console.error('shareBoard error:', err);

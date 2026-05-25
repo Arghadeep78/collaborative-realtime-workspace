@@ -118,6 +118,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
   const italic = !!props.italic;
 
   const taRef = useRef(null);
+  const rootRef = useRef(null);
   useEffect(() => {
     if (editing && taRef.current) taRef.current.focus();
   }, [editing]);
@@ -129,7 +130,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
   const maxLines = Math.max(1, Math.floor((h - 2 * textPadding) / (fontSize * 1.375)));
 
   return (
-    <div className="relative w-full h-full select-none" style={{ opacity }}>
+    <div ref={rootRef} className="relative w-full h-full select-none" style={{ opacity }}>
       {/* SVG shape */}
       <svg
         className="absolute inset-0 w-full h-full"
@@ -191,12 +192,13 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           textColor={rawTextColor}
           scale={scale}
           elementY={element.y}
+          anchorRef={rootRef}
         />
       )}
 
       {/* ── Shape style panel (when selected, not editing) ─────────────────── */}
       {selected && editable && !editing && (
-        <FloatBar scale={scale} elementY={element.y}>
+        <FloatBar scale={scale} elementY={element.y} anchorRef={rootRef}>
           {/* Shape type */}
           <Popover
             title="Shape"

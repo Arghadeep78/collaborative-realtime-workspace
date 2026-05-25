@@ -294,10 +294,13 @@ export default function PollBlock({
                   {/* Right side — fixed, aligned to first line */}
                   <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                     {vCount > 0 && (
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => openVoterPopup(e, opt.id, votersForOption)}
                         onPointerDown={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors text-xs font-semibold ${
+                        onKeyDown={(e) => e.key === 'Enter' && openVoterPopup(e, opt.id, votersForOption)}
+                        className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors text-xs font-semibold cursor-pointer ${
                           voterPopup?.optId === opt.id
                             ? `${theme.text} ring-1 ring-current`
                             : mine
@@ -308,7 +311,7 @@ export default function PollBlock({
                       >
                         <Users className="w-3 h-3" />
                         <span>{vCount}</span>
-                      </button>
+                      </div>
                     )}
                     <span
                       className={`font-bold tabular-nums w-9 text-right ${mine ? theme.text : textMuted}`}

@@ -1,22 +1,45 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
 import { TEXT_COLORS as _TEXT_COLORS } from '../theme/colorMap.js';
 
-export function FloatBar({ children, scale, elementY }) {
-  const inv = 1 / (scale || 1);
-  // Flip toolbar below element when element is near the top of the slide (avoids topbar overlap)
-  const flipDown = typeof elementY === 'number' && elementY * (scale || 1) < 80;
-  return (
+export function FloatBar({ children, scale, elementY, anchorRef }) {
+  const [pos, setPos] = useState(null);
+
+  useLayoutEffect(() => {
+    if (!anchorRef?.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const flipDown = typeof elementY === 'number' && elementY * (scale || 1) < 80;
+    setPos((prev) => {
+      if (
+        prev &&
+        prev.flipDown === flipDown &&
+        prev.rect.left === rect.left &&
+        prev.rect.top === rect.top &&
+        prev.rect.width === rect.width &&
+        prev.rect.height === rect.height
+      ) return prev;
+      return { rect, flipDown };
+    });
+  });
+
+  if (!pos) return null;
+
+  const { rect, flipDown } = pos;
+  const centerX = rect.left + rect.width / 2;
+  const top = flipDown ? rect.bottom + 8 : rect.top - 8;
+  const translateY = flipDown ? '0%' : '-100%';
+
+  return createPortal(
     <div
-      className="absolute pointer-events-auto"
+      className="pointer-events-auto"
       style={{
-        ...(flipDown
-          ? { top: `calc(100% + ${8 * inv}px)`, transformOrigin: 'top center' }
-          : { top: -56 * inv, transformOrigin: 'bottom center' }),
-        left: '50%',
-        transform: `translate(-50%, 0) scale(${inv})`,
-        zIndex: 300,
+        position: 'fixed',
+        left: centerX,
+        top,
+        transform: `translateX(-50%) translateY(${translateY})`,
+        zIndex: 9999,
         whiteSpace: 'nowrap',
       }}
       onPointerDown={(e) => e.stopPropagation()}
@@ -24,7 +47,8 @@ export function FloatBar({ children, scale, elementY }) {
       <div className="inline-flex items-center gap-1 bg-surface border border-edge rounded-2xl shadow-2xl px-2.5 py-2">
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -33,15 +57,16 @@ export const Sep = () => <div className="w-px h-4 bg-edge mx-0.5 shrink-0" />;
 export function Swatch({ color, active, onClick, label, transparent }) {
   const { isDark } = useTheme();
   const displayColor = getThemeColor(color, isDark);
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <button
+    <Tag
       onClick={onClick}
       title={label || color}
-      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : 'border-transparent hover:border-edge-strong'}`}
+      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : onClick ? 'border-transparent hover:border-edge-strong' : 'border-transparent'}`}
       style={{ backgroundColor: transparent ? 'transparent' : displayColor, boxShadow: '0 0 0 1px var(--c-edge) inset' }}
     >
       {transparent && <span className="text-[10px] text-content-subtle font-bold leading-none">/</span>}
-    </button>
+    </Tag>
   );
 }
 
@@ -87,8 +112,8 @@ export function Popover({ activeIcon, children, title }) {
       {open && (
         <div
           ref={popoverRef}
-          className="absolute top-full mt-3 bg-surface shadow-xl border border-edge rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto"
-          style={popStyle}
+          className="absolute top-full mt-3 bg-surface shadow-xl border border-edge rounded-xl p-3 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto"
+          style={{ zIndex: 10000, ...popStyle }}
         >
           {children}
         </div>
@@ -99,9 +124,9 @@ export function Popover({ activeIcon, children, title }) {
 
 export const TEXT_COLORS = _TEXT_COLORS;
 
-export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAlign, textColor, scale, elementY }) {
+export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAlign, textColor, scale, elementY, anchorRef }) {
   return (
-    <FloatBar scale={scale} elementY={elementY}>
+    <FloatBar scale={scale} elementY={elementY} anchorRef={anchorRef}>
       {/* Font size */}
       <button
         onClick={() => onEditProps({ fontSize: Math.max(10, fontSize - 2) })}

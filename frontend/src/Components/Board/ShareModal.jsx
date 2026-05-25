@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
-import { Globe, Lock, Copy, X, Settings } from 'lucide-react';
+import { Globe, Lock, Copy, X, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ManageWorkspaceModal from './ManageWorkspaceModal.jsx';
+import ManageBoardAccessModal from './ManageBoardAccessModal.jsx';
 
 export default function ShareModal({ boardId, board, workspace, onClose }) {
-  const [showManageWs, setShowManageWs] = useState(false);
+  const [showManageBoard, setShowManageBoard] = useState(false);
   const userEmail = (() => { try { return JSON.parse(localStorage.getItem('userData') || '{}').email; } catch { return null; } })();
   const ownsWorkspace = workspace?.id && workspace?.owner === userEmail;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -102,7 +102,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm rb-anim-fade">
-      <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-[520px] overflow-hidden m-4">
+      <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-130 overflow-hidden m-4">
         {/* Header */}
         <div className="px-6 py-5 border-b border-edge-subtle flex items-center justify-between bg-surface">
           <h2 className="text-content font-semibold text-xl tracking-tight">Share "{board?.title || 'Board'}"</h2>
@@ -144,11 +144,11 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
           {/* People with access */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-content">People with access</h3>
-            <div className="max-h-[200px] overflow-y-auto space-y-3 pr-2">
+            <div className="max-h-50 overflow-y-auto space-y-3 pr-2">
               {/* Owner */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+                  <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
                     {board?.owner?.[0]?.toUpperCase()}
                   </div>
                   <div>
@@ -162,7 +162,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
               {collaborators.map(c => (
                 <div key={c.email} className="flex items-center justify-between group">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
                       {c.email?.[0]?.toUpperCase()}
                     </div>
                     <div>
@@ -226,12 +226,11 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
             </button>
             {ownsWorkspace && (
               <button
-                onClick={() => setShowManageWs(true)}
+                onClick={() => setShowManageBoard(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-surface border border-edge-strong hover:bg-hover text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-                title="Share or manage the whole workspace"
               >
-                <Settings size={16} />
-                <span className="hidden sm:inline">Workspace</span>
+                <ExternalLink size={16} />
+                <span className="hidden sm:inline">Manage access</span>
               </button>
             )}
           </div>
@@ -244,11 +243,13 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         </div>
       </div>
 
-      {showManageWs && (
-        <ManageWorkspaceModal
-          workspaceId={workspace.id}
-          workspaceName={workspace.name}
-          onClose={() => setShowManageWs(false)}
+      {showManageBoard && (
+        <ManageBoardAccessModal
+          boardId={boardId}
+          boardTitle={board?.title}
+          workspaceId={workspace?.id}
+          onClose={() => setShowManageBoard(false)}
+          onBack={() => setShowManageBoard(false)}
         />
       )}
     </div>

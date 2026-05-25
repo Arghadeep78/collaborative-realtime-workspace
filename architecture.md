@@ -116,9 +116,13 @@ The realtime core. A custom WebSocket server that implements the full `y-protoco
    - `MSG_SYNC (0)` — reads the y-protocol sub-message type:
      - `SyncStep1` / `SyncStep2` — always served (read path)
      - `Update` — applied **only** for write-capable roles (`editor`, `commenter` for allowed ops); viewers' bytes are discarded before `Y.applyUpdate` is called
-   - `MSG_AWARENESS (1)` — relayed to all other room peers
-8. **Cross-instance fanout** — after applying an update locally, publishes the raw binary to `yjs:<boardId>` on Redis. Subscriber handler on each instance applies the update to its local Y.Doc copy and rebroadcasts to its local peers.
-9. **Disconnect cleanup** — removes the connection from `DocumentManager`, evicts only that connection's `clientId` from the Awareness instance, and broadcasts the updated awareness state to remaining peers.
+   - `MSG_AWARENESS (1)` — relayed to all other room peers **and** published to `awareness:<boardId>` on Redis for cross-instance relay
+8. **Update validation (`applyClientUpdate`)** — write-path updates are not handed to `Y.applyUpdate` blindly. Each is guarded by three checks first, so a buggy or hostile client can't stall the event loop or crash the process:
+   - **Size cap** — updates larger than `MAX_UPDATE_BYTES` (512 KB) are dropped before parsing.
+   - **Pure-replay rejection** — the update's embedded state vector (`Y.encodeStateVectorFromUpdate`) is compared against the doc's current state vector (`Y.encodeStateVector`). If every client clock in the update is already covered, the update adds nothing and is dropped. The check is O(#clients), not O(document size).
+   - **Malformed-payload isolation** — both the replay inspection and `Y.applyUpdate` are wrapped in try/catch; a corrupt frame is logged and dropped rather than taking down the server for every peer.
+9. **Cross-instance fanout** — after applying an update locally, publishes the raw binary to `yjs:<boardId>` on Redis. Subscriber handler on each instance applies the update to its local Y.Doc copy and rebroadcasts to its local peers.
+10. **Disconnect cleanup** — removes the connection from `DocumentManager`, evicts only that connection's `clientId` from the Awareness instance, broadcasts the removal to remaining local peers, and publishes it to `awareness:<boardId>` on Redis so other instances drop the departed peer's ghost cursor.
 
 **RBAC is enforced at the message level, not just at connect.** A viewer connecting with a raw WebSocket client and replaying update frames will have every write discarded.
 
@@ -138,7 +142,7 @@ Manages the in-memory lifecycle of all active `Y.Doc` instances.
 1. Fetches board from MongoDB (lean query).
 2. Applies stored `yjsState` buffer to a fresh `Y.Doc` via `Y.applyUpdate`.
 3. Registers an `update` listener that marks the doc dirty on every change.
-4. Calls `_compact` to shrink accumulated CRDT history before any client connects.
+4. Schedules compaction asynchronously (`_scheduleCompaction`) and returns the un-compacted doc immediately — the first client's sync handshake is never blocked on a compaction pass.
 
 **History compaction (`_compact`):**
 - Computes `Y.encodeStateAsUpdate(ydoc)` to measure current size.
@@ -147,7 +151,8 @@ Manages the in-memory lifecycle of all active `Y.Doc` instances.
   - Plain JSON values (elements, pages) are set directly.
   - Nested Y.Maps (votes, comments) are recursively reconstructed as new `Y.Map` instances.
 - If compacted size ≤ 80% of original (`COMPACT_SAVE_RATIO`), swaps the doc, persists the compacted state, and returns it. Otherwise returns the original unchanged.
-- **Runs synchronously on cold load** — no peers are attached yet, so the swap is invisible. Clients receive the compacted state through the normal sync handshake.
+- **Runs asynchronously, off the cold-load path** (`_scheduleCompaction` → `setImmediate`). Rebuilding a large doc (encode → deep-clone → re-encode) can block the event loop for 50–200 ms; doing it during `_loadDoc` would make the first client wait and queue every other board's WebSocket traffic behind it. The "serve then optimize" ordering hands back the un-compacted doc first, then compacts in a later turn. A per-`boardId` `compacting` flag prevents two concurrent cold loads from double-compacting.
+- **Doc swap is rewired live, not assumed invisible.** Because compaction now runs after clients may have connected, the rebuilt `Y.Doc` is a new instance. The swap is made atomic: the `docs` map is updated first (so any in-flight message resolves the new doc — the WSServer read/write paths look the doc up fresh per message), then an `onDocSwapped` callback moves the `update` listener onto the new doc and pushes a fresh `SyncStep2` to all attached peers, then the old doc is destroyed.
 
 **Dirty tracking:**
 - `ydoc.on('update')` → `markDirty(boardId)`
@@ -240,11 +245,14 @@ Three composable primitives used to harden Gemini API calls:
 | Endpoint | Checks | Failure response |
 |---|---|---|
 | `GET /health` | MongoDB ping, Redis ping | `503` with per-service status |
-| `GET /ready` | MongoDB, Redis, BullMQ worker running | `503` if any check fails |
+| `GET /ready` | MongoDB, Redis, BullMQ workers running, persist-queue backpressure | `503` if any check fails |
 
-Both return JSON: `{ status: 'ok'|'degraded', services: { ... } }`.
+`/health` returns `{ status, redis, mongo }`. `/ready` returns the same plus `{ workers, persistBacklog, backpressure, activeBoards }`.
 
-`/ready` checks that the BullMQ persistence worker is active, not just that Redis is reachable — a node with a crashed worker will not receive traffic from a Kubernetes readiness probe.
+`/ready` is Yjs-aware, not a boilerplate probe:
+- It checks the BullMQ persistence + publish workers are actually running — a node with a crashed worker is "live" but should not take traffic.
+- It reads the `yjs-persist` queue's waiting-job count (`getWaitingCount`). A backlog above `PERSIST_BACKLOG_THRESHOLD` (100) means edits are being made faster than they flush to MongoDB; the node reports `not-ready` so an orchestrator stops piling on new load until it drains.
+- It reports `activeBoards` (`documentManager.docs.size`) — a snapshot of how many `Y.Doc`s are hot in memory.
 
 ---
 
@@ -356,13 +364,18 @@ Redis serves four distinct purposes in this system:
 | Purpose | Key pattern | Notes |
 |---|---|---|
 | Yjs cross-instance fanout | `yjs:<boardId>` pub/sub channel | Binary Yjs update frames, base64-encoded for Redis |
+| Awareness cross-instance relay | `awareness:<boardId>` pub/sub channel | `<instanceId>\|<base64 awareness frame>`; instance prefix lets the publisher skip its own echo |
 | Board metadata cache | `board:meta:<boardId>` | JSON, 60 s TTL, explicit invalidation |
 | BullMQ job queues | BullMQ internal keys | `noeviction` policy required |
 | Rate-limit counters | `rate-limit-redis` internal keys | Shared across instances |
 
 ### 7.3 Awareness Protocol
 
-Cursor positions and user metadata are ephemeral — they live in the Yjs Awareness instance on the server (in-memory, per-room) and are not persisted. On disconnect, `removeAwarenessStates` evicts only that connection's `clientId` and broadcasts the updated state to remaining peers. Cross-instance awareness relay is handled within each instance's WebSocket broadcast; awareness messages are not published to Redis (cursors are inherently local to the connected instance's peers).
+Cursor positions and user metadata are ephemeral — they live in the Yjs Awareness instance on the server (in-memory, per-room) and are not persisted.
+
+**Cross-instance relay.** Awareness frames are published to `awareness:<boardId>` on Redis so presence works in a horizontally-scaled deployment: a user on instance 1 sees the cursors of users connected to instance 2. Each instance subscribes to `awareness:*`, applies remote frames to its local Awareness instance (which then relays them to its own WebSocket peers), and skips the echo of its own publishes via an instance-id prefix on every frame.
+
+**Departure cleanup.** On disconnect, `removeAwarenessStates` evicts only that connection's `clientId`, broadcasts the removal to remaining local peers, **and** publishes it to `awareness:<boardId>` — a server-initiated removal never flows through the normal message path, so without this explicit publish, peers on other instances would keep rendering the departed user's ghost cursor.
 
 ### 7.4 Scalability
 
@@ -371,12 +384,28 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
 | Stateful WebSocket connections | Multiple instances OK; Yjs updates cross-synced via Redis pub/sub |
 | Rate limiting | Redis-backed counters; `trust proxy: 1` for correct client IP |
 | Database load | Board-metadata cache removes MongoDB from hot connection path; write-behind removes it from the sync path |
-| Memory | GC evicts idle boards after 5 min; compaction shrinks bloated docs on cold load |
+| Memory | GC evicts idle boards after 5 min; async compaction shrinks bloated docs without blocking the cold-load path |
 | Worker reliability | Dirty flag cleared only after durable enqueue; failures re-mark dirty for retry |
 
 ---
 
-## 8. Directory Structure
+## 8. Future Improvements
+
+### Incremental update log (replace full-snapshot persistence)
+
+**Current behaviour.** The persistence worker calls `Y.encodeStateAsUpdate(ydoc)` and writes the *entire* document to MongoDB on every flush cycle, even when a single element moved. For a board with a few hundred elements, one drag can trigger a ~50–200 KB write. At 30-second flush intervals across many active boards, this is significant write amplification.
+
+**Proposed change.** Persist incremental Yjs update chunks instead of full snapshots:
+
+- On each `ydoc.on('update')`, append the raw update chunk (typically 20–200 bytes) to a dedicated collection — `yjsUpdates: [{ boardId, update: Buffer, seq: Number, ts: Date }]` — rather than re-encoding the whole document.
+- On cold load, replay the chunks in `seq` order via `Y.applyUpdate()` to reconstruct the doc.
+- When the log for a board exceeds a threshold (e.g. 50 entries), compact it into a single snapshot and truncate the log — bounding replay cost.
+
+**Why it's deferred.** This is the standard pattern behind `y-leveldb` and Hocuspocus persistence adapters and trades read-path complexity (replay + periodic compaction) for write efficiency. It's a larger change (~100 lines across `DocumentManager.js` and `persistenceWorker.js`, plus a new `YjsUpdate` Mongoose model) and is orthogonal to the write-behind scheduling already in place, so it's tracked as a follow-up rather than bundled with the current persistence path.
+
+---
+
+## 9. Directory Structure
 
 ```
 .

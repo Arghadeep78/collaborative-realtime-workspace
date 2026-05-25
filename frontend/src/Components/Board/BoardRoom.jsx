@@ -613,6 +613,16 @@ export default function BoardRoom() {
         }
         return;
       }
+      // Layer shortcuts: Cmd/Ctrl+] = bring forward, Cmd/Ctrl+[ = send backward
+      if ((e.metaKey || e.ctrlKey) && (e.key === ']' || e.key === '[')) {
+        if (!editable || selectedIds.size === 0) return;
+        e.preventDefault();
+        selectedIds.forEach(id => {
+          if (e.key === ']') bringForward(id);
+          else sendBackward(id);
+        });
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0 && editable) {
         e.preventDefault();
         [...selectedIds].forEach(id => handleDelete(id));
@@ -623,7 +633,7 @@ export default function BoardRoom() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedIds, editable, handleDelete, undo, redo, elements, addElement, nextZ]);
+  }, [selectedIds, editable, handleDelete, undo, redo, elements, addElement, nextZ, bringForward, sendBackward]);
 
   // Switching slides clears transient selection/edit.
   const selectPage = useCallback((id) => {

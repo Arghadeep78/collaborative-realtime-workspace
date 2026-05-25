@@ -9,7 +9,7 @@ The client for the real-time collaborative workspace, built with **React 19 + Vi
 - **Custom multi-page canvas** — fixed 16:9 slides with freeform / grid / column layout modes, pan & zoom, marquee select, and explicit z-order layering.
 - **Rich elements** — sticky notes, Kanban cards (labels, assignees, subcards, due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
 - **Real-time collaboration** — element edits sync instantly via Yjs CRDTs; conflicts resolve automatically.
-- **Live presence** — teammate cursors with name tags and a broadcast laser pointer, powered by the Yjs Awareness protocol.
+- **Live presence** — teammate cursors with name tags and a broadcast laser pointer, powered by the Yjs Awareness protocol. Presence is relayed cross-instance on the backend, so cursors stay visible even when collaborators are connected to different server instances.
 - **Comments & voting** on elements for async feedback.
 - **AI brainstorming** panel powered by the Gemini API.
 - **Sharing roles** — Viewer, Commenter, and Editor; enforced client-side and at the server trust boundary.

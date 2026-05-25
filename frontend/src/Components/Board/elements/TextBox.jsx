@@ -13,6 +13,7 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
   const textColor = getThemeColor(rawTextColor, isDark);
   const textAlign = props.textAlign || 'left';
   const taRef = useRef(null);
+  const rootRef = useRef(null);
 
   useEffect(() => {
     if (editing && taRef.current) {
@@ -33,8 +34,8 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
   };
 
   return (
-    <div className="relative w-full h-full">
-      {/* Text format toolbar — shows while editing or selected */}
+    <div ref={rootRef} className="relative w-full h-full">
+      {/* Text format toolbar — rendered via portal to escape element stacking context */}
       {(editing || selected) && editable && (
         <TextFormatToolbar
           onEditProps={onEditProps}
@@ -45,6 +46,7 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
           textColor={rawTextColor}
           scale={scale}
           elementY={element.y}
+          anchorRef={rootRef}
         />
       )}
 
