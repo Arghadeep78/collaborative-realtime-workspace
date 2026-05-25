@@ -14,13 +14,7 @@ const OPTION_COLORS = [
   { bar: 'bg-cyan-500/20 dark:bg-cyan-500/30',    fill: 'bg-cyan-500',    active: 'border-cyan-500 ring-1 ring-cyan-500',    text: 'text-cyan-600 dark:text-cyan-400' },
 ];
 
-// Three discrete font size snaps stored in props.fontSize ('sm'|'md'|'lg').
-// Header: 18 / 26 / 52 px  |  Options: 14 / 20 / 40 px
-const FONT_SIZES = {
-  sm: { header: 18, option: 14 },
-  md: { header: 26, option: 20 },
-  lg: { header: 52, option: 40 },
-};
+// FONT_SIZES removed: poll scales automatically based on element width.
 
 // ── Setup modal ───────────────────────────────────────────────────────────────
 
@@ -46,7 +40,7 @@ function PollSetupModal({ initialProps, isDark, onConfirm, onCancel }) {
 
   const handleConfirm = () => {
     if (!question.trim()) { questionRef.current?.focus(); return; }
-    onConfirm({ question: question.trim(), multiChoice, options, bgColor, configured: true, fontSize: 'md' });
+    onConfirm({ question: question.trim(), multiChoice, options, bgColor, configured: true });
   };
 
   return createPortal(
@@ -224,9 +218,15 @@ export default function PollBlock({
 
   const [showSetup, setShowSetup] = useState(false);
 
-  const sizeKey  = props.fontSize || 'md';
-  const fsHeader = FONT_SIZES[sizeKey].header;
-  const fsOption = FONT_SIZES[sizeKey].option;
+  // Scale font sizes based on element width to fix visibility and squishing issues
+  const BASE_W = 320;
+  const textScale = Math.min(2.5, Math.max(0.5, element.w ? (element.w / BASE_W) : 1));
+  const fsHeader = Math.round(24 * textScale);
+  const fsOption = Math.round(15 * textScale);
+  
+  // Also scale height and icons proportionally
+  const minHeightOpt = Math.round(40 * textScale);
+  const iconClass = textScale > 1.5 ? 'w-6 h-6' : textScale > 1.2 ? 'w-5 h-5' : 'w-4 h-4';
 
   const options = useMemo(() => props.options || [], [props.options]);
   const pollId  = element.id;
@@ -406,7 +406,7 @@ export default function PollBlock({
                 style={{ fontSize: fsHeader }}
               />
             ) : (
-              <div className={`font-bold ${textMain} leading-snug line-clamp-2`} style={{ fontSize: fsHeader }}>
+              <div className={`font-bold ${textMain} leading-snug break-words`} style={{ fontSize: fsHeader }}>
                 {props.question || <span className="text-content-subtle font-semibold italic">Untitled poll</span>}
               </div>
             )}
@@ -463,24 +463,24 @@ export default function PollBlock({
                   style={{ width: `${pct}%` }}
                 />
                 {/* Row */}
-                <div className="relative w-full flex items-center gap-2 px-3 py-2 min-w-0" style={{ minHeight: 40 }}>
+                <div className="relative w-full flex items-center gap-2 px-3 py-2 min-w-0" style={{ minHeight: minHeightOpt }}>
                   {/* Check/circle indicator — fixed size, never shrinks */}
                   {mine ? (
                     props.multiChoice ? (
-                      <div className={`w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 ${theme.active}`}>
-                        <svg className={`w-2.5 h-2.5 ${theme.text}`} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5"><path d="M2 6l3 3 5-5"/></svg>
+                      <div className={`${iconClass} rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${theme.active}`}>
+                        <svg className={`w-3/5 h-3/5 ${theme.text}`} fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="2.5"><path d="M2 6l3 3 5-5"/></svg>
                       </div>
                     ) : (
-                      <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme.text}`} />
+                      <CheckCircle2 className={`${iconClass} shrink-0 transition-all ${theme.text}`} />
                     )
                   ) : (
-                    <div className={`${props.multiChoice ? 'rounded-md' : 'rounded-full'} w-4 h-4 border-2 shrink-0 transition-colors ${unvotedCircle}`} />
+                    <div className={`${props.multiChoice ? 'rounded-md' : 'rounded-full'} ${iconClass} border-2 shrink-0 transition-all ${unvotedCircle}`} />
                   )}
 
-                  {/* Label — takes remaining space, single line with ellipsis */}
+                  {/* Label — takes remaining space, wraps nicely when space is constrained */}
                   <div
-                    className={`font-medium flex-1 min-w-0 ${mine ? textMain : textSub}`}
-                    style={{ fontSize: fsOption, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    className={`font-medium flex-1 min-w-0 leading-tight ${mine ? textMain : textSub}`}
+                    style={{ fontSize: fsOption, whiteSpace: 'normal', overflowWrap: 'break-word', padding: '2px 0' }}
                   >
                     {opt.label}
                   </div>
@@ -533,26 +533,6 @@ export default function PollBlock({
               </button>
 
               <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 border-t ${footerBorder}`}>
-                {/* Font size snap — S / M / L */}
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-medium ${textMuted}`}>Size:</span>
-                  {[{ key: 'sm', label: 'S' }, { key: 'md', label: 'M' }, { key: 'lg', label: 'L' }].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => onEditProps({ fontSize: key })}
-                      className={`w-6 h-6 rounded-md text-xs font-bold border transition-all ${
-                        sizeKey === key
-                          ? 'bg-blue-500 border-blue-500 text-white'
-                          : hasColor
-                            ? 'border-slate-400 text-slate-600 dark:text-slate-300 hover:border-slate-500'
-                            : 'border-edge text-content-muted hover:border-edge-strong hover:text-content'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
                 {/* Background color */}
                 <div className="flex items-center gap-1.5">
                   <span className={`text-xs font-medium ${textMuted}`}>Color:</span>
