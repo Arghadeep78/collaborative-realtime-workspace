@@ -111,14 +111,24 @@ export const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 export const makeId = (prefix = 'el') =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
-// Convenience: pull the four top-level shared types this board uses. Names are
+// Convenience: pull the top-level shared types this board uses. Names are
 // chosen by the client; the server creates them on demand.
+//
+// `comments` mirrors the `votes` shape: a Y.Map keyed by elementId, each value
+// a nested Y.Map keyed by commentId → comment record. The nested-Map structure
+// lets concurrent commenters merge cleanly, and the backend's history
+// compaction already preserves nested Yjs types (see DocumentManager._compact).
 export const getBoardTypes = (ydoc) => ({
   yPages: ydoc.getArray('pages'),
   yElements: ydoc.getMap('elements'),
   ySystem: ydoc.getMap('system'),
   yVotes: ydoc.getMap('votes'),
+  yComments: ydoc.getMap('comments'),
 });
+
+// Element types that support threaded comments (toolbar tools 2,3,4,6,7,8 —
+// sticky, kanban, text, poll, iframe, shape). Connectors, media, laser excluded.
+export const COMMENTABLE_TYPES = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape'];
 
 // Re-exported so call sites don't each import yjs just for an origin tag.
 export const Yjs = Y;
@@ -131,22 +141,22 @@ export const LOCAL_ORIGIN = 'board-local';
 // ── Tailwind tokens for our own chrome (glassy surfaces, buttons, inputs) ────
 export const UI = {
   surface:
-    'bg-white/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/60 shadow-[0_16px_40px_rgba(12,18,36,0.12)] backdrop-blur-xl',
+    'bg-surface/90 border border-edge shadow-[0_16px_40px_rgba(12,18,36,0.12)] backdrop-blur-xl',
   surfaceSolid:
-    'bg-white/95 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 shadow-[0_16px_40px_rgba(12,18,36,0.12)]',
+    'bg-surface border border-edge shadow-[0_16px_40px_rgba(12,18,36,0.12)]',
   iconBtn:
-    'inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-900/10 dark:border-white/10 bg-slate-900/5 dark:bg-white/5 text-slate-500 dark:text-slate-400 transition hover:bg-white dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100',
+    'inline-flex items-center justify-center w-9 h-9 rounded-xl border border-edge bg-muted text-content-muted transition hover:bg-hover hover:text-content',
   iconBtnActive:
     'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/50',
   primaryBtn:
     'bg-gradient-to-br from-[#4262ff] to-[#2f49e7] text-white border border-blue-400/40 shadow-[0_12px_28px_rgba(66,98,255,0.28)] hover:brightness-95 transition',
   input:
-    'bg-slate-50/90 dark:bg-slate-700/80 border border-slate-900/10 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500/70 focus:ring-4 focus:ring-blue-500/15 transition',
+    'bg-muted border border-edge rounded-xl px-3 py-2 text-content focus:outline-none focus:border-blue-500/70 focus:ring-4 focus:ring-blue-500/15 transition',
   chip:
-    'bg-slate-900/5 dark:bg-white/10 border border-slate-900/10 dark:border-white/10 text-slate-500 dark:text-slate-400 text-[10px] font-bold tracking-[0.16em] uppercase rounded-full px-2 py-0.5',
-  logo: 'font-bold text-[1.05rem] tracking-[-0.03em] text-slate-900 dark:text-slate-100',
+    'bg-muted border border-edge text-content-muted text-[10px] font-bold tracking-[0.16em] uppercase rounded-full px-2 py-0.5',
+  logo: 'font-bold text-[1.05rem] tracking-[-0.03em] text-content',
   lite: 'bg-amber-200/60 dark:bg-amber-900/40 text-amber-950 dark:text-amber-300 border border-amber-300/70 dark:border-amber-700/60 rounded-full text-[9px] font-bold tracking-[0.2em] uppercase px-2 py-0.5',
 };
 
 export const boardShellClass =
-  'fixed inset-0 w-screen h-screen overflow-hidden bg-slate-50 dark:bg-[#212121] [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] dark:[background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.12),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.08),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.08),transparent_65%),#212121] [&_button]:cursor-pointer';
+  'fixed inset-0 w-screen h-screen overflow-hidden bg-app [background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.2),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.15),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.18),transparent_65%)] dark:[background:radial-gradient(1200px_540px_at_10%_-15%,rgba(66,98,255,0.12),transparent_65%),radial-gradient(900px_420px_at_90%_0%,rgba(0,167,116,0.08),transparent_60%),radial-gradient(700px_360px_at_40%_110%,rgba(255,204,102,0.08),transparent_65%),#0f172a] [&_button]:cursor-pointer';

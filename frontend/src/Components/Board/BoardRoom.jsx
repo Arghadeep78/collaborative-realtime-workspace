@@ -16,6 +16,7 @@ import TopUtilityBar from './TopUtilityBar.jsx';
 import SlideCanvas from './SlideCanvas.jsx';
 import ShareModal from './ShareModal.jsx';
 import ElementContextMenu from './ElementContextMenu.jsx';
+import CommentsDialog from './CommentsDialog.jsx';
 
 /**
  * The 3-pane discussion board: slide sidebar · top utility bar · slide canvas.
@@ -34,8 +35,11 @@ export default function BoardRoom() {
     pages,
     elements,
     votes,
+    comments,
     castPollVote,
     removePollVote,
+    addComment,
+    removeComment,
     addElement,
     updateElement,
     updateElementProps,
@@ -61,7 +65,12 @@ export default function BoardRoom() {
   const [role, setRole] = useState(null); // null = unresolved / no access (mirrors backend deny-by-default)
   const [isEditingTitle, setEditTitle] = useState(false);
   const [titleInput, setTitleInput] = useState('');
-  const editable = role === 'editor';
+  // owner/editor edit freely; commenter may only vote in polls; viewer is read-only.
+  const editable = role === 'owner' || role === 'editor';
+  const canVote = !!role && role !== 'viewer';
+  // owner / editor / commenter may comment; viewers (and unresolved role) cannot.
+  const canComment = !!role && role !== 'viewer';
+  const canShare = role === 'owner'; // only the owner can invite / manage access
   const isEditingTitleRef = useRef(false);
   isEditingTitleRef.current = isEditingTitle;
 
@@ -115,13 +124,13 @@ export default function BoardRoom() {
 
   const [connectFromId, setConnectFromId] = useState(null); // pending connector source
   const [graduationTargetId, setGraduationTargetId] = useState(null); // kanban drop target
-  const [contextMenu, setContextMenu] = useState(null); // { id, x, y } layering menu
+  const [contextMenu, setContextMenu] = useState(null); // { id, x, y } element right-click menu
+  const [commentsForId, setCommentsForId] = useState(null); // element id whose comment thread is open
 
   // ── Presence ─────────────────────────────────────────────────────────────
   const [peers, setPeers] = useState([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 
   const activePageRef = useRef(activePageId);
   activePageRef.current = activePageId;
@@ -152,9 +161,15 @@ export default function BoardRoom() {
   }, [board, userData.email, userData.name]);
 
   // ── Fetch board metadata + resolve role ───────────────────────────────────
+  // The backend resolves the caller's effective role (owner / editor /
+  // commenter / viewer) — including workspace-membership viewer baseline — and
+  // returns the workspace this board lives in, so we can land the user there.
   useEffect(() => {
     if (!boardId) return;
-    fetch(`${BACKEND_URL}/boards/${boardId}`)
+    const token = localStorage.getItem('token');
+    fetch(`${BACKEND_URL}/boards/${boardId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(async (r) => {
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
@@ -165,38 +180,25 @@ export default function BoardRoom() {
       .then((data) => {
         setBoard(data);
         setTitleInput(data.title || '');
-        const email = userData.email;
-        const token = localStorage.getItem('token');
 
-        if (!data.isPublic) {
+        // Remember which workspace this board belongs to so the dashboard opens
+        // there when the user navigates back (requirement: invitee lands on the
+        // board's workspace).
+        if (data.workspace?.id) {
+          try { localStorage.setItem('activeWorkspaceId', data.workspace.id); } catch { /* ignore */ }
+        }
+
+        if (!data.myRole) {
           if (!token) { toast.error('Please login to access this board.', { id: 'auth-toast' }); navigate('/login'); return; }
-          const isOwner = data.owner === email;
-          const isCollab = data.collaborators?.some((c) => c.email === email);
-          if (!isOwner && !isCollab) { toast.error("You don't have access to this private board.", { id: 'auth-toast' }); navigate('/dashboard'); return; }
+          toast.error("You don't have access to this board.", { id: 'auth-toast' }); navigate('/dashboard'); return;
         }
-
-        if (data.owner === email) setRole('editor');
-        else {
-          const collab = data.collaborators?.find((c) => c.email === email);
-          if (collab) setRole(collab.role);
-          else if (data.isPublic) {
-            setRole(data.publicRole || 'viewer');
-            // New joiner via public link — prompt to add to a workspace (once per session).
-            const seenKey = `ws-picker-shown:${boardId}`;
-            if (token && email && !sessionStorage.getItem(seenKey)) {
-              sessionStorage.setItem(seenKey, '1');
-              setShowWorkspacePicker(true);
-            }
-          } else {
-            setRole(null); // unknown user on private board — mirrors resolveRole deny-by-default
-          }
-        }
+        setRole(data.myRole);
       })
       .catch((err) => {
         toast.error(err.message || 'Board not found', { id: 'board-error-toast' });
         navigate('/dashboard');
       });
-  }, [boardId, navigate, userData.email]);
+  }, [boardId, navigate]);
 
   // ── Live title sync via ySystem map ──────────────────────────────────────
   // Observe remote title changes so renaming propagates to every open tab.
@@ -405,6 +407,36 @@ export default function BoardRoom() {
   useEffect(() => {
     if (contextMenu && !elements[contextMenu.id]) setContextMenu(null);
   }, [contextMenu, elements]);
+
+  // ── Comments ────────────────────────────────────────────────────────────────
+  const handleAddComment = useCallback((text) => {
+    if (!commentsForId) return;
+    addComment(commentsForId, text, {
+      name: userData.name || userData.email,
+      email: userData.email,
+      color: myColor,
+    });
+  }, [commentsForId, addComment, userData.name, userData.email]);
+
+  const handleRemoveComment = useCallback((commentId) => {
+    if (commentsForId) removeComment(commentsForId, commentId);
+  }, [commentsForId, removeComment]);
+
+  // A short human label for the comment-dialog header, per element type.
+  const commentTargetTitle = useMemo(() => {
+    const el = commentsForId && elements[commentsForId];
+    if (!el) return '';
+    const p = el.props || {};
+    const text = (p.text || p.title || p.question || p.caption || '').trim();
+    const labels = { sticky: 'sticky note', kanban: 'card', text: 'text box', poll: 'poll', iframe: 'embed', shape: 'shape' };
+    const kind = labels[el.type] || el.type;
+    return text ? `${kind} “${text.slice(0, 40)}”` : `this ${kind}`;
+  }, [commentsForId, elements]);
+
+  // Close the comments dialog if its element is deleted by anyone.
+  useEffect(() => {
+    if (commentsForId && !elements[commentsForId]) setCommentsForId(null);
+  }, [commentsForId, elements]);
 
   // ── Layout engine ──────────────────────────────────────────────────────────
   const applyLayout = useCallback((mode) => {
@@ -616,15 +648,15 @@ export default function BoardRoom() {
   // ── Loading gate ───────────────────────────────────────────────────────────
   if (!synced || !board || role === null) {
     return (
-      <div ref={boardRoomRef} className={`w-screen h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      <div ref={boardRoomRef} className="w-screen h-screen flex flex-col transition-colors duration-300 bg-app text-content">
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <div className="relative">
-            <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 rounded-full" />
+            <div className="w-14 h-14 border-4 border-edge rounded-full" />
             <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute inset-0" />
           </div>
           <div className="text-center">
             <p className="font-medium">Joining board…</p>
-            <p className="text-slate-500 text-sm mt-1">Syncing with collaborators</p>
+            <p className="text-content-muted text-sm mt-1">Syncing with collaborators</p>
           </div>
         </div>
       </div>
@@ -632,7 +664,7 @@ export default function BoardRoom() {
   }
 
   return (
-    <div ref={boardRoomRef} className={`${boardShellClass} flex flex-col w-screen h-screen ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`} onClick={() => showUserMenu && setShowUserMenu(false)}>
+    <div ref={boardRoomRef} className={`${boardShellClass} flex flex-col w-screen h-screen text-content`} onClick={() => showUserMenu && setShowUserMenu(false)}>
       {!presentationMode && (
         <TopUtilityBar
           board={board}
@@ -658,6 +690,7 @@ export default function BoardRoom() {
           setShowUserMenu={setShowUserMenu}
           navigate={navigate}
           onSignOut={handleSignOut}
+          canShare={canShare}
           onShare={() => setShowShare(true)}
           isDark={isDark}
           toggleTheme={toggleTheme}
@@ -726,6 +759,8 @@ export default function BoardRoom() {
             votes={votes}
             castPollVote={castPollVote}
             removePollVote={removePollVote}
+            canVote={canVote}
+            canComment={canComment}
             boardId={boardId}
             members={members}
             activePage={activePage}
@@ -733,20 +768,20 @@ export default function BoardRoom() {
           />
 
           {/* Slide Navigation (Bottom Center) */}
-          <div className="absolute bottom-6 left-4 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 z-50">
+          <div className="absolute bottom-6 left-4 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-4 bg-surface/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-edge z-50">
             <button
               onClick={() => {
                 const idx = pages.findIndex((p) => p.id === activePageId);
                 if (idx > 0) selectPage(pages[idx - 1].id);
               }}
               disabled={pages.findIndex((p) => p.id === activePageId) <= 0}
-              className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-600 transition"
+              className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
               title="Previous Slide (Left Arrow)"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
 
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 min-w-[3rem] text-center select-none">
+            <span className="text-sm font-semibold text-content min-w-[3rem] text-center select-none">
               {pages.findIndex((p) => p.id === activePageId) + 1} / {pages.length}
             </span>
 
@@ -756,7 +791,7 @@ export default function BoardRoom() {
                 if (idx < pages.length - 1) selectPage(pages[idx + 1].id);
               }}
               disabled={pages.findIndex((p) => p.id === activePageId) >= pages.length - 1}
-              className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 disabled:hover:text-slate-600 transition"
+              className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
               title="Next Slide (Right Arrow)"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
@@ -765,157 +800,42 @@ export default function BoardRoom() {
         </div>
       </div>
 
-      {contextMenu && editable && (
+      {contextMenu && (editable || canComment) && (
         <ElementContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           atFront={contextMenuFlags.atFront}
           atBack={contextMenuFlags.atBack}
           onAction={handleLayerAction}
+          canLayer={editable}
+          canComment={canComment}
+          commentCount={Object.keys(comments[contextMenu.id] || {}).length}
+          onComment={() => setCommentsForId(contextMenu.id)}
           onClose={() => setContextMenu(null)}
         />
       )}
 
-      {showShare && <ShareModal boardId={boardId} board={board} onClose={() => setShowShare(false)} />}
-      {showWorkspacePicker && (
-        <WorkspacePickerModal
-          boardId={boardId}
-          boardTitle={board?.title}
-          onClose={() => setShowWorkspacePicker(false)}
+      {commentsForId && (
+        <CommentsDialog
+          elementTitle={commentTargetTitle}
+          thread={comments[commentsForId] || {}}
+          canComment={canComment}
+          currentEmail={userData.email || ''}
+          isOwner={role === 'owner'}
+          onAdd={handleAddComment}
+          onDelete={handleRemoveComment}
+          onClose={() => setCommentsForId(null)}
         />
       )}
-    </div>
-  );
-}
 
-// ── WorkspacePickerModal ──────────────────────────────────────────────────────
-// Shown once per session to authenticated users who arrive via a public share link.
-function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
-  const [workspaces, setWorkspaces] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [newWsName, setNewWsName] = useState('');
-  const [mode, setMode] = useState('pick'); // 'pick' | 'create'
-  const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState(false);
-
-  const token = localStorage.getItem('token');
-
-  useEffect(() => {
-    fetch(`${BACKEND_URL}/workspaces/list`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => setWorkspaces(Array.isArray(data) ? data : []))
-      .catch((e) => { toast.error(e.message || 'Could not load workspaces'); })
-      .finally(() => setLoading(false));
-  }, [token]);
-
-  const addToWorkspace = async (wsId) => {
-    setSaving(true);
-    try {
-      await fetch(`${BACKEND_URL}/workspaces/${wsId}/add-board`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boardId }),
-      });
-      setDone(true);
-      setTimeout(onClose, 1400);
-    } catch (e) {
-      console.error(e);
-      setSaving(false);
-    }
-  };
-
-  const createAndAdd = async () => {
-    if (!newWsName.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`${BACKEND_URL}/workspaces/create`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newWsName.trim() }),
-      });
-      const ws = await res.json();
-      await addToWorkspace(ws.id);
-    } catch (e) {
-      console.error(e);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6">
-        {done ? (
-          <div className="flex flex-col items-center gap-3 py-2">
-            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center text-green-600 dark:text-green-400">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-            </div>
-            <p className="text-gray-900 dark:text-white font-semibold">Board saved to workspace!</p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-5">
-              <p className="text-gray-900 dark:text-white font-semibold text-base">Add to your workspace?</p>
-              <p className="text-gray-500 dark:text-white/50 text-sm mt-1">
-                Save &ldquo;{boardTitle || 'this board'}&rdquo; to a workspace so it appears in your dashboard.
-              </p>
-            </div>
-
-            {mode === 'pick' ? (
-              <>
-                {loading ? (
-                  <div className="space-y-2 mb-4">
-                    {[1, 2].map(i => <div key={i} className="h-10 rounded-lg bg-gray-100 dark:bg-white/5 animate-pulse" />)}
-                  </div>
-                ) : workspaces.length > 0 ? (
-                  <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                    {workspaces.map(ws => (
-                      <button key={ws.id} onClick={() => addToWorkspace(ws.id)} disabled={saving}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-left transition-colors disabled:opacity-50">
-                        <div className="w-7 h-7 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                          {ws.name[0]?.toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-gray-800 dark:text-white/90 truncate">{ws.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-400 dark:text-white/30 text-sm mb-4">You don&apos;t have any workspaces yet.</p>
-                )}
-                <button onClick={() => setMode('create')}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-dashed border-gray-300 dark:border-white/15 hover:border-gray-400 dark:hover:border-white/30 rounded-lg transition-colors mb-3">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                  New workspace
-                </button>
-              </>
-            ) : (
-              <>
-                <input
-                  autoFocus
-                  value={newWsName}
-                  onChange={e => setNewWsName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') createAndAdd(); if (e.key === 'Escape') setMode('pick'); }}
-                  placeholder="Workspace name"
-                  className="w-full bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 placeholder:text-gray-400 dark:placeholder:text-white/25 transition-colors mb-4"
-                />
-                <button onClick={createAndAdd} disabled={!newWsName.trim() || saving}
-                  className="w-full py-2.5 text-sm font-medium bg-indigo-600 dark:bg-white text-white dark:text-black rounded-lg disabled:opacity-40 hover:bg-indigo-700 dark:hover:bg-white/90 transition-colors mb-3">
-                  {saving ? 'Creating...' : 'Create & add'}
-                </button>
-                <button onClick={() => setMode('pick')}
-                  className="w-full py-2 text-sm text-gray-500 dark:text-white/40 hover:text-gray-700 dark:hover:text-white/70 transition-colors">
-                  ← Back
-                </button>
-              </>
-            )}
-
-            <button onClick={onClose}
-              className="w-full py-2 text-sm text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50 transition-colors">
-              Maybe later
-            </button>
-          </>
-        )}
-      </div>
+      {showShare && (
+        <ShareModal
+          boardId={boardId}
+          board={board}
+          workspace={board?.workspace}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 }

@@ -5,14 +5,19 @@ import BoardElement from './BoardElement.jsx';
 import ConnectorLayer from './ConnectorLayer.jsx';
 import PresenceLayer from './PresenceLayer.jsx';
 import RadialMenu from './RadialMenu.jsx';
+import { getThemeColor } from './theme/themeUtils.js';
+import { lightColors } from './theme/lightThemeMap.js';
+import { darkColors } from './theme/darkThemeMap.js';
 
 const FIT_PADDING = 64; // breathing room around the slide within the viewport
 
 export function getSlideBackground(bg, isDark) {
-  const defaultBg = isDark ? '#282e33' : '#ffffff';
-  const bgColor = bg?.value || defaultBg;
-  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.07)';
-  const gridColorLighter = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.06)';
+  const defaultBg = isDark ? darkColors.boardBg : lightColors.boardBg;
+  let bgColor = bg?.value || defaultBg;
+  bgColor = getThemeColor(bgColor, isDark); // Map custom board colors if any
+
+  const gridColor = isDark ? darkColors.boardGrid : lightColors.boardGrid;
+  const gridColorLighter = isDark ? darkColors.boardGridLighter : lightColors.boardGridLighter;
 
   if (!bg || bg.type === 'dots' || !bg.type) {
     return {
@@ -111,6 +116,8 @@ export default function SlideCanvas({
   votes,
   castPollVote,
   removePollVote,
+  canVote,
+  canComment,
   boardId,
   // Kanban assignee options
   members,
@@ -472,6 +479,8 @@ export default function SlideCanvas({
             votes={votes}
             castPollVote={castPollVote}
             removePollVote={removePollVote}
+            canVote={canVote}
+            canComment={canComment}
             boardId={boardId}
             members={members}
             activeTool={activeTool}
@@ -519,12 +528,12 @@ export default function SlideCanvas({
     </div>
 
     {/* Zoom controls — floats over the canvas, anchored to the outer wrapper */}
-    <div className="absolute bottom-5 right-4 z-50 flex items-center gap-1.5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 select-none pointer-events-auto">
+    <div className="absolute bottom-5 right-4 z-50 flex items-center gap-1.5 bg-surface/90 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-lg border border-edge select-none pointer-events-auto">
       {/* Zoom out */}
       <button
         onClick={zoomOut}
         title="Zoom out"
-        className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 transition shrink-0"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
@@ -547,7 +556,7 @@ export default function SlideCanvas({
       <button
         onClick={zoomIn}
         title="Zoom in"
-        className="w-6 h-6 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100 transition shrink-0"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -558,7 +567,7 @@ export default function SlideCanvas({
       <button
         onClick={zoomFit}
         title="Reset to fit view"
-        className="min-w-10 text-[11px] font-semibold text-slate-600 dark:text-slate-300 text-center hover:text-blue-600 dark:hover:text-blue-400 transition tabular-nums"
+        className="min-w-10 text-[11px] font-semibold text-content-muted text-center hover:text-blue-600 dark:hover:text-blue-400 transition tabular-nums"
       >
         {Math.abs(zoomMult - 1) < 0.01 ? 'Fit' : `${Math.round(zoomMult * 100)}%`}
       </button>

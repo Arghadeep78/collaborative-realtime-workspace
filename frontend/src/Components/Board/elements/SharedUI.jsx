@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useTheme } from '../../../contexts/ThemeContext.jsx';
+import { getThemeColor } from '../theme/themeUtils.js';
 
 export function FloatBar({ children, scale, elementY }) {
   const inv = 1 / (scale || 1);
@@ -18,24 +20,26 @@ export function FloatBar({ children, scale, elementY }) {
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="inline-flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl px-2.5 py-2">
+      <div className="inline-flex items-center gap-1 bg-surface border border-edge rounded-2xl shadow-2xl px-2.5 py-2">
         {children}
       </div>
     </div>
   );
 }
 
-export const Sep = () => <div className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5 shrink-0" />;
+export const Sep = () => <div className="w-px h-4 bg-edge mx-0.5 shrink-0" />;
 
 export function Swatch({ color, active, onClick, label, transparent }) {
+  const { isDark } = useTheme();
+  const displayColor = getThemeColor(color, isDark);
   return (
     <button
       onClick={onClick}
       title={label || color}
-      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-500'}`}
-      style={{ backgroundColor: transparent ? 'transparent' : color, boxShadow: '0 0 0 1px #e2e8f0 inset' }}
+      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : 'border-transparent hover:border-edge-strong'}`}
+      style={{ backgroundColor: transparent ? 'transparent' : displayColor, boxShadow: '0 0 0 1px #e2e8f0 inset' }}
     >
-      {transparent && <span className="text-[10px] text-slate-400 font-bold leading-none">/</span>}
+      {transparent && <span className="text-[10px] text-content-subtle font-bold leading-none">/</span>}
     </button>
   );
 }
@@ -74,7 +78,7 @@ export function Popover({ activeIcon, children, title }) {
     <div className="relative flex items-center shrink-0" ref={containerRef}>
       <button
         onClick={() => { setPopStyle({ left: '50%', transform: 'translateX(-50%)' }); setOpen(!open); }}
-        className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${open ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${open ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-content-muted hover:bg-hover'}`}
         title={title}
       >
         {activeIcon}
@@ -82,7 +86,7 @@ export function Popover({ activeIcon, children, title }) {
       {open && (
         <div
           ref={popoverRef}
-          className="absolute top-full mt-3 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto"
+          className="absolute top-full mt-3 bg-surface shadow-xl border border-edge rounded-xl p-3 z-50 flex flex-col gap-2 cursor-default whitespace-normal pointer-events-auto"
           style={popStyle}
         >
           {children}
@@ -100,23 +104,23 @@ export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAli
       {/* Font size */}
       <button
         onClick={() => onEditProps({ fontSize: Math.max(10, fontSize - 2) })}
-        className="w-7 h-7 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-[13px] font-bold"
+        className="w-7 h-7 rounded-lg text-content-muted hover:bg-hover flex items-center justify-center text-[13px] font-bold"
       >A−</button>
-      <span className="text-[12px] text-slate-400 tabular-nums w-7 text-center">{fontSize}</span>
+      <span className="text-[12px] text-content-subtle tabular-nums w-7 text-center">{fontSize}</span>
       <button
         onClick={() => onEditProps({ fontSize: Math.min(120, fontSize + 2) })}
-        className="w-7 h-7 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-[13px] font-bold"
+        className="w-7 h-7 rounded-lg text-content-muted hover:bg-hover flex items-center justify-center text-[13px] font-bold"
       >A+</button>
       <Sep />
       {/* Bold */}
       <button
         onClick={() => onEditProps({ bold: !bold })}
-        className={`w-7 h-7 rounded-lg text-[13px] font-bold flex items-center justify-center transition ${bold ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+        className={`w-7 h-7 rounded-lg text-[13px] font-bold flex items-center justify-center transition ${bold ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-content-muted hover:bg-hover'}`}
       >B</button>
       {/* Italic */}
       <button
         onClick={() => onEditProps({ italic: !italic })}
-        className={`w-7 h-7 rounded-lg text-[13px] italic font-semibold flex items-center justify-center transition ${italic ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+        className={`w-7 h-7 rounded-lg text-[13px] italic font-semibold flex items-center justify-center transition ${italic ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-content-muted hover:bg-hover'}`}
       >I</button>
       <Sep />
       {/* Alignment */}
@@ -124,7 +128,7 @@ export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAli
         <button
           key={a}
           onClick={() => onEditProps({ textAlign: a })}
-          className={`w-7 h-7 rounded-lg text-[11px] flex items-center justify-center transition ${textAlign === a ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+          className={`w-7 h-7 rounded-lg text-[11px] flex items-center justify-center transition ${textAlign === a ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-content-muted hover:bg-hover'}`}
           title={`Align ${a}`}
         >{sym}</button>
       ))}

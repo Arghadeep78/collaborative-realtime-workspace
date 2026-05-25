@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
-import { getBoardTypes, makeId, LOCAL_ORIGIN } from './boardConstants.js';
+import { getBoardTypes, makeId, LOCAL_ORIGIN, myColor } from './boardConstants.js';
 
 // Transaction origin tag for local edits. Shared with the per-user UndoManager
 // so it can track only the transactions this client authored.
@@ -21,12 +21,13 @@ export function useBoardSync(ydoc) {
   const [pages, setPages] = useState([]);
   const [elements, setElements] = useState({});
   const [votes, setVotes] = useState({});
+  const [comments, setComments] = useState({});
   const ydocRef = useRef(ydoc);
   ydocRef.current = ydoc;
 
   useEffect(() => {
     if (!ydoc) return;
-    const { yPages, yElements, yVotes } = getBoardTypes(ydoc);
+    const { yPages, yElements, yVotes, yComments } = getBoardTypes(ydoc);
 
     const syncPages = () => {
       const arr = yPages.toArray().map((p) => ({ ...p }));
@@ -35,18 +36,22 @@ export function useBoardSync(ydoc) {
     };
     const syncElements = () => setElements(yElements.toJSON());
     const syncVotes = () => setVotes(yVotes.toJSON());
+    const syncComments = () => setComments(yComments.toJSON());
 
     syncPages();
     syncElements();
     syncVotes();
+    syncComments();
     yPages.observe(syncPages);
     yElements.observe(syncElements);
     yVotes.observeDeep(syncVotes); // Use observeDeep so nested Map changes trigger re-sync!
+    yComments.observeDeep(syncComments); // nested per-element Map → observeDeep
 
     return () => {
       yPages.unobserve(syncPages);
       yElements.unobserve(syncElements);
       yVotes.unobserveDeep(syncVotes);
+      yComments.unobserveDeep(syncComments);
     };
   }, [ydoc]);
 
@@ -82,6 +87,60 @@ export function useBoardSync(ydoc) {
         const next = new Y.Map();
         Object.entries(yPoll).forEach(([k, v]) => { if (k !== email) next.set(k, v); });
         yVotes.set(pollId, next);
+      }
+    }, LOCAL);
+  }, []);
+
+  // ── Comments ────────────────────────────────────────────────────────────────
+  // Same nested-Y.Map shape as votes: comments → { [elementId]: Y.Map<commentId,
+  // record> }. observeDeep above re-syncs on any nested change, and the backend
+  // compaction preserves the nested Y.Maps so threads survive a cold load.
+
+  /** Add a comment to an element. `user` is { name, email, color? }. */
+  const addComment = useCallback((elementId, text, user) => {
+    const doc = ydocRef.current;
+    const body = (text || '').trim();
+    if (!doc || !elementId || !body) return null;
+    const yComments = doc.getMap('comments');
+    const commentId = makeId('cm');
+    doc.transact(() => {
+      let thread = yComments.get(elementId);
+      if (!(thread instanceof Y.Map)) {
+        // Rehydrate a compaction-flattened thread into a Y.Map, carrying
+        // existing comments across so a new comment doesn't drop the others.
+        const prev = thread && typeof thread === 'object' ? thread : null;
+        thread = new Y.Map();
+        if (prev) Object.entries(prev).forEach(([k, v]) => thread.set(k, v));
+        yComments.set(elementId, thread);
+      }
+      thread.set(commentId, {
+        id: commentId,
+        text: body,
+        author: user?.name || user?.email || 'Anonymous',
+        authorEmail: user?.email || '',
+        color: user?.color || myColor,
+        createdAt: Date.now(),
+      });
+    }, LOCAL);
+    return commentId;
+  }, []);
+
+  /** Delete a single comment from an element's thread. */
+  const removeComment = useCallback((elementId, commentId) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yComments = doc.getMap('comments');
+    doc.transact(() => {
+      const thread = yComments.get(elementId);
+      if (thread instanceof Y.Map) {
+        thread.delete(commentId);
+        if (thread.size === 0) yComments.delete(elementId);
+      } else if (thread && typeof thread === 'object' && commentId in thread) {
+        // Compaction-flattened thread: rebuild without the removed comment.
+        const next = new Y.Map();
+        Object.entries(thread).forEach(([k, v]) => { if (k !== commentId) next.set(k, v); });
+        if (next.size === 0) yComments.delete(elementId);
+        else yComments.set(elementId, next);
       }
     }, LOCAL);
   }, []);
@@ -141,7 +200,10 @@ export function useBoardSync(ydoc) {
   const removeElement = useCallback((id) => {
     const doc = ydocRef.current;
     if (!doc) return;
-    doc.transact(() => doc.getMap('elements').delete(id), LOCAL);
+    doc.transact(() => {
+      doc.getMap('elements').delete(id);
+      doc.getMap('comments').delete(id); // drop the element's comment thread too
+    }, LOCAL);
   }, []);
 
   /**
@@ -317,8 +379,11 @@ export function useBoardSync(ydoc) {
     pages,
     elements,
     votes,
+    comments,
     castPollVote,
     removePollVote,
+    addComment,
+    removeComment,
     addElement,
     updateElement,
     updateElementProps,

@@ -1,5 +1,34 @@
+import jwt from 'jsonwebtoken';
 import Whiteboard from '../models/whiteboardModel.js';
+import Workspace from '../models/workspaceModel.js';
 import { invalidateBoardMeta } from '../cache/boardCache.js';
+
+// Decode a Bearer token without rejecting the request when it's missing/invalid.
+// getBoardById is intentionally public, but we still want the caller's identity
+// (when present) to resolve their effective role on the board.
+function emailFromAuthHeader(req) {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) return null;
+    return jwt.verify(token, process.env.JWT_SECRET).email || null;
+  } catch {
+    return null;
+  }
+}
+
+// Resolve a user's effective role on a board. Precedence:
+//   owner → explicit board collaborator → workspace-member viewer baseline →
+//   public link role → no access (null).
+function resolveRole(board, email, workspace) {
+  if (email && board.owner === email) return 'owner';
+  const collab = email && board.collaborators?.find(c => c.email === email);
+  if (collab) return collab.role;
+  const isWsMember = email && workspace &&
+    (workspace.owner === email || workspace.members?.some(m => m.email === email));
+  if (isWsMember) return 'viewer';
+  if (board.isPublic) return board.publicRole || 'viewer';
+  return null;
+}
 
 // ── createBoard ───────────────────────────────────────────────────────────────
 export const createBoard = async (req, res) => {
@@ -25,16 +54,31 @@ export const createBoard = async (req, res) => {
 export const getAllUserBoards = async (req, res) => {
   try {
     const email = req.email;
+
+    // Boards I can see by being a member of (or owner of) a workspace — workspace
+    // membership grants viewer access to every board in that workspace.
+    const myWorkspaces = await Workspace.find({
+      $or: [{ owner: email }, { 'members.email': email }],
+    }).select('boardIds owner members').lean();
+    const memberBoardIds = [...new Set(myWorkspaces.flatMap(w => w.boardIds || []))];
+    // Quick lookup: which workspace (membership) covers a given board id.
+    const wsByBoardId = new Map();
+    myWorkspaces.forEach(w => (w.boardIds || []).forEach(id => {
+      if (!wsByBoardId.has(id)) wsByBoardId.set(id, w);
+    }));
+
     const boards = await Whiteboard.find({
       $or: [
         { owner: email },
-        { 'collaborators.email': email }
+        { 'collaborators.email': email },
+        ...(memberBoardIds.length ? [{ id: { $in: memberBoardIds } }] : []),
       ]
     }).select('-yjsState').sort({ updatedAt: -1 }).lean();
 
     const result = boards.map(b => ({
       ...b,
       isFavorited: Array.isArray(b.favoritedBy) && b.favoritedBy.includes(email),
+      myRole: resolveRole(b, email, wsByBoardId.get(b.id)),
     }));
     return res.status(200).json(result);
   } catch (err) {
@@ -51,7 +95,20 @@ export const getBoardById = async (req, res) => {
     const board = await Whiteboard.findOne({ id: req.params.id })
       .select('-yjsState').lean();
     if (!board) return res.status(404).json({ error: 'Board not found' });
-    return res.status(200).json(board);
+
+    const email = emailFromAuthHeader(req);
+    // The workspace this board canonically lives in (its owner's workspace).
+    const workspace = await Workspace.findOne({ boardIds: board.id })
+      .select('id name owner members').lean();
+    const myRole = resolveRole(board, email, workspace);
+
+    return res.status(200).json({
+      ...board,
+      myRole,
+      workspace: workspace
+        ? { id: workspace.id, name: workspace.name, owner: workspace.owner }
+        : null,
+    });
   } catch (err) {
     console.error('getBoardById error:', err);
     return res.status(500).json({ error: 'Failed to fetch board' });

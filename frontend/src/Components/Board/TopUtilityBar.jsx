@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { UI, TOOLS } from './boardConstants.js';
+import { getThemeColor } from './theme/themeUtils';
 
 const BG_PATTERNS = [
   { id: 'dots',  label: 'Dots',  preview: 'radial-gradient(circle, rgba(15,23,42,0.25) 1.5px, transparent 1.5px)', darkPreview: 'radial-gradient(circle, rgba(255,255,255,0.2) 1.5px, transparent 1.5px)', size: '12px 12px' },
@@ -54,11 +55,11 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
             style={{ boxShadow: '0 8px 24px rgba(12,18,36,0.14), 0 1px 4px rgba(12,18,36,0.08)' }}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60">
+            <div className="bg-surface border border-edge">
 
               {/* Pattern */}
               <div className="px-4 pt-4 pb-3">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Pattern</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-content-subtle mb-2.5">Pattern</p>
                 <div className="grid grid-cols-4 gap-2">
                   {BG_PATTERNS.map((p) => (
                     <button
@@ -68,24 +69,24 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
                       className={`flex flex-col items-center gap-1.5 rounded-xl p-1.5 border-2 transition-all ${
                         currentType === p.id
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
-                          : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                          : 'border-transparent hover:border-edge hover:bg-hover'
                       }`}
                     >
                       <div
-                        className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700"
+                        className="w-full rounded-lg border border-edge bg-muted"
                         style={{ height: 34, backgroundImage: isDark ? p.darkPreview : p.preview, backgroundSize: p.size }}
                       />
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">{p.label}</span>
+                      <span className="text-[10px] text-content-muted font-medium leading-none">{p.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="h-px bg-slate-100 dark:bg-slate-700/60 mx-4" />
+              <div className="h-px bg-edge-subtle mx-4" />
 
               {/* Color */}
               <div className="px-4 py-3">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Color</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-content-subtle mb-2.5">Color</p>
                 {/* 7 cols × 2 rows = 14 swatches + rainbow fits exactly */}
                 <div className="grid grid-cols-8 gap-1.5">
                   {BG_COLORS.map((c) => (
@@ -94,16 +95,16 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
                       onClick={() => set({ type: currentType === 'image' ? 'solid' : currentType, value: c })}
                       title={c}
                       className={`w-6 h-6 rounded-full border-2 transition-all ${
-                        bg?.value === c ? 'border-blue-500 scale-110 shadow-sm' : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 hover:scale-105'
+                        bg?.value === c ? 'border-blue-500 scale-110 shadow-sm' : 'border-edge hover:border-blue-400 hover:scale-105'
                       }`}
-                      style={{ backgroundColor: c }}
+                      style={{ backgroundColor: getThemeColor(c, isDark) }}
                     />
                   ))}
                   {/* Custom colour — must be 15th cell so it lands in row 2, col 7 */}
                   <label
                     title="Custom color"
                     className={`relative w-6 h-6 rounded-full border-2 cursor-pointer transition-all overflow-hidden ${
-                      bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-slate-200 dark:border-slate-600 hover:border-blue-400 hover:scale-105'
+                      bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-edge hover:border-blue-400 hover:scale-105'
                     }`}
                     style={{ background: 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8a00 60deg, #ffe500 120deg, #14ff00 180deg, #00a3ff 240deg, #0500ff 300deg, #ff0000 360deg)' }}
                   >
@@ -117,18 +118,18 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
                 </div>
               </div>
 
-              <div className="h-px bg-slate-100 dark:bg-slate-700/60 mx-4" />
+              <div className="h-px bg-edge-subtle mx-4" />
 
               {/* Image URL */}
               <div className="px-4 py-3">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 dark:text-slate-500 mb-2.5">Image URL</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-content-subtle mb-2.5">Image URL</p>
                 <div className="flex gap-2">
                   <input
                     value={imgUrl}
                     onChange={(e) => setImgUrl(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
                     placeholder="https://…"
-                    className="flex-1 text-[12px] bg-slate-50 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-1.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition"
+                    className="flex-1 text-[12px] bg-muted border border-edge rounded-xl px-3 py-1.5 text-content placeholder:text-content-subtle focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition"
                   />
                   <button
                     onClick={() => { if (imgUrl.trim()) { set({ type: 'image', value: imgUrl.trim() }); setImgUrl(''); } }}
@@ -218,7 +219,7 @@ function PeersMenu({ peers, board }) {
         {peers.slice(0, 3).map((peer, i) => (
           <div
             key={peer.clientId}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-white dark:border-slate-800 shadow-sm overflow-hidden z-10"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-surface shadow-sm overflow-hidden z-10"
             style={{ backgroundColor: peer.color, zIndex: 10 - i }}
           >
             {peer.profilePic ? (
@@ -229,7 +230,7 @@ function PeersMenu({ peers, board }) {
           </div>
         ))}
         {peers.length > 3 && (
-          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold border-2 border-white dark:border-slate-800 shadow-sm z-0">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-muted text-content-muted text-[10px] font-bold border-2 border-surface shadow-sm z-0">
             +{peers.length - 3}
           </div>
         )}
@@ -239,15 +240,15 @@ function PeersMenu({ peers, board }) {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute top-full mt-2 right-0 w-64 rounded-2xl z-50 overflow-hidden bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/60 shadow-xl"
+            className="absolute top-full mt-2 right-0 w-64 rounded-2xl z-50 overflow-hidden bg-surface border border-edge shadow-xl"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
-              <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">Active Members ({peers.length})</h3>
+            <div className="px-4 py-3 border-b border-edge-subtle">
+              <h3 className="text-xs font-semibold text-content">Active Members ({peers.length})</h3>
             </div>
             <div className="max-h-60 overflow-y-auto px-2 py-2 flex flex-col gap-1">
               {peers.map((peer) => (
-                <div key={peer.clientId} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/40 transition">
+                <div key={peer.clientId} className="flex items-center gap-3 p-2 rounded-xl hover:bg-hover transition">
                   <div
                     className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden"
                     style={{ backgroundColor: peer.color }}
@@ -259,8 +260,8 @@ function PeersMenu({ peers, board }) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{peer.name}</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">{getRole(peer.email)}</p>
+                    <p className="text-sm font-medium text-content truncate">{peer.name}</p>
+                    <p className="text-[11px] text-content-muted capitalize">{getRole(peer.email)}</p>
                   </div>
                 </div>
               ))}
@@ -293,6 +294,7 @@ export default function TopUtilityBar({
   setShowUserMenu,
   navigate,
   onSignOut,
+  canShare,
   onShare,
   isDark,
   toggleTheme,
@@ -315,11 +317,11 @@ export default function TopUtilityBar({
               className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition ${
                 active
                   ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-1 ring-blue-400/50'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
+                  : 'text-content-muted hover:bg-hover'
               } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
             >
               <ToolGlyph id={tool.id} />
-              <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-slate-400">{tool.key}</span>
+              <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-content-subtle">{tool.key}</span>
             </button>
           );
         })}
@@ -333,8 +335,8 @@ export default function TopUtilityBar({
             title="Undo your last change (⌘Z)"
             className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
               canUndo
-                ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
-                : 'text-slate-400 opacity-35 cursor-not-allowed'
+                ? 'text-content-muted hover:bg-hover'
+                : 'text-content-subtle opacity-35 cursor-not-allowed'
             }`}
           >
             <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -348,8 +350,8 @@ export default function TopUtilityBar({
             title="Redo (⌘⇧Z)"
             className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
               canRedo
-                ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5'
-                : 'text-slate-400 opacity-35 cursor-not-allowed'
+                ? 'text-content-muted hover:bg-hover'
+                : 'text-content-subtle opacity-35 cursor-not-allowed'
             }`}
           >
             <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -379,7 +381,7 @@ export default function TopUtilityBar({
           <span className={UI.logo}>Collab</span>
           <span className={UI.lite}>Board</span>
         </div>
-        <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+        <div className="h-5 w-px bg-edge" />
         {isEditingTitle ? (
           <input
             autoFocus
@@ -392,12 +394,13 @@ export default function TopUtilityBar({
         ) : (
           <button
             onClick={() => editable && setEditTitle(true)}
-            className="text-slate-900 dark:text-slate-100 font-medium text-sm hover:bg-black/5 dark:hover:bg-white/5 px-2 py-1 rounded-lg transition max-w-28 sm:max-w-44 lg:max-w-56 min-w-0 truncate block"
+            className="text-content font-medium text-sm hover:bg-hover px-2 py-1 rounded-lg transition max-w-28 sm:max-w-44 lg:max-w-56 min-w-0 truncate block"
           >
             {board?.title || 'Untitled Board'}
           </button>
         )}
         {role === 'viewer' && <span className={UI.chip}>View Only</span>}
+        {role === 'commenter' && <span className={UI.chip}>Polls Only</span>}
       </div>
 
       {/* ── Centre: element toolbar — inline on lg+, full-width row below on smaller ── */}
@@ -416,12 +419,12 @@ export default function TopUtilityBar({
           <button
             onClick={toggleTheme}
             title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition text-content-muted hover:bg-hover border border-edge bg-surface shadow-sm"
           >
             {isDark ? (
               <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>
             ) : (
-              <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
+              <svg className="w-4 h-4 text-content-subtle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
             )}
           </button>
         </div>
@@ -437,27 +440,27 @@ export default function TopUtilityBar({
                 userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'
               )}
             </div>
-            <svg className={`w-3 h-3 text-slate-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <svg className={`w-3 h-3 text-content-muted transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {showUserMenu && (
             <div className={`absolute right-0 top-full mt-2 w-56 rounded-xl py-2 z-50 ${UI.surfaceSolid}`}>
-              <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{userData.name || 'User'}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{userData.email || ''}</p>
+              <div className="px-4 py-2 border-b border-edge-subtle">
+                <p className="text-sm font-semibold text-content truncate">{userData.name || 'User'}</p>
+                <p className="text-xs text-content-muted truncate">{userData.email || ''}</p>
               </div>
-              <button onClick={() => { setShowUserMenu(false); navigate('/dashboard'); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition">
-                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+              <button onClick={() => { setShowUserMenu(false); navigate('/dashboard'); }} className="w-full text-left px-4 py-2 text-sm text-content hover:bg-hover flex items-center gap-2.5 transition">
+                <svg className="w-4 h-4 text-content-subtle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
                 Dashboard
               </button>
-              <button onClick={() => { setShowUserMenu(false); navigate('/profile'); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2.5 transition">
-                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              <button onClick={() => { setShowUserMenu(false); navigate('/profile'); }} className="w-full text-left px-4 py-2 text-sm text-content hover:bg-hover flex items-center gap-2.5 transition">
+                <svg className="w-4 h-4 text-content-subtle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 Profile
               </button>
-              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+              <div className="border-t border-edge-subtle my-1" />
+              <div className="border-t border-edge-subtle my-1" />
               <button onClick={onSignOut} className="w-full text-left px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2.5 transition">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                 Sign Out
@@ -470,9 +473,11 @@ export default function TopUtilityBar({
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
         </button>
 
-        <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share board">
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-        </button>
+        {canShare && (
+          <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share board">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+          </button>
+        )}
       </div>
 
       {/* ── Toolbar row 2: shown below lg breakpoint ────────────────── */}

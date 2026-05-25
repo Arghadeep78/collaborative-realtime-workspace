@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { FloatBar, Sep, Swatch, Popover, TextFormatToolbar, TEXT_COLORS } from './SharedUI';
+import { useTheme } from '../../../contexts/ThemeContext.jsx';
+import { getThemeColor } from '../theme/themeUtils.js';
 
 // ── Shape geometry helpers ─────────────────────────────────────────────────
 
@@ -106,14 +108,20 @@ const SHAPES = [
 
 export default function ShapeBlock({ element, editable, editing, selected, onEditProps, getScale }) {
   const { props, w, h } = element;
+  const { isDark } = useTheme();
   const shapeType = props.shapeType || 'rect';
-  const fill = props.fill ?? '#a5b4fc';
-  const stroke = props.stroke ?? '#6366f1';
+  const rawFill = props.fill ?? '#a5b4fc';
+  const rawStroke = props.stroke ?? '#6366f1';
+  const rawTextColor = props.textColor || '#1e293b';
+  
+  const fill = getThemeColor(rawFill, isDark);
+  const stroke = getThemeColor(rawStroke, isDark);
+  const textColor = getThemeColor(rawTextColor, isDark);
+  
   const strokeWidth = props.strokeWidth ?? 3;
   const opacity = props.opacity ?? 1;
   const text = props.text || '';
   const fontSize = props.fontSize || 28;
-  const textColor = props.textColor || '#1e293b';
   const textAlign = props.textAlign || 'center';
   const bold = !!props.bold;
   const italic = !!props.italic;
@@ -189,7 +197,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           bold={bold}
           italic={italic}
           textAlign={textAlign}
-          textColor={textColor}
+          textColor={rawTextColor}
           scale={scale}
           elementY={element.y}
         />
@@ -209,7 +217,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
                   key={s.id}
                   onClick={() => onEditProps({ shapeType: s.id })}
                   title={s.id}
-                  className={`w-8 h-8 rounded-lg text-[18px] flex items-center justify-center transition leading-none ${shapeType === s.id ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                  className={`w-8 h-8 rounded-lg text-[18px] flex items-center justify-center transition leading-none ${shapeType === s.id ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-content-muted hover:bg-hover'}`}
                 >{s.icon}</button>
               ))}
             </div>
@@ -220,11 +228,11 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           {/* Fill */}
           <Popover
             title="Fill Color"
-            activeIcon={<Swatch color={fill} active={false} />}
+            activeIcon={<Swatch color={rawFill} active={false} />}
           >
             <div className="grid grid-cols-5 gap-1.5 w-36">
               {FILL_COLORS.map((c) => (
-                <Swatch key={c} color={c} active={fill === c} onClick={() => onEditProps({ fill: c })} />
+                <Swatch key={c} color={c} active={rawFill === c} onClick={() => onEditProps({ fill: c })} />
               ))}
             </div>
           </Popover>
@@ -234,19 +242,19 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           {/* Border */}
           <Popover
             title="Border"
-            activeIcon={<Swatch color={stroke} transparent={stroke === 'transparent'} active={false} />}
+            activeIcon={<Swatch color={rawStroke} transparent={rawStroke === 'transparent'} active={false} />}
           >
             <div className="flex flex-col gap-3 w-36">
               <div className="grid grid-cols-4 gap-1.5">
                 {STROKE_OPTIONS.map(({ v, label }) => (
-                  <Swatch key={v} color={v} active={stroke === v} onClick={() => onEditProps({ stroke: v })} transparent={v === 'transparent'} label={label} />
+                  <Swatch key={v} color={v} active={rawStroke === v} onClick={() => onEditProps({ stroke: v })} transparent={v === 'transparent'} label={label} />
                 ))}
               </div>
-              <div className="h-px bg-slate-200 dark:bg-slate-700 w-full" />
+              <div className="h-px bg-edge w-full" />
               <div className="flex flex-col gap-1 w-full">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Width</span>
-                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{strokeWidth}px</span>
+                  <span className="text-[10px] font-bold text-content-muted uppercase">Width</span>
+                  <span className="text-[10px] font-bold text-content tabular-nums">{strokeWidth}px</span>
                 </div>
                 <input
                   type="range" min={1} max={12} step={1} value={strokeWidth}
@@ -271,8 +279,8 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
           >
             <div className="flex flex-col gap-2 w-32">
                <div className="flex items-center justify-between">
-                 <span className="text-[10px] font-bold text-slate-500 uppercase">Opacity</span>
-                 <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{Math.round(opacity * 100)}%</span>
+                 <span className="text-[10px] font-bold text-content-muted uppercase">Opacity</span>
+                 <span className="text-[10px] font-bold text-content tabular-nums">{Math.round(opacity * 100)}%</span>
                </div>
                <input
                  type="range" min={0.1} max={1} step={0.05} value={opacity}

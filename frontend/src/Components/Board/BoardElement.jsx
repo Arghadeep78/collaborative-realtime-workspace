@@ -8,7 +8,7 @@ import PollBlock from './elements/PollBlock.jsx';
 import IframeWindow from './elements/IframeWindow.jsx';
 import ShapeBlock from './elements/ShapeBlock.jsx';
 import MediaBlock from './elements/MediaBlock.jsx';
-import { SLIDE_W, SLIDE_H, clamp, MIN_FONT, ELEMENT_MIN_DIMS } from './boardConstants.js';
+import { SLIDE_W, SLIDE_H, clamp, MIN_FONT, ELEMENT_MIN_DIMS, COMMENTABLE_TYPES } from './boardConstants.js';
 
 const RENDERERS = {
   sticky: StickyNote,
@@ -62,6 +62,8 @@ export default function BoardElement({
   votes,
   castPollVote,
   removePollVote,
+  canVote,
+  canComment,
   boardId,
   // Kanban assignee options (board members)
   members,
@@ -69,6 +71,9 @@ export default function BoardElement({
 }) {
   const selected       = selectedIds?.has(element.id) ?? false;
   const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
+  // Commenters (who aren't editors) may right-click commentable elements to
+  // open the comment thread, even though they can't select/drag/edit them.
+  const commentable = canComment && COMMENTABLE_TYPES.includes(element.type);
 
   const [live, setLive] = useState(null); // { x?, y?, w?, h?, props? } gesture override
   const lastClickRef   = useRef({ time: 0, x: 0, y: 0 });
@@ -193,6 +198,9 @@ export default function BoardElement({
   const handleBodyPointerDown = (e) => {
     // In draw/spawn mode let the event bubble through to the canvas for element creation
     if (editable && activeTool && activeTool !== 'pointer' && !connectMode && !editing) return;
+    // Non-editors (e.g. commenters who may vote on polls) can't select or drag —
+    // swallow the press here; the poll's own vote buttons stopPropagation first.
+    if (!editable) { e.stopPropagation(); return; }
     e.stopPropagation();
 
     if (connectMode) {
@@ -239,14 +247,21 @@ export default function BoardElement({
         height: geom.h,
         zIndex: element.z ?? 1,
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
-        pointerEvents: (!editable || (activeTool && activeTool !== 'pointer' && !connectMode && !editing)) ? 'none' : 'auto',
+        pointerEvents: (
+          (!editable && !(element.type === 'poll' && canVote) && !commentable) ||
+          (activeTool && activeTool !== 'pointer' && !connectMode && !editing)
+        ) ? 'none' : 'auto',
       }}
       onPointerDown={handleBodyPointerDown}
       onContextMenu={(e) => {
-        if (!editable || connectMode) return;
+        // Editors get the full menu (layering + comments); commenters who can't
+        // edit still get a right-click menu on commentable elements (comments
+        // only). Spawn/connect modes suppress it.
+        if (connectMode || (!editable && !commentable)) return;
+        if (activeTool && activeTool !== 'pointer' && !editing) return;
         e.preventDefault();
         e.stopPropagation();
-        onSelect(element.id);
+        if (editable) onSelect(element.id);
         onContextMenu?.(element.id, e.clientX, e.clientY);
       }}
       onDoubleClick={(e) => {
@@ -295,6 +310,7 @@ export default function BoardElement({
         votes={votes}
         castPollVote={castPollVote}
         removePollVote={removePollVote}
+        canVote={canVote}
         boardId={boardId}
         members={members}
         getScale={getScale}

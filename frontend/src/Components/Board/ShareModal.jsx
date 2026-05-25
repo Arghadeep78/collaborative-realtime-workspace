@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
-import { Globe, Lock, Copy, X } from 'lucide-react';
+import { Globe, Lock, Copy, X, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ManageWorkspaceModal from './ManageWorkspaceModal.jsx';
 
-export default function ShareModal({ boardId, board, onClose }) {
+export default function ShareModal({ boardId, board, workspace, onClose }) {
+  const [showManageWs, setShowManageWs] = useState(false);
+  const userEmail = (() => { try { return JSON.parse(localStorage.getItem('userData') || '{}').email; } catch { return null; } })();
+  const ownsWorkspace = workspace?.id && workspace?.owner === userEmail;
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('editor');
 
@@ -94,20 +98,20 @@ export default function ShareModal({ boardId, board, onClose }) {
     }
   };
 
-  const inputClass = "bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition";
+  const inputClass = "bg-surface border border-edge-strong rounded-lg px-3 py-2 text-content text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm rb-anim-fade">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] overflow-hidden m-4">
+      <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-[520px] overflow-hidden m-4">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white">
-          <h2 className="text-gray-900 font-semibold text-xl tracking-tight">Share "{board?.title || 'Board'}"</h2>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
+        <div className="px-6 py-5 border-b border-edge-subtle flex items-center justify-between bg-surface">
+          <h2 className="text-content font-semibold text-xl tracking-tight">Share "{board?.title || 'Board'}"</h2>
+          <button onClick={onClose} className="p-1.5 text-content-subtle hover:text-content hover:bg-hover rounded-full transition-colors cursor-pointer">
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-6 space-y-7 bg-white">
+        <div className="p-6 space-y-7 bg-surface">
           {/* Invite Section */}
           <div className="flex flex-col sm:flex-row gap-3">
             <input
@@ -121,7 +125,7 @@ export default function ShareModal({ boardId, board, onClose }) {
               <select
                 value={inviteRole}
                 onChange={e => setInviteRole(e.target.value)}
-                className="flex-1 sm:flex-none bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-700 text-sm focus:outline-none shadow-sm cursor-pointer"
+                className="flex-1 sm:flex-none bg-surface border border-edge-strong rounded-lg px-3 py-2 text-content-muted text-sm focus:outline-none shadow-sm cursor-pointer"
               >
                 <option value="viewer">Viewer</option>
                 <option value="commenter">Commenter</option>
@@ -139,7 +143,7 @@ export default function ShareModal({ boardId, board, onClose }) {
 
           {/* People with access */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-800">People with access</h3>
+            <h3 className="text-sm font-semibold text-content">People with access</h3>
             <div className="max-h-[200px] overflow-y-auto space-y-3 pr-2">
               {/* Owner */}
               <div className="flex items-center justify-between">
@@ -148,8 +152,8 @@ export default function ShareModal({ boardId, board, onClose }) {
                     {board?.owner?.[0]?.toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-gray-900 text-sm font-medium">{board?.owner}</p>
-                    <p className="text-slate-500 text-xs">Owner</p>
+                    <p className="text-content text-sm font-medium">{board?.owner}</p>
+                    <p className="text-content-muted text-xs">Owner</p>
                   </div>
                 </div>
               </div>
@@ -162,16 +166,16 @@ export default function ShareModal({ boardId, board, onClose }) {
                       {c.email?.[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-gray-900 text-sm font-medium">{c.name || c.email}</p>
+                      <p className="text-content text-sm font-medium">{c.name || c.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-slate-600 text-sm font-medium bg-slate-100 px-2.5 py-1 rounded-md">
+                    <span className="text-content-muted text-sm font-medium bg-muted px-2.5 py-1 rounded-md">
                       {c.role.charAt(0).toUpperCase() + c.role.slice(1)}
                     </span>
                     <button
                       onClick={() => handleRemove(c.email)}
-                      className="text-slate-400 hover:text-red-500 text-sm px-2 opacity-0 group-hover:opacity-100 transition-all font-medium cursor-pointer"
+                      className="text-content-subtle hover:text-red-500 text-sm px-2 opacity-0 group-hover:opacity-100 transition-all font-medium cursor-pointer"
                     >
                       Remove
                     </button>
@@ -182,17 +186,17 @@ export default function ShareModal({ boardId, board, onClose }) {
           </div>
 
           {/* General Access */}
-          <div className="pt-5 border-t border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800 mb-3">General access</h3>
-            <div className="flex items-center gap-4 p-4 bg-slate-50/80 rounded-xl border border-slate-100/50">
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-200 text-slate-600">
-                {isPublic ? <Globe className="text-emerald-600" size={20} /> : <Lock className="text-slate-500" size={20} />}
+          <div className="pt-5 border-t border-edge-subtle">
+            <h3 className="text-sm font-semibold text-content mb-3">General access</h3>
+            <div className="flex items-center gap-4 p-4 bg-muted rounded-xl border border-edge-subtle">
+              <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center shadow-sm border border-edge text-content-muted">
+                {isPublic ? <Globe className="text-emerald-600" size={20} /> : <Lock className="text-content-muted" size={20} />}
               </div>
               <div className="flex-1">
                 <select
                   value={generalAccess}
                   onChange={e => handleGeneralAccess(e.target.value)}
-                  className="font-semibold text-slate-900 bg-transparent text-sm focus:outline-none cursor-pointer -ml-1 hover:bg-slate-200/50 rounded px-1 py-0.5 transition-colors"
+                  className="font-semibold text-content bg-transparent text-sm focus:outline-none cursor-pointer -ml-1 hover:bg-hover rounded px-1 py-0.5 transition-colors"
                   disabled={isProcessing}
                 >
                   <option value="restricted">Restricted</option>
@@ -200,7 +204,7 @@ export default function ShareModal({ boardId, board, onClose }) {
                   <option value="commenter">Anyone with the link — Commenter</option>
                   <option value="editor">Anyone with the link — Editor</option>
                 </select>
-                <p className="text-[13px] text-slate-500 mt-0.5">
+                <p className="text-[13px] text-content-muted mt-0.5">
                   {isPublic
                     ? "Anyone on the internet with the link can access"
                     : "Only people with access can open with the link"}
@@ -211,22 +215,42 @@ export default function ShareModal({ boardId, board, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-          <button
-            onClick={copyLink}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-          >
-            <Copy size={16} />
-            Copy link
-          </button>
+        <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-2 px-5 py-2.5 bg-surface border border-edge-strong hover:bg-hover hover:border-edge-strong text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <Copy size={16} />
+              Copy link
+            </button>
+            {ownsWorkspace && (
+              <button
+                onClick={() => setShowManageWs(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-surface border border-edge-strong hover:bg-hover text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                title="Share or manage the whole workspace"
+              >
+                <Settings size={16} />
+                <span className="hidden sm:inline">Workspace</span>
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+            className="px-6 py-2.5 bg-content hover:opacity-90 text-app text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             Done
           </button>
         </div>
       </div>
+
+      {showManageWs && (
+        <ManageWorkspaceModal
+          workspaceId={workspace.id}
+          workspaceName={workspace.name}
+          onClose={() => setShowManageWs(false)}
+        />
+      )}
     </div>
   );
 }

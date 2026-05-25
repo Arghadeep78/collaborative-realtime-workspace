@@ -1,13 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { STICKY_COLORS } from '../boardConstants.js';
 import { TextFormatToolbar } from './SharedUI.jsx';
+import { useTheme } from '../../../contexts/ThemeContext.jsx';
+import { getThemeColor } from '../theme/themeUtils.js';
 
 export default function StickyNote({ element, editable, editing, selected, onEditProps, getScale }) {
+  const { isDark } = useTheme();
   const { props } = element;
   const color = props.color || STICKY_COLORS[0];
+  const displayColor = getThemeColor(color, isDark);
   const bold = !!props.bold;
   const italic = !!props.italic;
   const textColor = props.textColor || '#1e293b';
+  const displayTextColor = getThemeColor(textColor, isDark);
   const autoSize = Math.max(20, Math.min(46, Math.round(element.w / 9)));
   const fontSize = props.fontSize || autoSize;
 
@@ -47,7 +52,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
             ? 'ring-2 ring-blue-400/40 shadow-[0_12px_40px_rgba(59,130,246,0.15)]'
             : 'border-black/5 dark:border-white/5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]'
         }`}
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: displayColor }}
       >
         {/* Paper texture overlay */}
         <div
@@ -70,7 +75,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
             className="flex-1 w-full bg-transparent resize-none outline-none placeholder:text-black/25 dark:placeholder:text-white/30 leading-snug z-10 pt-5 font-medium break-words whitespace-pre-wrap"
             style={{
               fontSize,
-              color: textColor,
+              color: displayTextColor,
               fontWeight: bold ? 700 : 600,
               fontStyle: italic ? 'italic' : 'normal',
             }}
@@ -81,7 +86,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
             className={`w-full whitespace-pre-wrap break-words leading-snug overflow-hidden z-10 font-medium transition-opacity text-content-container ${!props.text ? 'opacity-40' : ''}`}
             style={{
               fontSize,
-              color: textColor,
+              color: displayTextColor,
               fontWeight: bold ? 700 : 600,
               fontStyle: italic ? 'italic' : 'normal',
               maxHeight: '100%',
@@ -110,7 +115,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
                     ? 'ring-2 ring-black/40 dark:ring-white/60 ring-offset-1 scale-110 border-white/60 dark:border-white/40 shadow-md'
                     : 'border-white/30 dark:border-white/20 hover:border-white/50'
                 }`}
-                style={{ background: c }}
+                style={{ background: getThemeColor(c, isDark) }}
                 title={`Color: ${c}`}
               />
             ))}

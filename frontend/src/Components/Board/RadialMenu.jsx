@@ -40,7 +40,7 @@ export default function RadialMenu({ x, y, onPick, onClose }) {
     >
       {/* Centre marker */}
       <div
-        className="absolute w-2.5 h-2.5 rounded-full bg-slate-900/70 dark:bg-white/70"
+        className="absolute w-2.5 h-2.5 rounded-full bg-content/70"
         style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
       />
       {ITEMS.map((item, i) => {
@@ -55,12 +55,12 @@ export default function RadialMenu({ x, y, onPick, onClose }) {
             style={{ left: ox, top: oy, transform: 'translate(-50%, -50%)' }}
           >
             <span
-              className="w-11 h-11 rounded-full bg-white dark:bg-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.22)] border border-slate-200 dark:border-slate-700 flex items-center justify-center transition-transform group-hover:scale-110"
+              className="w-11 h-11 rounded-full bg-surface shadow-[0_8px_24px_rgba(15,23,42,0.22)] border border-edge flex items-center justify-center transition-transform group-hover:scale-110"
               style={{ color: item.color }}
             >
               <Glyph type={item.type} />
             </span>
-            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800/80 px-1.5 rounded">
+            <span className="text-[10px] font-semibold text-content-muted bg-surface/80 px-1.5 rounded">
               {item.label}
             </span>
           </button>

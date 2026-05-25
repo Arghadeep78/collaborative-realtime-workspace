@@ -37,7 +37,7 @@ function SlideThumbnail({ elements, page, sidebarWidth }) {
 
   return (
     <div
-      className="relative w-full aspect-video rounded-md overflow-hidden ring-1 ring-black/10 select-none pointer-events-none"
+      className="relative w-full aspect-video rounded-md overflow-hidden ring-1 ring-edge select-none pointer-events-none"
       style={slideBg}
     >
       <div
@@ -57,7 +57,7 @@ function SlideThumbnail({ elements, page, sidebarWidth }) {
         ))}
       </div>
       {items.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-slate-300">
+        <div className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-content-subtle">
           Empty slide
         </div>
       )}
@@ -143,11 +143,11 @@ export default function Sidebar({
       ) : (
         /* ── Expanded: full panel ── */
         <>
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200/70 dark:border-slate-700/60">
-            <span className="text-[11px] font-bold tracking-[0.16em] uppercase text-slate-400 dark:text-slate-500">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-edge">
+            <span className="text-[11px] font-bold tracking-[0.16em] uppercase text-content-subtle">
               Slides
             </span>
-            <button onClick={onToggleCollapse} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" title="Hide slides">
+            <button onClick={onToggleCollapse} className="text-content-subtle hover:text-content" title="Hide slides">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path d="M15 18l-6-6 6-6" />
               </svg>
@@ -186,13 +186,13 @@ export default function Sidebar({
                   className={`group relative rounded-xl border px-2.5 py-2 cursor-pointer transition ${
                     active
                       ? 'border-blue-400/60 bg-blue-500/10'
-                      : 'border-transparent hover:bg-slate-900/5 dark:hover:bg-white/5'
+                      : 'border-transparent hover:bg-hover'
                   } ${isDragOver ? 'ring-2 ring-blue-500 scale-[1.02] shadow-md z-10' : ''} ${draggedPageId === page.id ? 'opacity-40 scale-95' : ''}`}
                 >
                   <SlideThumbnail elements={elements} page={page} sidebarWidth={customWidth} />
 
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="shrink-0 w-5 h-5 rounded bg-slate-900/5 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                    <span className="shrink-0 w-5 h-5 rounded bg-muted flex items-center justify-center text-[10px] font-bold text-content-subtle">
                       {i + 1}
                     </span>
                     {editingId === page.id ? (
@@ -206,10 +206,10 @@ export default function Sidebar({
                           if (e.key === 'Escape') setEditingId(null);
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100 border-b border-blue-400"
+                        className="flex-1 min-w-0 bg-transparent outline-none text-sm text-content border-b border-blue-400"
                       />
                     ) : (
-                      <span className="flex-1 min-w-0 truncate text-sm text-slate-700 dark:text-slate-200">
+                      <span className="flex-1 min-w-0 truncate text-sm text-content">
                         {page.title}
                       </span>
                     )}
@@ -218,7 +218,7 @@ export default function Sidebar({
                   {editable && pages.length > 1 && (
                     <button
                       onClick={(e) => { e.stopPropagation(); if (window.confirm('Delete this slide? This cannot be undone.')) onDeletePage(page.id); }}
-                      className="absolute top-2 left-2 w-8 h-8 rounded-md bg-white/90 dark:bg-slate-800/80 text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 opacity-0 group-hover:opacity-100 shadow-sm flex items-center justify-center transition"
+                      className="absolute top-2 left-2 w-8 h-8 rounded-md bg-surface/90 text-content-muted hover:bg-rose-500/10 hover:text-rose-600 opacity-0 group-hover:opacity-100 shadow-sm flex items-center justify-center transition"
                       title="Delete slide"
                       aria-label={`Delete slide ${i + 1}`}
                     >
@@ -233,10 +233,10 @@ export default function Sidebar({
           </div>
 
           {editable && (
-            <div className="p-2 border-t border-slate-200/70 dark:border-slate-700/60">
+            <div className="p-2 border-t border-edge">
               <button
                 onClick={() => onAddPage()}
-                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-900/5 dark:hover:bg-white/5 transition"
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium text-content-muted hover:bg-hover transition"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path d="M12 5v14M5 12h14" />

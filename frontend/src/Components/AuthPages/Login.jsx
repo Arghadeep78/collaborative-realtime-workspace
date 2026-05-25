@@ -155,11 +155,11 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#212121] flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
+    <div className="min-h-screen bg-app flex items-center justify-center p-4 font-sans relative transition-colors duration-300">
       {/* Theme Toggle */}
       <button
         onClick={toggleTheme}
-        className="absolute top-6 right-6 p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-full transition-colors cursor-pointer"
+        className="absolute top-6 right-6 p-2 text-content-muted hover:text-content hover:bg-hover rounded-full transition-colors cursor-pointer"
         title="Toggle theme"
       >
         {isDark ? <SunIcon /> : <MoonIcon />}
@@ -169,13 +169,13 @@ const Login = () => {
         {/* Logo */}
         <div className="text-center mb-8 flex flex-col items-center">
           <div className="mb-3"><LogoIcon /></div>
-          <h1 className="text-gray-900 dark:text-white text-2xl font-bold tracking-tight">CollabBoard</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Real-time collaborative Workspace</p>
+          <h1 className="text-content text-2xl font-bold tracking-tight">CollabBoard</h1>
+          <p className="text-content-muted text-sm mt-1">Real-time collaborative Workspace</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 shadow-xl transition-colors duration-300">
-          <h2 className="text-gray-900 dark:text-white font-semibold text-lg mb-5 text-center">Sign in</h2>
+        <div className="bg-surface border border-edge rounded-2xl p-6 shadow-xl transition-colors duration-300">
+          <h2 className="text-content font-semibold text-lg mb-5 text-center">Sign in</h2>
 
           {/* Google OAuth button */}
           <button
@@ -201,27 +201,27 @@ const Login = () => {
           <div id="g_id_hidden_container" style={{ display: 'none' }} />
 
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
-            <span className="text-gray-400 dark:text-gray-600 text-xs">or</span>
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+            <div className="flex-1 h-px bg-edge" />
+            <span className="text-content-subtle text-xs">or</span>
+            <div className="flex-1 h-px bg-edge" />
           </div>
 
           {/* Email/password form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div>
-              <label className="text-gray-600 dark:text-gray-400 text-xs mb-1 block font-medium">Email</label>
+              <label className="text-content-muted text-xs mb-1 block font-medium">Email</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
                 required
-                className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+                className="w-full bg-muted text-content text-sm px-3 py-2.5 rounded-xl border border-edge outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-content-subtle"
                 placeholder="you@example.com"
               />
             </div>
             <div>
-              <label className="text-gray-600 dark:text-gray-400 text-xs mb-1 block font-medium">Password</label>
+              <label className="text-content-muted text-xs mb-1 block font-medium">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -229,13 +229,13 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-10 placeholder:text-gray-400"
+                  className="w-full bg-muted text-content text-sm px-3 py-2.5 rounded-xl border border-edge outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-10 placeholder:text-content-subtle"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle hover:text-content cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -251,14 +251,14 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium text-sm rounded-xl transition-all mt-1 flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-muted text-white font-medium text-sm rounded-xl transition-all mt-1 flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
             >
               {loading && <div className="w-4 h-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />}
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-5">
+          <p className="text-center text-content-muted text-sm mt-5">
             No account?{' '}
             <button type="button" onClick={navigateToRegister} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium transition-colors cursor-pointer">Create one</button>
           </p>

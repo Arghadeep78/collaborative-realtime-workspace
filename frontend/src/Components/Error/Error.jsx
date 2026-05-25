@@ -9,16 +9,16 @@ const Error = ({
   showHomeButton = true 
 }) => {
   return (
-    <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-950 text-white font-sans p-6">
+    <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-app text-content font-sans p-6">
       <div className="text-center max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 rounded-2xl bg-red-900/30 border border-red-800/50 flex items-center justify-center text-red-400">
+          <div className="w-20 h-20 rounded-2xl bg-red-500/10 border border-red-500/40 flex items-center justify-center text-red-500 dark:text-red-400">
             <AlertTriangle size={40} />
           </div>
         </div>
-        
-        <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
-        <p className="text-gray-400 text-sm mb-8">
+
+        <h2 className="text-xl font-bold text-content mb-2">{title}</h2>
+        <p className="text-content-muted text-sm mb-8">
           {error || "An unexpected error occurred. Please try again."}
         </p>
         
@@ -36,7 +36,7 @@ const Error = ({
           {showHomeButton && onGoHome && (
             <button 
               onClick={onGoHome}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-sm font-medium rounded-xl transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-muted hover:bg-hover border border-edge text-content text-sm font-medium rounded-xl transition-colors"
             >
               <Home size={16} />
               Go Home

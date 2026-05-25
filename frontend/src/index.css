@@ -14,6 +14,67 @@
 }
 
 /*
+ * ── Semantic color tokens ───────────────────────────────────────────────────
+ *
+ * One source of truth for every NEUTRAL color in the app. Each role is a
+ * runtime CSS variable that swaps value under `.dark`, so a single utility
+ * (`bg-surface`, `text-content`, `border-edge`, …) renders correctly in both
+ * themes — no `dark:` variant needed at the call site.
+ *
+ * `@theme inline` makes the generated utilities emit `var(--c-…)` directly, so
+ * when `.dark` changes the variable, the color follows. Opacity modifiers
+ * (`bg-surface/80`) still work via Tailwind's color-mix.
+ *
+ * Brand / accent / overlay colors (indigo buttons, white text on colored
+ * buttons, black/40 scrims, poll & chart hues) are intentionally NOT tokenized
+ * — they stay constant across themes, like most websites.
+ */
+@theme inline {
+  --color-app: var(--c-app); /* page background */
+  --color-surface: var(--c-surface); /* cards, panels, popovers (was white) */
+  --color-muted: var(--c-muted); /* secondary surface (was slate-50/100) */
+  --color-hover: var(--c-hover); /* hover fill on surfaces (was slate-100/200) */
+
+  --color-edge: var(--c-edge); /* default border (was slate-200/gray-200) */
+  --color-edge-strong: var(--c-edge-strong); /* stronger border (was slate-300/400) */
+  --color-edge-subtle: var(--c-edge-subtle); /* faint divider (was slate-100) */
+
+  --color-content: var(--c-content); /* primary text (was slate-900/800) */
+  --color-content-muted: var(--c-content-muted); /* secondary text (was slate-600/500) */
+  --color-content-subtle: var(--c-content-subtle); /* tertiary / placeholder (was slate-400) */
+}
+
+:root {
+  --c-app: #f8fafc; /* slate-50  */
+  --c-surface: #ffffff; /* white     */
+  --c-muted: #f1f5f9; /* slate-100 */
+  --c-hover: #e2e8f0; /* slate-200 */
+
+  --c-edge: #e2e8f0; /* slate-200 */
+  --c-edge-strong: #cbd5e1; /* slate-300 */
+  --c-edge-subtle: #f1f5f9; /* slate-100 */
+
+  --c-content: #0f172a; /* slate-900 */
+  --c-content-muted: #475569; /* slate-600 */
+  --c-content-subtle: #94a3b8; /* slate-400 */
+}
+
+.dark {
+  --c-app: #0f172a; /* slate-900 */
+  --c-surface: #1e293b; /* slate-800 */
+  --c-muted: #334155; /* slate-700 */
+  --c-hover: #475569; /* slate-600 */
+
+  --c-edge: #334155; /* slate-700 */
+  --c-edge-strong: #475569; /* slate-600 */
+  --c-edge-subtle: #1e293b; /* slate-800 */
+
+  --c-content: #f1f5f9; /* slate-100 */
+  --c-content-muted: #94a3b8; /* slate-400 */
+  --c-content-subtle: #64748b; /* slate-500 */
+}
+
+/*
  * Lightweight enter animations.
  *
  * The components previously used `animate-in fade-in zoom-in-95 ...` style

@@ -168,7 +168,7 @@ function App() {
         gutter={8}
         toastOptions={{
           duration: 3000,
-          className: 'dark:bg-[#1e293b] dark:text-[#f1f5f9] bg-white text-gray-900 border border-gray-200 dark:border-white/10 shadow-lg',
+          className: 'bg-surface text-content border border-edge shadow-lg',
           style: {
             fontFamily: '"Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
             fontSize: '14px',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
+import ManageWorkspaceModal from '../Board/ManageWorkspaceModal.jsx';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const PlusIcon = () => (
@@ -63,6 +64,9 @@ const MoveIcon = () => (
 const MenuIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
 );
+const UsersIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+);
 
 // ── Cute Thumbnails ───────────────────────────────────────────────────────────
 const CUTE_THUMBNAILS = [
@@ -105,18 +109,18 @@ function ThumbnailPicker({ currentThumbnail, onSelect, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-surface border border-edge rounded-2xl shadow-2xl w-full max-w-md p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-gray-900 dark:text-white font-semibold text-base">Change cover</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:text-white/40 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"><XIcon /></button>
+          <h2 className="text-content font-semibold text-base">Change cover</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md text-content-muted hover:text-content hover:bg-hover transition-colors"><XIcon /></button>
         </div>
         <div className="grid grid-cols-4 gap-2 mb-5">
           {CUTE_THUMBNAILS.map((url, i) => {
             const active = draftThumbnail === url;
             return (
               <button key={i} onClick={() => setDraftThumbnail(url)}
-                className="relative h-14 rounded-lg overflow-hidden ring-2 transition-all hover:ring-gray-300 dark:hover:ring-white/40 focus:outline-none"
+                className="relative h-14 rounded-lg overflow-hidden ring-2 transition-all hover:ring-edge-strong focus:outline-none"
                 style={{ outline: active ? '2px solid #6366f1' : '2px solid transparent', outlineOffset: '2px' }}>
                 <img src={url} alt="" className="w-full h-full object-cover" />
                 {active && <div className="absolute inset-0 flex items-center justify-center bg-black/20 text-white"><CheckIcon /></div>}
@@ -126,32 +130,32 @@ function ThumbnailPicker({ currentThumbnail, onSelect, onClose }) {
         </div>
         {draftThumbnail && (
           <button onClick={() => setDraftThumbnail(null)}
-            className="w-full mb-4 py-2 text-sm text-gray-600 dark:text-white/50 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 rounded-lg transition-colors">
+            className="w-full mb-4 py-2 text-sm text-content-muted hover:text-content border border-edge hover:border-edge-strong rounded-lg transition-colors">
             Remove cover
           </button>
         )}
-        <p className="text-gray-500 dark:text-white/40 text-xs font-medium uppercase tracking-widest mb-3">Custom image</p>
+        <p className="text-content-subtle text-xs font-medium uppercase tracking-widest mb-3">Custom image</p>
         <div className="flex gap-2 mb-3">
           <input value={customUrl} onChange={e => setCustomUrl(e.target.value)} placeholder="Paste image URL..."
-            className="flex-1 bg-gray-50 dark:bg-white/[0.05] text-gray-900 dark:text-white text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 placeholder:text-gray-400 dark:placeholder:text-white/25 transition-colors" />
+            className="flex-1 bg-muted text-content text-sm px-3 py-2 rounded-lg border border-edge outline-none focus:border-indigo-500 placeholder:text-content-subtle transition-colors" />
           <button onClick={() => { if (customUrl.trim()) { setDraftThumbnail(customUrl.trim()); setCustomUrl(''); } }}
             disabled={!customUrl.trim()}
-            className="px-4 py-2 bg-indigo-600 dark:bg-white text-white dark:text-black text-sm font-medium rounded-lg disabled:opacity-30 hover:bg-indigo-700 dark:hover:bg-white/90 transition-colors">
+            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg disabled:opacity-30 hover:bg-indigo-700 transition-colors">
             Apply
           </button>
         </div>
         <button onClick={() => fileRef.current?.click()}
-          className="w-full py-2.5 flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-dashed border-gray-300 dark:border-white/15 hover:border-gray-400 dark:hover:border-white/30 rounded-lg transition-colors">
+          className="w-full py-2.5 flex items-center justify-center gap-2 text-sm text-content-muted hover:text-content border border-dashed border-edge-strong hover:border-edge-strong rounded-lg transition-colors">
           <ImageIcon /> Upload from device
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         <div className="mt-5 flex items-center gap-2">
           <button onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-medium text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 rounded-lg transition-colors">
+            className="flex-1 py-2.5 text-sm font-medium text-content-muted hover:text-content border border-edge hover:border-edge-strong rounded-lg transition-colors">
             Cancel
           </button>
           <button onClick={() => onSelect(draftThumbnail)} disabled={draftThumbnail === currentThumbnail}
-            className="flex-1 py-2.5 text-sm font-medium bg-indigo-600 dark:bg-white text-white dark:text-black rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 dark:hover:bg-white/90 transition-colors">
+            className="flex-1 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors">
             Apply cover
           </button>
         </div>
@@ -174,11 +178,11 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-surface border border-edge rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-gray-900 dark:text-white font-semibold text-base">New workspace</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:text-white/40 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"><XIcon /></button>
+          <h2 className="text-content font-semibold text-base">New workspace</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md text-content-muted hover:text-content hover:bg-hover transition-colors"><XIcon /></button>
         </div>
         <input
           autoFocus
@@ -186,15 +190,15 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
           onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') onClose(); }}
           placeholder="Workspace name"
-          className="w-full bg-gray-50 dark:bg-white/[0.05] text-gray-900 dark:text-white text-sm px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 placeholder:text-gray-400 dark:placeholder:text-white/25 transition-colors mb-5"
+          className="w-full bg-muted text-content text-sm px-3 py-2.5 rounded-lg border border-edge outline-none focus:border-indigo-500 placeholder:text-content-subtle transition-colors mb-5"
         />
         <div className="flex gap-2">
           <button onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-medium text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-white/10 rounded-lg transition-colors">
+            className="flex-1 py-2.5 text-sm font-medium text-content-muted hover:text-content border border-edge rounded-lg transition-colors">
             Cancel
           </button>
           <button onClick={handleCreate} disabled={!name.trim() || busy}
-            className="flex-1 py-2.5 text-sm font-medium bg-indigo-600 dark:bg-white text-white dark:text-black rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 dark:hover:bg-white/90 transition-colors">
+            className="flex-1 py-2.5 text-sm font-medium bg-indigo-600 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors">
             {busy ? 'Creating...' : 'Create'}
           </button>
         </div>
@@ -205,24 +209,24 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
 
 // ── MoveToWorkspaceModal ──────────────────────────────────────────────────────
 function MoveToWorkspaceModal({ board, workspaces, currentWorkspaceId, onMove, onClose }) {
-  const others = workspaces.filter(w => w.id !== currentWorkspaceId);
+  const others = workspaces.filter(w => w.isOwner && w.id !== currentWorkspaceId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-surface border border-edge rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-gray-900 dark:text-white font-semibold text-base">Move to workspace</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:text-white/40 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"><XIcon /></button>
+          <h2 className="text-content font-semibold text-base">Move to workspace</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md text-content-muted hover:text-content hover:bg-hover transition-colors"><XIcon /></button>
         </div>
-        <p className="text-xs text-gray-500 dark:text-white/40 mb-3 truncate">Moving: <span className="font-medium text-gray-700 dark:text-white/70">{board.title}</span></p>
+        <p className="text-xs text-content-subtle mb-3 truncate">Moving: <span className="font-medium text-content">{board.title}</span></p>
         {others.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-white/40 py-4 text-center">No other workspaces available.<br/>Create one first.</p>
+          <p className="text-sm text-content-subtle py-4 text-center">No other workspaces available.<br/>Create one first.</p>
         ) : (
           <div className="space-y-1 max-h-60 overflow-y-auto">
             {others.map(ws => (
               <button key={ws.id} onClick={() => onMove(ws.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 dark:text-white/70 hover:bg-gray-50 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors">
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-content-muted hover:bg-hover hover:text-content transition-colors">
                 <div className="w-7 h-7 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                   {ws.name[0]?.toUpperCase()}
                 </div>
@@ -239,13 +243,18 @@ function MoveToWorkspaceModal({ board, workspaces, currentWorkspaceId, onMove, o
 // ── BoardCard ─────────────────────────────────────────────────────────────────
 function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, onToggleFavorite, onMoveToWorkspace, canMove, openMenu, setOpenMenu, renamingId, renameVal, setRenameVal, saveRename, setRenamingId }) {
   const isGradient = (v) => v && v.startsWith('linear-gradient');
+  // Owner & editor can edit; only the owner can delete. Boards shared with you
+  // as a viewer/commenter expose no edit actions.
+  const canEdit = board.myRole === 'owner' || board.myRole === 'editor';
+  const canDelete = board.myRole === 'owner';
+  const hasMenu = canEdit || canDelete || canMove;
 
   return (
     <div
-      className="group relative bg-white dark:bg-[#2c2c2c] border border-gray-200 dark:border-white/[0.07] hover:shadow-lg dark:hover:border-white/[0.18] rounded-xl cursor-pointer transition-all duration-200 flex flex-col"
+      className="group relative bg-surface border border-edge hover:shadow-lg hover:border-edge-strong rounded-xl cursor-pointer transition-all duration-200 flex flex-col"
       onClick={() => onNavigate(board.id)}
     >
-      <div className="h-40 relative overflow-hidden flex items-center justify-center bg-gray-50 dark:bg-[#333333] rounded-t-[11px]">
+      <div className="h-40 relative overflow-hidden flex items-center justify-center bg-muted rounded-t-[11px]">
         {board.thumbnail ? (
           isGradient(board.thumbnail) ? (
             <div className="absolute inset-0" style={{ background: board.thumbnail }} />
@@ -253,29 +262,29 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
             <img src={board.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           )
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-300 dark:text-white/10 group-hover:text-gray-400 dark:group-hover:text-white/20 transition-colors duration-300">
+          <div className="absolute inset-0 flex items-center justify-center text-content-subtle/40 group-hover:text-content-subtle transition-colors duration-300">
             <LayoutIcon />
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
       </div>
 
-      <div className="px-4 py-3.5 flex items-start justify-between gap-3 bg-white dark:bg-[#2c2c2c] rounded-b-[11px]">
+      <div className="px-4 py-3.5 flex items-start justify-between gap-3 bg-surface rounded-b-[11px]">
         <div className="flex-1 min-w-0">
-          {renamingId === board.id ? (
+          {renamingId === board.id && canEdit ? (
             <input autoFocus value={renameVal} onClick={e => e.stopPropagation()}
               onChange={e => setRenameVal(e.target.value)}
               onBlur={() => saveRename(board.id)}
               onKeyDown={e => { if (e.key === 'Enter') saveRename(board.id); if (e.key === 'Escape') setRenamingId(null); }}
-              className="w-full bg-gray-50 dark:bg-white/10 text-gray-900 dark:text-white text-sm px-2 py-1 rounded border border-gray-300 dark:border-white/20 outline-none focus:border-indigo-500 dark:focus:border-white/40"
+              className="w-full bg-muted text-content text-sm px-2 py-1 rounded border border-edge-strong outline-none focus:border-indigo-500"
             />
           ) : (
-            <p className="text-gray-900 dark:text-white text-sm font-medium truncate">{board.title}</p>
+            <p className="text-content text-sm font-medium truncate">{board.title}</p>
           )}
-          <p className="text-gray-500 dark:text-white/35 text-xs mt-1 flex items-center gap-1.5">
+          <p className="text-content-subtle text-xs mt-1 flex items-center gap-1.5">
             {timeAgo(board.updatedAt || board.createdAt)}
             {board.isPublic && (
-              <><span className="w-0.5 h-0.5 rounded-full bg-gray-300 dark:bg-white/20 inline-block" /><span className="text-gray-400 dark:text-white/50">Public</span></>
+              <><span className="w-0.5 h-0.5 rounded-full bg-edge-strong inline-block" /><span className="text-content-subtle">Public</span></>
             )}
           </p>
         </div>
@@ -283,30 +292,40 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
         <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
           <button
             onClick={() => onToggleFavorite(board.id)}
-            className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-md transition-all ${board.isFavorited ? 'opacity-100 text-yellow-500 dark:text-yellow-400' : 'text-gray-400 hover:text-yellow-500 dark:text-white/40 dark:hover:text-yellow-400'}`}
+            className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-md transition-all ${board.isFavorited ? 'opacity-100 text-yellow-500 dark:text-yellow-400' : 'text-content-subtle hover:text-yellow-500 dark:hover:text-yellow-400'}`}
             title={board.isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
             <StarIcon filled={board.isFavorited} />
           </button>
-          <div className="relative">
-            <button
-              onClick={() => setOpenMenu(openMenu === board.id ? null : board.id)}
-              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-gray-400 hover:text-gray-900 hover:bg-gray-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/10 transition-all"
-            >
-              <MoreIcon />
-            </button>
-            {openMenu === board.id && (
-              <div className="absolute right-0 top-8 w-44 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 rb-anim-pop py-1">
-                <button onClick={() => onRename(board)} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><EditIcon /> Rename</button>
-                <button onClick={() => { onChangeThumbnail(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><ImageIcon /> Change cover</button>
-                {canMove && (
-                  <button onClick={() => { onMoveToWorkspace(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><MoveIcon /> Move to workspace</button>
-                )}
-                <div className="h-px bg-gray-100 dark:bg-white/[0.06] my-1" />
-                <button onClick={() => { onDelete(board.id); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400/80 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center gap-2.5"><TrashIcon /> Delete</button>
-              </div>
-            )}
-          </div>
+          {hasMenu && (
+            <div className="relative">
+              <button
+                onClick={() => setOpenMenu(openMenu === board.id ? null : board.id)}
+                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-content-subtle hover:text-content hover:bg-hover transition-all"
+              >
+                <MoreIcon />
+              </button>
+              {openMenu === board.id && (
+                <div className="absolute right-0 top-8 w-44 bg-surface border border-edge rounded-xl shadow-xl overflow-hidden z-20 rb-anim-pop py-1">
+                  {canEdit && (
+                    <button onClick={() => onRename(board)} className="w-full text-left px-3 py-2 text-sm text-content-muted hover:bg-hover hover:text-content transition-colors flex items-center gap-2.5"><EditIcon /> Rename</button>
+                  )}
+                  {canEdit && (
+                    <button onClick={() => { onChangeThumbnail(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-content-muted hover:bg-hover hover:text-content transition-colors flex items-center gap-2.5"><ImageIcon /> Change cover</button>
+                  )}
+                  {canMove && (
+                    <button onClick={() => { onMoveToWorkspace(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-content-muted hover:bg-hover hover:text-content transition-colors flex items-center gap-2.5"><MoveIcon /> Move to workspace</button>
+                  )}
+                  {canDelete && (
+                    <>
+                      <div className="h-px bg-edge-subtle my-1" />
+                      <button onClick={() => { onDelete(board.id); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400/80 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center gap-2.5"><TrashIcon /> Delete</button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -325,22 +344,23 @@ function timeAgo(dateStr) {
 // ── WorkspaceDropdown ─────────────────────────────────────────────────────────
 function WorkspaceDropdown({ workspaces, activeWorkspace, onSelect, onCreate }) {
   return (
-    <div className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-30 py-2 rb-anim-pop" onClick={e => e.stopPropagation()}>
-      <p className="px-3 py-1.5 text-xs text-gray-400 dark:text-white/30 font-medium uppercase tracking-widest">Workspaces</p>
+    <div className="absolute left-0 top-full mt-1 w-64 bg-surface border border-edge rounded-xl shadow-2xl overflow-hidden z-30 py-2 rb-anim-pop" onClick={e => e.stopPropagation()}>
+      <p className="px-3 py-1.5 text-xs text-content-subtle font-medium uppercase tracking-widest">Workspaces</p>
       {workspaces.map(ws => (
         <button key={ws.id} onClick={() => onSelect(ws)}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${activeWorkspace?.id === ws.id ? 'bg-indigo-50 dark:bg-white/[0.07] text-indigo-700 dark:text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.04] dark:hover:text-white'}`}>
+          className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${activeWorkspace?.id === ws.id ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : 'text-content-muted hover:bg-hover hover:text-content'}`}>
           <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {ws.name[0]?.toUpperCase()}
           </div>
           <span className="truncate font-medium">{ws.name}</span>
+          {!ws.isOwner && <span className="ml-auto text-[10px] font-medium text-content-subtle bg-muted px-1.5 py-0.5 rounded">Shared</span>}
           {activeWorkspace?.id === ws.id && <CheckIcon />}
         </button>
       ))}
-      <div className="h-px bg-gray-100 dark:bg-white/[0.06] my-1.5" />
+      <div className="h-px bg-edge-subtle my-1.5" />
       <button onClick={onCreate}
-        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04] transition-colors">
-        <div className="w-6 h-6 rounded border-2 border-dashed border-gray-300 dark:border-white/20 flex items-center justify-center flex-shrink-0">
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-content-muted hover:text-content hover:bg-hover transition-colors">
+        <div className="w-6 h-6 rounded border-2 border-dashed border-edge-strong flex items-center justify-center flex-shrink-0">
           <PlusIcon />
         </div>
         Create workspace
@@ -368,6 +388,8 @@ export default function Dashboard({ logout }) {
   const [renamingWs, setRenamingWs]       = useState(false);
   const [wsRenameVal, setWsRenameVal]     = useState('');
   const [movingBoard, setMovingBoard]     = useState(null); // board to move between workspaces
+  const [showManageWs, setShowManageWs]   = useState(false); // workspace members / board-access dialog
+  const [deletingWs, setDeletingWs]       = useState(null);  // workspace pending delete confirmation
   const wsDropdownRef = useRef(null);
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
@@ -411,7 +433,14 @@ export default function Dashboard({ logout }) {
         setActiveWs(ws);
       } else {
         setWorkspaces(list);
-        setActiveWs(list[0]);
+        // Prefer the workspace the user last opened a board in (set by BoardRoom),
+        // then their first owned workspace, then anything.
+        const storedId = localStorage.getItem('activeWorkspaceId');
+        const initial =
+          list.find((w) => w.id === storedId) ||
+          list.find((w) => w.isOwner) ||
+          list[0];
+        setActiveWs(initial);
       }
     } catch (e) {
       console.error(e);
@@ -445,8 +474,8 @@ export default function Dashboard({ logout }) {
       });
       const data = await res.json();
       if (data.id) {
-        // If user is in a workspace, add the new board to it
-        if (activeWorkspace?.id) {
+        // Only the workspace owner can file boards into it; members are view-only.
+        if (activeWorkspace?.id && activeWorkspace?.isOwner) {
           await fetch(`${BACKEND_URL}/workspaces/${activeWorkspace.id}/add-board`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
@@ -565,6 +594,32 @@ export default function Dashboard({ logout }) {
     }
   };
 
+  const deleteWorkspace = async (ws) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/workspaces/${ws.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || 'Failed to delete workspace');
+      }
+      const remaining = workspaces.filter((w) => w.id !== ws.id);
+      setWorkspaces(remaining);
+      if (activeWorkspace?.id === ws.id) {
+        const next = remaining.find((w) => w.isOwner) || remaining[0] || null;
+        setActiveWs(next);
+        try { if (next) localStorage.setItem('activeWorkspaceId', next.id); } catch { /* ignore */ }
+      }
+      // Boards owned in that workspace were deleted server-side — refresh the grid.
+      fetchBoards();
+      setDeletingWs(null);
+      toast.success('Workspace deleted');
+    } catch (e) {
+      toast.error(e.message || 'Failed to delete workspace');
+      setDeletingWs(null);
+    }
+  };
+
   const moveBoardToWorkspace = async (targetWorkspaceId) => {
     if (!movingBoard) return;
     const boardId = movingBoard.id;
@@ -601,9 +656,11 @@ export default function Dashboard({ logout }) {
     const matchesSearch = b.title?.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     if (activeView === 'favorites') return b.isFavorited;
-    // 'all' view — if there's an active workspace, show only boards in it
-    if (activeWorkspace && activeWorkspace.boardIds?.length > 0) {
-      return activeWorkspace.boardIds.includes(b.id);
+    // 'all' view — show only the boards belonging to the active workspace.
+    // `boards` already contains only boards I can access, so for a workspace
+    // shared with me at board level this naturally narrows to just those boards.
+    if (activeWorkspace) {
+      return (activeWorkspace.boardIds || []).includes(b.id);
     }
     return true;
   });
@@ -611,7 +668,7 @@ export default function Dashboard({ logout }) {
   const favCount = boards.filter(b => b.isFavorited).length;
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#212121] text-gray-900 dark:text-[#ededed] font-sans overflow-hidden selection:bg-indigo-500/30 dark:selection:bg-white/20">
+    <div className="flex h-screen bg-app text-content font-sans overflow-hidden selection:bg-indigo-500/30">
 
       {/* Drawer backdrop — only below lg, when the sidebar is open */}
       {sidebarOpen && (
@@ -622,11 +679,11 @@ export default function Dashboard({ logout }) {
       )}
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-[240px] flex flex-col border-r border-gray-200 dark:border-white/[0.07] bg-white dark:bg-[#212121] py-5 px-4 shadow-xl transition-transform duration-300 ease-in-out lg:static lg:z-10 lg:flex-shrink-0 lg:translate-x-0 lg:shadow-sm ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-[240px] flex flex-col border-r border-edge bg-surface py-5 px-4 shadow-xl transition-transform duration-300 ease-in-out lg:static lg:z-10 lg:flex-shrink-0 lg:translate-x-0 lg:shadow-sm ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-2 mb-8 cursor-pointer select-none">
           <LogoIcon />
-          <span className="font-bold text-lg tracking-tight text-gray-900 dark:text-white">Collab Board</span>
+          <span className="font-bold text-lg tracking-tight text-content">Collab Board</span>
         </div>
 
         {/* Workspace Selector */}
@@ -639,24 +696,24 @@ export default function Dashboard({ logout }) {
                 onChange={e => setWsRenameVal(e.target.value)}
                 onBlur={saveRenameWorkspace}
                 onKeyDown={e => { if (e.key === 'Enter') saveRenameWorkspace(); if (e.key === 'Escape') setRenamingWs(false); }}
-                className="flex-1 text-sm px-2 py-1 rounded border border-gray-300 dark:border-white/20 bg-white dark:bg-white/10 text-gray-900 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-white/40"
+                className="flex-1 text-sm px-2 py-1 rounded border border-edge-strong bg-muted text-content outline-none focus:border-indigo-500"
               />
-              <button onClick={() => setRenamingWs(false)} className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white"><XIcon /></button>
+              <button onClick={() => setRenamingWs(false)} className="p-1 text-content-subtle hover:text-content"><XIcon /></button>
             </div>
           ) : (
             <button
               onClick={(e) => { e.stopPropagation(); setShowWsDropdown(v => !v); }}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/[0.04] transition-colors group"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-edge hover:bg-hover transition-colors group"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                   {activeWorkspace?.name?.[0]?.toUpperCase() || 'W'}
                 </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-white/80 group-hover:text-gray-900 dark:group-hover:text-white truncate">
+                <span className="text-sm font-medium text-content-muted group-hover:text-content truncate">
                   {activeWorkspace?.name || 'My Workspace'}
                 </span>
               </div>
-              <div className="text-gray-400 group-hover:text-gray-600 dark:text-white/30 dark:group-hover:text-white/60 flex-shrink-0">
+              <div className="text-content-subtle group-hover:text-content-muted flex-shrink-0">
                 <ChevronDownIcon />
               </div>
             </button>
@@ -665,18 +722,38 @@ export default function Dashboard({ logout }) {
             <WorkspaceDropdown
               workspaces={workspaces}
               activeWorkspace={activeWorkspace}
-              onSelect={(ws) => { setActiveWs(ws); setShowWsDropdown(false); setActiveView('all'); setSidebarOpen(false); }}
+              onSelect={(ws) => { setActiveWs(ws); try { localStorage.setItem('activeWorkspaceId', ws.id); } catch { /* ignore */ } setShowWsDropdown(false); setActiveView('all'); setSidebarOpen(false); }}
               onCreate={() => { setShowCreateWs(true); setShowWsDropdown(false); }}
             />
           )}
-          {/* Rename current workspace */}
-          {activeWorkspace && !renamingWs && (
-            <button
-              onClick={() => { setRenamingWs(true); setWsRenameVal(activeWorkspace.name); }}
-              className="mt-1 w-full flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-gray-600 dark:text-white/25 dark:hover:text-white/50 transition-colors rounded"
-            >
-              <EditIcon /> Rename workspace
-            </button>
+          {/* Owner controls — share/manage, rename, delete */}
+          {activeWorkspace && !renamingWs && activeWorkspace.isOwner && (
+            <div className="mt-1 flex flex-col gap-0.5">
+              <button
+                onClick={() => setShowManageWs(true)}
+                className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-content-subtle hover:text-content-muted transition-colors rounded"
+              >
+                <UsersIcon /> Share &amp; manage access
+              </button>
+              <button
+                onClick={() => { setRenamingWs(true); setWsRenameVal(activeWorkspace.name); }}
+                className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-content-subtle hover:text-content-muted transition-colors rounded"
+              >
+                <EditIcon /> Rename workspace
+              </button>
+              <button
+                onClick={() => setDeletingWs(activeWorkspace)}
+                className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-content-subtle hover:text-red-500 transition-colors rounded"
+              >
+                <TrashIcon /> Delete workspace
+              </button>
+            </div>
+          )}
+          {/* Shared-with-me indicator */}
+          {activeWorkspace && !activeWorkspace.isOwner && (
+            <p className="mt-1.5 px-2 text-xs text-content-subtle flex items-center gap-1.5">
+              <UsersIcon /> Shared with you · view access
+            </p>
           )}
         </div>
 
@@ -684,19 +761,19 @@ export default function Dashboard({ logout }) {
         <nav className="flex-1 space-y-1">
           <button
             onClick={() => { setActiveView('all'); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'all' ? 'bg-gray-100 dark:bg-white/[0.07] text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04]'}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'all' ? 'bg-hover text-content' : 'text-content-muted hover:text-content hover:bg-hover'}`}
           >
             <LayoutIcon />
             Team collab boards
           </button>
           <button
             onClick={() => { setActiveView('favorites'); setSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'favorites' ? 'bg-gray-100 dark:bg-white/[0.07] text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/[0.04]'}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'favorites' ? 'bg-hover text-content' : 'text-content-muted hover:text-content hover:bg-hover'}`}
           >
             <StarIcon filled={activeView === 'favorites'} />
             Favorite boards
             {favCount > 0 && (
-              <span className="ml-auto text-xs bg-indigo-100 dark:bg-white/10 text-indigo-600 dark:text-white/60 px-2 py-0.5 rounded-full">{favCount}</span>
+              <span className="ml-auto text-xs bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full">{favCount}</span>
             )}
           </button>
         </nav>
@@ -705,7 +782,7 @@ export default function Dashboard({ logout }) {
         <div className="mt-auto pt-4">
           <button
             onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:text-white/40 dark:hover:text-red-400 dark:hover:bg-red-500/10 text-sm font-medium transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-500/10 dark:hover:text-red-400 text-sm font-medium transition-colors"
           >
             <LogOutIcon />
             Log out
@@ -714,40 +791,40 @@ export default function Dashboard({ logout }) {
       </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-[#212121]">
+      <div className="flex-1 flex flex-col overflow-hidden bg-app">
         {/* Top bar */}
-        <header className="flex-shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-4 bg-white dark:bg-[#212121] border-b border-gray-200 dark:border-white/[0.07] z-0">
+        <header className="flex-shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-4 bg-surface border-b border-edge z-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden flex-shrink-0 p-2 -ml-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/10 rounded-lg transition-colors"
+            className="lg:hidden flex-shrink-0 p-2 -ml-1 text-content-muted hover:text-content hover:bg-hover rounded-lg transition-colors"
             title="Open menu"
             aria-label="Open menu"
           >
             <MenuIcon />
           </button>
           <div className="relative group flex-1 min-w-0 max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-white/30 group-focus-within:text-indigo-500 dark:group-focus-within:text-white/60 transition-colors">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-content-subtle group-focus-within:text-indigo-500 transition-colors">
               <SearchIcon />
             </div>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search collab boards..."
-              className="w-full bg-gray-100 dark:bg-white/[0.04] text-gray-900 dark:text-white text-sm pl-10 pr-4 py-2.5 rounded-lg border-none dark:border dark:border-white/[0.08] outline-none focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 dark:focus:border-white/20 dark:focus:bg-white/[0.06] transition-all placeholder:text-gray-500 dark:placeholder:text-white/25"
+              className="w-full bg-muted text-content text-sm pl-10 pr-4 py-2.5 rounded-lg border border-edge outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-content-subtle"
             />
           </div>
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 ml-auto">
-            <div className="w-px h-6 bg-gray-200 dark:bg-white/10" />
+            <div className="w-px h-6 bg-edge" />
             <button
               onClick={toggleTheme}
-              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/10 rounded-full transition-colors"
+              className="p-2 text-content-muted hover:text-content hover:bg-hover rounded-full transition-colors"
               title="Toggle theme"
             >
               {isDark ? <SunIcon /> : <MoonIcon />}
             </button>
             <button
               onClick={() => navigate('/profile')}
-              className="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 dark:bg-white/10 dark:border-white/15 flex items-center justify-center overflow-hidden text-sm font-semibold text-indigo-700 dark:text-white shadow-sm cursor-pointer"
+              className="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center overflow-hidden text-sm font-semibold text-indigo-600 dark:text-indigo-300 shadow-sm cursor-pointer"
               title="Open profile"
             >
               {profileImage ? (
@@ -770,26 +847,26 @@ export default function Dashboard({ logout }) {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tracking-tight mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-content tracking-tight mb-6">
             {activeView === 'favorites' ? 'Favorite boards' : 'Team collab boards'}
           </h1>
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-white/[0.05] rounded-xl overflow-hidden animate-pulse shadow-sm">
-                  <div className="h-40 bg-gray-200 dark:bg-white/[0.03]" />
+                <div key={i} className="bg-surface border border-edge-subtle rounded-xl overflow-hidden animate-pulse shadow-sm">
+                  <div className="h-40 bg-muted" />
                   <div className="p-4 space-y-2">
-                    <div className="h-3.5 bg-gray-200 dark:bg-white/[0.05] rounded w-3/4" />
-                    <div className="h-3 bg-gray-100 dark:bg-white/[0.04] rounded w-1/3" />
+                    <div className="h-3.5 bg-muted rounded w-3/4" />
+                    <div className="h-3 bg-hover rounded w-1/3" />
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-              {/* New board card — only show in 'all' view */}
-              {activeView === 'all' && (
+              {/* New board card — only in 'all' view, and only for workspaces you own */}
+              {activeView === 'all' && activeWorkspace?.isOwner && (
                 <button
                   onClick={createBoard}
                   disabled={creating}
@@ -812,7 +889,7 @@ export default function Dashboard({ logout }) {
                   onChangeThumbnail={(b) => setPickerBoard(b)}
                   onToggleFavorite={toggleFavorite}
                   onMoveToWorkspace={(b) => setMovingBoard(b)}
-                  canMove={workspaces.length > 1}
+                  canMove={board.myRole === 'owner' && workspaces.filter(w => w.isOwner).length > 1}
                   openMenu={openMenu}
                   setOpenMenu={setOpenMenu}
                   renamingId={renamingId}
@@ -824,7 +901,7 @@ export default function Dashboard({ logout }) {
               ))}
 
               {!loading && visibleBoards.length === 0 && (
-                <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-500 dark:text-white/40">
+                <div className="col-span-full py-12 flex flex-col items-center justify-center text-content-subtle">
                   {activeView === 'favorites' ? (
                     <>
                       <StarIcon filled={false} />
@@ -871,6 +948,57 @@ export default function Dashboard({ logout }) {
           onClose={() => setMovingBoard(null)}
         />
       )}
+      {showManageWs && activeWorkspace?.isOwner && (
+        <ManageWorkspaceModal
+          workspaceId={activeWorkspace.id}
+          workspaceName={activeWorkspace.name}
+          onClose={() => setShowManageWs(false)}
+          onChanged={() => { fetchWorkspaces(); fetchBoards(); }}
+        />
+      )}
+      {deletingWs && (
+        <DeleteWorkspaceModal
+          workspace={deletingWs}
+          boardCount={(deletingWs.boardIds || []).filter(id => boards.some(b => b.id === id && b.owner === userData.email)).length}
+          onConfirm={() => deleteWorkspace(deletingWs)}
+          onClose={() => setDeletingWs(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── DeleteWorkspaceModal ──────────────────────────────────────────────────────
+function DeleteWorkspaceModal({ workspace, boardCount, onConfirm, onClose }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-surface border border-edge rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/15 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+            <TrashIcon />
+          </div>
+          <h2 className="text-content font-semibold text-base">Delete &ldquo;{workspace.name}&rdquo;?</h2>
+        </div>
+        <p className="text-sm text-content-muted mb-5">
+          {boardCount > 0 ? (
+            <>This permanently deletes the workspace and the <span className="font-semibold text-content">{boardCount} board{boardCount === 1 ? '' : 's'}</span> you own inside it. This can&apos;t be undone.</>
+          ) : (
+            <>This permanently deletes the workspace. Boards shared into it by others stay with their owners.</>
+          )}
+        </p>
+        <div className="flex gap-2">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 text-sm font-medium text-content-muted hover:text-content border border-edge rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button onClick={() => { setBusy(true); onConfirm(); }} disabled={busy}
+            className="flex-1 py-2.5 text-sm font-medium bg-red-600 text-white rounded-lg disabled:opacity-50 hover:bg-red-700 transition-colors">
+            {busy ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

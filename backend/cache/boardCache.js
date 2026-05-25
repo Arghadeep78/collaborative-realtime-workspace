@@ -1,4 +1,5 @@
 import Whiteboard from '../models/whiteboardModel.js';
+import Workspace from '../models/workspaceModel.js';
 
 /**
  * Redis-backed cache for board access metadata.
@@ -44,12 +45,19 @@ export async function getBoardMeta(boardId) {
     .lean();
   if (!board) return null;
 
+  // Members of the workspace this board lives in get a viewer baseline on it.
+  const ws = await Workspace.findOne({ boardIds: boardId }).select('owner members').lean();
+  const workspaceMembers = ws
+    ? [ws.owner, ...(ws.members || []).map((m) => m.email)]
+    : [];
+
   const meta = {
     id: board.id,
     owner: board.owner,
     collaborators: (board.collaborators || []).map((c) => ({ email: c.email, role: c.role })),
     isPublic: Boolean(board.isPublic),
     publicRole: board.publicRole || 'viewer',
+    workspaceMembers,
   };
 
   if (redis) {
@@ -81,6 +89,7 @@ export function resolveRole(meta, userEmail) {
   if (meta.owner === userEmail) return 'editor';
   const collab = (meta.collaborators || []).find((c) => c.email === userEmail);
   if (collab) return collab.role || 'editor';
+  if ((meta.workspaceMembers || []).includes(userEmail)) return 'viewer';
   if (meta.isPublic) return meta.publicRole || 'viewer';
   return null;
 }
