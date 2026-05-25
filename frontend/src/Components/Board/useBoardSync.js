@@ -55,7 +55,9 @@ export function useBoardSync(ydoc) {
     };
   }, [ydoc]);
 
-  const castPollVote = useCallback((pollId, optionId, user) => {
+  // multiKey=true uses "email:optionId" as the map key so multiple votes per
+  // user can coexist (multi-choice polls). Single-choice polls use just email.
+  const castPollVote = useCallback((pollId, optionId, user, multiKey = false) => {
     const doc = ydocRef.current;
     if (!doc) return;
     const yVotes = doc.getMap('votes');
@@ -70,7 +72,8 @@ export function useBoardSync(ydoc) {
         if (prev) Object.entries(prev).forEach(([k, v]) => yPoll.set(k, v));
         yVotes.set(pollId, yPoll);
       }
-      yPoll.set(user.email, { optionId, ...user });
+      const key = multiKey ? `${user.email}:${optionId}` : user.email;
+      yPoll.set(key, { optionId, ...user });
     }, LOCAL);
   }, []);
 
