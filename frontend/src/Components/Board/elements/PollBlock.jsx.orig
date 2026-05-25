@@ -251,7 +251,7 @@ export default function PollBlock({
 
             if (editing) {
               return (
-                <div key={opt.id} className="flex items-center gap-2 group shrink-0">
+                <div key={opt.id} className="flex items-center gap-2 group">
                   <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${theme.fill}`} />
                   <input
                     value={opt.label}
@@ -277,7 +277,7 @@ export default function PollBlock({
                 key={opt.id}
                 onClick={(e) => { e.stopPropagation(); castVote(opt.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
-                className={`relative w-full text-left rounded-xl overflow-hidden border transition-all duration-200 group flex items-center shrink-0 ${
+                className={`relative w-full text-left rounded-xl overflow-hidden border transition-all duration-200 group flex items-center ${
                   mine ? theme.active + (hasColor ? ' bg-white/70' : ' bg-muted') : btnBase
                 }`}
               >
@@ -287,24 +287,24 @@ export default function PollBlock({
                   style={{ width: `${pct}%` }}
                 />
                 {/* Row content — fixed 40px min-height, px-3 py-2 */}
-                <div className="relative w-full flex items-center justify-between gap-2 px-3 py-2" style={{ minHeight: 40 }}>
+                <div className="relative w-full flex items-start justify-between gap-2 px-3 py-2" style={{ minHeight: 40 }}>
                   {/* Label side */}
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
                     {mine ? (
                       <CheckCircle2 className={`w-4 h-4 shrink-0 ${theme.text}`} />
                     ) : (
                       <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-colors ${unvotedCircle}`} />
                     )}
-                    <div
-                      className={`font-medium min-w-0 line-clamp-3 break-words whitespace-normal ${mine ? textMain : textSub}`}
+                    <span
+                      className={`font-medium min-w-0 line-clamp-3 ${mine ? textMain : textSub}`}
                       style={{ fontSize: fs(17) }}
                     >
                       {opt.label}
-                    </div>
+                    </span>
                   </div>
 
-                  {/* Right side — fixed, centered */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Right side — fixed, aligned to first line */}
+                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                     {vCount > 0 && (
                       <div
                         role="button"
@@ -338,7 +338,7 @@ export default function PollBlock({
           })}
 
           {editing && editable && (
-            <div className="flex flex-col gap-2 mt-1.5 shrink-0">
+            <div className="flex flex-col gap-2 mt-1.5">
               <button
                 onClick={addOption}
                 className={`flex w-max items-center gap-1.5 text-sm font-semibold self-start px-2 py-1 rounded transition-colors ${

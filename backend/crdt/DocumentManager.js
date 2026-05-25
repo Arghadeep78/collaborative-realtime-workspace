@@ -1,6 +1,11 @@
 import * as Y from 'yjs';
 import Whiteboard from '../models/whiteboardModel.js';
 
+const C = '\x1b[35m'; // magenta
+const R = '\x1b[0m';
+const log  = (...a) => console.log(`${C}[DocumentManager]${R}`, ...a);
+const lerr = (...a) => console.error(`${C}[DocumentManager]${R}`, ...a);
+
 /**
  * @typedef {import('ws').WebSocket} WebSocket
  */
@@ -24,6 +29,8 @@ class DocumentManager {
     this.gcTimers = new Map();
     /** @type {Set<string>} - Boards with a compaction pass in flight (guards against double-compaction on concurrent cold loads) */
     this.compacting = new Set();
+    /** @type {Map<string, Promise<void>>} - Serialises concurrent flushes per board so an older snapshot can't overwrite a newer one */
+    this.flushChain = new Map();
     /** @type {((boardId: string) => void) | null} - Called when a doc is evicted from memory */
     this.onDocEvicted = null;
     /** @type {((boardId: string, oldDoc: Y.Doc, newDoc: Y.Doc) => void) | null} - Called when a doc instance is swapped (e.g. after async compaction) so WSServer can rewire its `update` listener */
@@ -218,9 +225,51 @@ class DocumentManager {
       conns.delete(ws);
       if (conns.size === 0) {
         this.connections.delete(boardId);
+        // Immediately write dirty state to MongoDB when the last peer leaves.
+        // This closes the 30s write-behind window: without it, a quick reload
+        // or server restart would serve a stale cold-load from MongoDB and lose
+        // any edits made since the last scheduler tick.
+        this._flushIfDirty(boardId);
         this._scheduleGC(boardId);
       }
     }
+  }
+
+  /**
+   * Write the current Y.Doc state directly to MongoDB if dirty.
+   * Called when the last connection leaves a room — avoids the 30s lag of the
+   * scheduler and ensures edits survive a server restart or quick reload.
+   *
+   * @param {string} boardId
+   */
+  _flushIfDirty(boardId) {
+    if (!this.dirtyDocs.has(boardId)) return;
+    // Capture the latest state NOW (before clearing dirty), then chain onto any
+    // in-flight write so the newer snapshot always wins. Without chaining,
+    // two rapid flushes can race: the first (stale) snapshot could resolve after
+    // the second (fresh) one and overwrite it in MongoDB.
+    const state = this.encodeState(boardId);
+    if (!state) return;
+    this.clearDirty(boardId);
+
+    const prev = this.flushChain.get(boardId) ?? Promise.resolve();
+    const next = prev.then(() =>
+      Whiteboard.updateOne(
+        { id: boardId },
+        { $set: { yjsState: Buffer.from(state) } },
+      ).then(() => {
+        log(`Flushed boardId: ${boardId} (${state.byteLength}B) on room-empty`);
+      }).catch((err) => {
+        this.markDirty(boardId);
+        lerr(`Flush failed for boardId: ${boardId} — re-marked dirty:`, err.message);
+      })
+    );
+    // Keep the chain alive only while a write is pending; clean up to avoid a
+    // memory leak on boards that are flushed many times over a long session.
+    this.flushChain.set(boardId, next);
+    next.finally(() => {
+      if (this.flushChain.get(boardId) === next) this.flushChain.delete(boardId);
+    });
   }
 
   /** @param {string} boardId @returns {Set<WebSocket>} */

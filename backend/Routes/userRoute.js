@@ -6,6 +6,7 @@ import {
   updatePassword,
   getUserProfile,
   updateUserProfile,
+  getBulkProfiles,
 } from "../Controllers/userController.js";
 import express from "express";
 import authMiddleware from "../middleware/AuthenticationMIddleware.js";
@@ -19,6 +20,7 @@ router.post("/login", loginUser);
 router.post("/google-login", googleLogin);
 router.post("/renew-token", renewToken);
 router.get("/profile", authMiddleware, getUserProfile);
+router.get("/profiles", authMiddleware, getBulkProfiles);
 router.put("/profile", authMiddleware, updateUserProfile);
 router.put("/profile/password", authMiddleware, updatePassword);
 router.post(

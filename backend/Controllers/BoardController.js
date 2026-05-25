@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import Whiteboard from '../models/whiteboardModel.js';
 import Workspace from '../models/workspaceModel.js';
+import User from '../models/usermodel.js';
 import { invalidateBoardMeta } from '../cache/boardCache.js';
 import { sendBoardInviteEmail } from '../utils/mailer.js';
 
@@ -141,11 +142,17 @@ export const shareBoard = async (req, res) => {
     if (!board) return res.status(404).json({ error: 'Board not found' });
     if (board.owner !== req.email) return res.status(403).json({ error: 'Only the owner can share this board' });
 
+    const invitee = await User.findOne({ email }).select('name profilePicture').lean();
+    const resolvedName = invitee?.name || name || email;
+    const resolvedPhoto = invitee?.profilePicture || '';
+
     const already = board.collaborators.find(c => c.email === email);
     if (already) {
-      already.role = role; // update role if already shared
+      already.role = role;
+      already.name = resolvedName;
+      already.profilePicture = resolvedPhoto;
     } else {
-      board.collaborators.push({ email, name: name || email, role });
+      board.collaborators.push({ email, name: resolvedName, role, profilePicture: resolvedPhoto });
     }
     await board.save();
     await invalidateBoardMeta(board.id);

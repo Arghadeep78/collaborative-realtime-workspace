@@ -110,6 +110,7 @@ const Profile = () => {
             const normalizedUser = {
                 ...updatedUser.user,
                 profilePicture: updatedUser.user.profilePicture ?? '',
+                profilePic: updatedUser.user.profilePicture ?? '',
             };
             setUserData(normalizedUser);
             setEditedData(normalizedUser);
@@ -154,8 +155,21 @@ const Profile = () => {
             }
 
             const data = await response.json();
-            handleInputChange('profilePic', data.url);
-            syncStoredUser({ profilePic: data.url });
+
+            // Persist the new picture URL to the user's profile immediately
+            await fetch(`${BACKEND_URL}/users/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ name: userData.name, profilePicture: data.url }),
+            });
+
+            const updated = { ...userData, profilePic: data.url, profilePicture: data.url };
+            setUserData(updated);
+            setEditedData(updated);
+            syncStoredUser({ profilePic: data.url, profilePicture: data.url });
             toast.success('Profile picture updated!');
         } catch (error) {
             console.error('Error uploading profile picture:', error);

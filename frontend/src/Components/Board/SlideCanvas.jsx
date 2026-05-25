@@ -170,6 +170,7 @@ export default function SlideCanvas({
   boardId,
   // Kanban assignee options
   members,
+  photoMap = {},
   // Active page (background)
   activePage,
   isDark,
@@ -266,12 +267,13 @@ export default function SlideCanvas({
     if (!el) return;
     const onWheel = (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
+      const cr = el.getBoundingClientRect();
+      if (e.clientX < cr.left || e.clientX > cr.right || e.clientY < cr.top || e.clientY > cr.bottom) return;
       e.preventDefault();
 
       const slide = slideRef.current;
       if (slide) {
         const sr = slide.getBoundingClientRect();
-        const cr = el.getBoundingClientRect();
         zoomAnchorRef.current = {
           cursorSlideX: (e.clientX - sr.left) / scaleRef.current,
           cursorSlideY: (e.clientY - sr.top) / scaleRef.current,
@@ -536,6 +538,8 @@ export default function SlideCanvas({
                   boardId={boardId}
                   members={members}
                   activeTool={activeTool}
+                  peers={peers}
+                  photoMap={photoMap}
                 />
               ))}
 

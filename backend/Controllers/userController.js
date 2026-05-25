@@ -232,6 +232,23 @@ const updatePassword = async (req, res) => {
   }
 };
 
+const getBulkProfiles = async (req, res) => {
+  try {
+    const emails = (req.query.emails || '').split(',').map(e => e.trim()).filter(Boolean);
+    if (!emails.length) return res.status(200).json([]);
+    const users = await userModel.find({ email: { $in: emails } })
+      .select('email name profilePicture')
+      .lean();
+    res.status(200).json(users.map(u => ({
+      email: u.email,
+      name: u.name,
+      profilePicture: u.profilePicture || '',
+    })));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export {
   registerUser,
   loginUser,
@@ -240,5 +257,6 @@ export {
   getUserProfile,
   updateUserProfile,
   updatePassword,
+  getBulkProfiles,
 };
 

@@ -9,28 +9,6 @@ const log  = (...a) => console.log(`${C}[Persist Scheduler]${R}`, ...a);
 const lerr = (...a) => console.error(`${C}[Persist Scheduler]${R}`, ...a);
 
 /**
- * Enqueue a single persist job for `boardId` if it is dirty.
- * Safe to call at any time (de-duplicated by jobId).
- *
- * @param {Queue} queue
- * @param {string} boardId
- */
-export async function flushBoard(queue, boardId) {
-  if (!documentManager.dirtyDocs.has(boardId)) return;
-  try {
-    await queue.add('persist', { boardId }, {
-      jobId: `persist-${boardId}`,
-      removeOnComplete: true,
-      removeOnFail: 50,
-    });
-    documentManager.clearDirty(boardId);
-    log(`Immediate flush enqueued for boardId: ${boardId}`);
-  } catch (err) {
-    lerr(`Immediate flush failed for boardId: ${boardId} — left dirty for retry:`, err.message);
-  }
-}
-
-/**
  * Start the periodic scheduler that checks for dirty Y.Docs
  * and enqueues BullMQ jobs to persist them to MongoDB.
  *

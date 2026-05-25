@@ -27,7 +27,7 @@ const roleIcon = (r) => {
  */
 export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceId, onClose, onBack }) {
   const [loading, setLoading] = useState(true);
-  const [owner, setOwner]     = useState(null);
+  const [owner, setOwner]     = useState(null); // { email, name, profilePicture }
   const [members, setMembers] = useState([]);   // workspace members (viewer baseline)
   const [collabs, setCollabs] = useState([]);   // explicit board collaborators
 
@@ -41,8 +41,9 @@ export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceI
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to load');
-      setOwner(d.workspace?.owner || null);
-      setMembers(d.workspace?.members || []);
+      const ws = d.workspace || {};
+      setOwner({ email: ws.owner, name: ws.ownerName || ws.owner, profilePicture: ws.ownerProfilePicture || '' });
+      setMembers(ws.members || []);
       const board = (d.boards || []).find((b) => b.id === boardId);
       setCollabs(board?.collaborators || []);
     } catch (e) {
@@ -60,10 +61,10 @@ export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceI
   const participants = (() => {
     const map = new Map();
     members.forEach((m) =>
-      map.set(m.email, { email: m.email, name: m.name || m.email, role: 'viewer', source: 'workspace' })
+      map.set(m.email, { email: m.email, name: m.name || m.email, profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
     );
     collabs.forEach((c) =>
-      map.set(c.email, { email: c.email, name: c.name || c.email, role: c.role, source: 'board' })
+      map.set(c.email, { email: c.email, name: c.name || c.email, profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
     );
     return [...map.values()];
   })();
@@ -112,11 +113,25 @@ export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceI
     }
   };
 
-  const Avatar = ({ email }) => (
-    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm shrink-0 bg-linear-to-br from-slate-600 to-slate-800 dark:from-slate-700 dark:to-slate-900">
-      {email?.[0]?.toUpperCase()}
-    </div>
-  );
+  const Avatar = ({ email, name, profilePicture }) => {
+    const [imgErr, setImgErr] = useState(false);
+    const initial = (name || email)?.[0]?.toUpperCase();
+    if (profilePicture && !imgErr) {
+      return (
+        <img
+          src={profilePicture}
+          alt={name || email}
+          onError={() => setImgErr(true)}
+          className="w-9 h-9 rounded-xl object-cover shadow-sm shrink-0"
+        />
+      );
+    }
+    return (
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm shrink-0 bg-linear-to-br from-slate-600 to-slate-800 dark:from-slate-700 dark:to-slate-900">
+        {initial}
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
@@ -167,11 +182,15 @@ export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceI
                 {/* Owner row */}
                 <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm bg-linear-to-br from-amber-400 to-amber-600 shrink-0">
-                      {owner?.[0]?.toUpperCase()}
-                    </div>
+                    {owner?.profilePicture ? (
+                      <img src={owner.profilePicture} alt={owner.name} className="w-9 h-9 rounded-xl object-cover shadow-sm shrink-0" onError={(e) => { e.target.style.display='none'; }} />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm bg-linear-to-br from-amber-400 to-amber-600 shrink-0">
+                        {owner?.email?.[0]?.toUpperCase()}
+                      </div>
+                    )}
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-content truncate">{owner}</p>
+                      <p className="text-sm font-semibold text-content truncate">{owner?.name || owner?.email}</p>
                       <p className="text-[11px] text-content-subtle">Board owner</p>
                     </div>
                   </div>
@@ -185,7 +204,7 @@ export default function ManageBoardAccessModal({ boardId, boardTitle, workspaceI
                 {participants.map((p) => (
                   <div key={p.email} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-surface border border-edge-subtle hover:border-indigo-500/20 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Avatar email={p.email} />
+                      <Avatar email={p.email} name={p.name} profilePicture={p.profilePicture} />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-content truncate">{p.name}</p>
                         <p className="text-[11px] text-content-subtle">

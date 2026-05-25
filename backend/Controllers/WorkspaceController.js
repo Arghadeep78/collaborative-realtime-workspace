@@ -1,5 +1,6 @@
 import Workspace from '../models/workspaceModel.js';
 import Whiteboard from '../models/whiteboardModel.js';
+import User from '../models/usermodel.js';
 import { invalidateBoardMeta } from '../cache/boardCache.js';
 
 // ── createWorkspace ───────────────────────────────────────────────────────────
@@ -234,13 +235,36 @@ export const getWorkspaceManageData = async (req, res) => {
           .select('id title owner collaborators isPublic publicRole').lean()
       : [];
 
+    // Collect every unique email that needs a profile picture
+    const allEmails = new Set([ws.owner]);
+    ws.members.forEach(m => allEmails.add(m.email));
+    boards.forEach(b => b.collaborators?.forEach(c => allEmails.add(c.email)));
+
+    const users = await User.find({ email: { $in: [...allEmails] } })
+      .select('email name profilePicture').lean();
+    const photoLookup = Object.fromEntries(users.map(u => [u.email, u.profilePicture || '']));
+    const nameLookup  = Object.fromEntries(users.map(u => [u.email, u.name || '']));
+
+    const wsObj = wsView(ws, req.email);
+    wsObj.members = ws.members.map(m => ({
+      ...m,
+      name: nameLookup[m.email] || m.name || m.email,
+      profilePicture: photoLookup[m.email] ?? m.profilePicture ?? '',
+    }));
+    wsObj.ownerProfilePicture = photoLookup[ws.owner] || '';
+    wsObj.ownerName = nameLookup[ws.owner] || ws.owner;
+
     return res.status(200).json({
-      workspace: wsView(ws, req.email),
+      workspace: wsObj,
       boards: boards.map(b => ({
         id: b.id,
         title: b.title,
         owner: b.owner,
-        collaborators: b.collaborators || [],
+        collaborators: (b.collaborators || []).map(c => ({
+          ...c,
+          name: nameLookup[c.email] || c.name || c.email,
+          profilePicture: photoLookup[c.email] ?? c.profilePicture ?? '',
+        })),
         isPublic: !!b.isPublic,
         publicRole: b.publicRole || 'viewer',
       })),

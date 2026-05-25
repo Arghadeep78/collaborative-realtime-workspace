@@ -44,24 +44,6 @@ function applyClientUpdate(ydoc, update, origin, userEmail, boardId) {
     return false;
   }
 
-  // Pure-replay check: an update's structs carry the clocks of the clients
-  // that produced them. If every clock is already covered by the doc's current
-  // state vector, the update adds nothing — applying it is a wasteful no-op
-  // (or, for a malicious replay, an attempt to look productive). Decoding the
-  // state vector is O(#clients), not O(doc size), so the check is cheap.
-  try {
-    const before = Y.encodeStateVector(ydoc);
-    if (isPureReplay(before, update)) {
-      console.warn(`[Yjs WS] Dropped pure-replay update from ${userEmail} on ${boardId}`);
-      return false;
-    }
-  } catch {
-    // A malformed update can throw while we inspect it. Treat it as garbage
-    // and drop it rather than handing it to applyUpdate.
-    console.warn(`[Yjs WS] Dropped unparseable update from ${userEmail} on ${boardId}`);
-    return false;
-  }
-
   try {
     Y.applyUpdate(ydoc, update, origin);
     return true;
@@ -73,41 +55,6 @@ function applyClientUpdate(ydoc, update, origin, userEmail, boardId) {
   }
 }
 
-/**
- * True when the update carries no client clocks newer than the doc already has
- * — i.e. it's entirely in the past relative to `stateVector`. Compares the
- * update's embedded state vector (the "missing-from" clocks in its header)
- * against the doc's current state vector.
- *
- * @param {Uint8Array} stateVector  - Y.encodeStateVector(ydoc)
- * @param {Uint8Array} update
- * @returns {boolean}
- */
-function isPureReplay(stateVector, update) {
-  // The update's own state vector describes the highest clock per client it
-  // contains. Y.encodeStateVectorFromUpdate gives us that without applying.
-  const updateSV = Y.encodeStateVectorFromUpdate(update);
-  const have = decodeSVToMap(stateVector);
-  const incoming = decodeSVToMap(updateSV);
-  for (const [client, clock] of incoming) {
-    // This client carries a clock the doc hasn't seen yet → real new content.
-    if (clock > (have.get(client) || 0)) return false;
-  }
-  return true; // nothing newer than what we already have
-}
-
-/** Decode an encoded Yjs state vector into a Map<clientId, clock>. */
-function decodeSVToMap(encoded) {
-  const dec = decoding.createDecoder(encoded);
-  const size = decoding.readVarUint(dec);
-  const map = new Map();
-  for (let i = 0; i < size; i++) {
-    const client = decoding.readVarUint(dec);
-    const clock = decoding.readVarUint(dec);
-    map.set(client, clock);
-  }
-  return map;
-}
 
 /**
  * Attach a Yjs-protocol WebSocket server to the existing HTTP server.

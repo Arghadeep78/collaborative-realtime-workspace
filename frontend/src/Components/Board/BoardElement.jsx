@@ -68,6 +68,8 @@ export default function BoardElement({
   // Kanban assignee options (board members)
   members,
   activeTool,
+  peers = [],
+  photoMap = {},
 }) {
   const selected = selectedIds?.has(element.id) ?? false;
   const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
@@ -313,6 +315,8 @@ export default function BoardElement({
         boardId={boardId}
         members={members}
         getScale={getScale}
+        peers={peers}
+        photoMap={photoMap}
       />
       {/* Intercept pointer events from iframe during drag so pointermove reaches window */}
       {dragging && element.type === 'iframe' && (

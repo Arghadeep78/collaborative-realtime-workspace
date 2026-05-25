@@ -62,7 +62,9 @@ export const ELEMENT_DEFAULTS = {
     w: 380,
     h: 300,
     props: {
+      configured: false,
       question: '',
+      multiChoice: false,
       options: [
         { id: 'o1', label: 'Option 1' },
         { id: 'o2', label: 'Option 2' },

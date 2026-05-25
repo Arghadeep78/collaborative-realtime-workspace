@@ -170,6 +170,7 @@ export default function BoardRoom() {
 
   // ── Presence ─────────────────────────────────────────────────────────────
   const [peers, setPeers] = useState([]);
+  const [photoMap, setPhotoMap] = useState({}); // email → profilePicture URL
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
@@ -311,7 +312,33 @@ export default function BoardRoom() {
     provider.awareness.on('change', update);
     update();
     return () => provider.awareness.off('change', update);
-  }, [provider, userData.name, userData.email]);
+  }, [provider, userData.name, userData.email, userData.profilePic, userData.profilePicture]);
+
+  // ── Photo map: resolve profile pictures for all voters ────────────────────
+  // Collect every unique voter email from the Yjs votes map, diff against what
+  // we already have, and fetch only the missing ones from the backend.
+  useEffect(() => {
+    const allEmails = new Set();
+    Object.values(votes).forEach(pollVotes => {
+      Object.keys(pollVotes).forEach(email => allEmails.add(email));
+    });
+    const missing = [...allEmails].filter(e => !(e in photoMap));
+    if (!missing.length) return;
+    const token = localStorage.getItem('token');
+    fetch(`${BACKEND_URL}/users/profiles?emails=${missing.join(',')}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(profiles => {
+        if (!profiles.length) return;
+        setPhotoMap(prev => {
+          const next = { ...prev };
+          profiles.forEach(p => { next[p.email] = p.profilePicture || ''; });
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [votes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Drop our cursor when the tab is hidden so stale pointers don't linger.
   useEffect(() => {
@@ -838,6 +865,7 @@ export default function BoardRoom() {
             canComment={canComment}
             boardId={boardId}
             members={members}
+            photoMap={photoMap}
             activePage={activePage}
             isDark={isDark}
             zoomMult={zoomMult}
