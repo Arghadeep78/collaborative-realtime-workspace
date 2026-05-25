@@ -1,5 +1,4 @@
-import { lightColors } from './lightThemeMap.js';
-import { darkColors } from './darkThemeMap.js';
+import { themeColors } from './colorMap.js';
 
 /**
  * Maps a given base color to its theme equivalent.
@@ -13,8 +12,9 @@ export function getThemeColor(color, isDark) {
   // Ensure we match case (stored colors are mostly lowercase hex)
   const normalizedColor = color.toLowerCase();
   
-  if (isDark) {
-    return darkColors[normalizedColor] || darkColors[color] || color;
+  const mapping = themeColors[normalizedColor] || themeColors[color];
+  if (mapping) {
+    return isDark ? (mapping.dark || mapping.light || color) : (mapping.light || color);
   }
-  return lightColors[normalizedColor] || lightColors[color] || color;
+  return color;
 }

@@ -4,7 +4,7 @@
 
 A full-stack, real-time collaborative workspace where teams ideate and organize on a shared, multi-page canvas — sticky notes, Kanban cards, connectors, polls, embeds, and more. State syncs conflict-free across clients with **Yjs CRDTs**, and the backend is built to run horizontally behind a load balancer: Redis-backed pub/sub, write-behind persistence, distributed rate limiting, health probes, and resilient external calls.
 
-The canvas UI is **custom-built** (React + SVG, no canvas library shell), so the workspace is fully owned end-to-end — from the CRDT wire protocol on the server to every element on the screen.
+The canvas UI is **custom-built** (React + SVG, no canvas library), so the workspace is fully owned end-to-end — from the CRDT wire protocol on the server to every element on the screen.
 
 ---
 
@@ -14,16 +14,17 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 
 | Concern | Implementation |
 |---|---|
-| **CRDT sync engine** | A Yjs WebSocket server (`backend/crdt/WSServer.js`) co-located on the same HTTP server (`/yjs` path). Merges and rebroadcasts document deltas; conflicts resolve automatically via CRDTs — no central locking. |
-| **Horizontal scaling** | Socket.IO uses the **Redis adapter**, and Yjs updates fan out across instances over **Redis pub/sub**, so users on different Node processes stay in sync behind a load balancer. |
-| **Write-behind persistence** | A **BullMQ** worker + scheduler flush in-memory `Y.Doc` state to MongoDB on an interval (`backend/crdt/persistenceWorker.js`), keeping the hot sync path off the database. |
+| **CRDT sync engine** | A custom Yjs WebSocket server (`backend/crdt/WSServer.js`) attached to the HTTP server at `/yjs/<boardId>`. Implements the full `y-protocols` binary sync handshake, merges incoming deltas, and rebroadcasts to peers — conflicts resolve automatically via CRDTs, no central locking. |
+| **Horizontal scaling** | Yjs document deltas fan out across instances via **Redis pub/sub** (`yjs:<boardId>` channel), so users on different Node processes stay in sync behind a load balancer. |
+| **Write-behind persistence** | A **BullMQ** scheduler + worker flush in-memory `Y.Doc` state to MongoDB every 30 seconds (`backend/crdt/persistenceWorker.js`), keeping the hot sync path off the database. Dirty-flag is cleared only after the job is durably enqueued — no silent data loss on crash. |
+| **History compaction** | On cold load, `DocumentManager` compacts the Y.Doc by replaying logical values into a fresh doc, dropping accumulated CRDT tombstones. Runs only when the compacted form is ≥ 20% smaller than the original; nested Y.Maps (votes, comments) are reconstructed, not flattened. |
 | **Authorization at the trust boundary** | Roles (`viewer`/`commenter`/`editor`) are enforced **per Yjs sync message**, not just at connect. A `viewer`'s write bytes are discarded before touching the shared doc — a hand-crafted WebSocket frame can't bypass the UI's read-only mode. |
-| **Distributed rate limiting** | `express-rate-limit` + `rate-limit-redis` with shared counters across instances, split into auth / AI / general API tiers (`backend/middleware/rateLimiters.js`). |
-| **Board-metadata cache** | Access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`) is cached in Redis (`board:meta:<id>`, 60s TTL) and invalidated on share/unshare/publish/delete — removing a cold Mongo read from every connection (`backend/cache/boardCache.js`). |
-| **External API resilience** | Gemini calls are wrapped with a 10s timeout, exponential-backoff retries, and an in-memory circuit breaker, so an upstream outage fails fast instead of queuing hanging requests (`backend/utils/resilience.js`). |
-| **Health & readiness probes** | `GET /health` checks live MongoDB + Redis (`503` when down); `GET /ready` additionally verifies BullMQ workers — concrete signals for load balancers / orchestrators. |
+| **Distributed rate limiting** | `express-rate-limit` + `rate-limit-redis` with shared counters in Redis across all instances, split into auth / AI / general API tiers (`backend/middleware/rateLimiters.js`). |
+| **Board-metadata cache** | Access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is cached in Redis (`board:meta:<id>`, 60 s TTL) and explicitly invalidated on share / unshare / publish / delete — removing a cold MongoDB read from every WebSocket connection (`backend/cache/boardCache.js`). |
+| **External API resilience** | Gemini calls are wrapped with a 10 s timeout, exponential-backoff retries (3 attempts, transient errors only), and an in-memory circuit breaker (opens after 5 consecutive failures, half-opens after 30 s cooldown) — an upstream outage fails fast instead of queuing hanging requests (`backend/utils/resilience.js`). |
+| **Health & readiness probes** | `GET /health` checks live MongoDB + Redis (`503` when down); `GET /ready` additionally verifies BullMQ workers are running — concrete signals for load balancers and orchestrators. |
 | **Async publishing** | A BullMQ queue + worker produces a read-only public snapshot of a board off the request path (`backend/jobs/`). |
-| **Graceful shutdown** | `SIGTERM`/`SIGINT` drain workers, queues, and Redis clients before exit. |
+| **Graceful shutdown** | `SIGTERM`/`SIGINT` drain BullMQ workers, close queues, and quit Redis clients before process exit. |
 
 ---
 
@@ -31,7 +32,7 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 
 - **Multi-page canvas** of fixed 16:9 slides with freeform / grid / column layout modes.
 - **Rich elements:** sticky notes, Kanban cards (labels, assignees, subcards, due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
-- **Live presence:** real-time teammate cursors with name tags and a laser pointer.
+- **Live presence:** real-time teammate cursors with name tags and a laser pointer, broadcast via Yjs Awareness.
 - **Comments & voting** on elements for async decision-making.
 - **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing.
 - **AI brainstorming** via the Google Gemini API.
@@ -43,33 +44,33 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 
 ```
 .
-├── backend/   # Node.js + Express + Socket.IO + Yjs WebSocket server
-└── frontend/  # React + Vite custom canvas client
+├── backend/   # Node.js + Express + custom Yjs WebSocket server
+└── frontend/  # React + Vite custom SVG canvas client
 ```
 
 ```mermaid
 graph TD
     subgraph Client [Frontend — React/Vite]
         UI[Custom SVG Canvas + UI]
-        YjsClient[Yjs Client Doc]
+        YjsClient[Yjs Client Doc + Awareness]
         UI <--> YjsClient
     end
 
     subgraph Server [Backend — Node.js/Express]
         API[Express REST API]
-        YjsServer[Yjs WebSocket Server]
+        YjsServer[Yjs WebSocket Server<br/>WSServer.js]
         Workers[BullMQ Workers<br/>persistence + publish]
     end
 
     subgraph Data [Data Layer]
         MongoDB[(MongoDB)]
-        Redis[(Redis<br/>pub/sub · cache · queues)]
+        Redis[(Redis<br/>pub/sub · cache · queues · rate-limit)]
     end
 
     Gemini[Google Gemini API]
 
     Client -- REST/HTTPS --> API
-    YjsClient <-- WebSocket --> YjsServer
+    YjsClient <-- WebSocket /yjs/boardId --> YjsServer
     API --> MongoDB
     YjsServer <--> Redis
     Workers <--> Redis
@@ -83,7 +84,7 @@ See [architecture.md](architecture.md) for the full design and [PRD.md](PRD.md) 
 
 ## Tech Stack
 
-**Backend** — Node.js, Express, Socket.IO + Yjs (`y-websocket`), MongoDB/Mongoose, Redis (adapter, pub/sub, cache, rate-limit store), BullMQ, JWT + Google OAuth 2.0, Google Gemini API.
+**Backend** — Node.js, Express, Yjs (`y-protocols`, `y-websocket`, `ws`), MongoDB/Mongoose, Redis (pub/sub, cache, rate-limit store), BullMQ + ioredis, JWT + Google OAuth 2.0, Google Gemini API.
 
 **Frontend** — React 19, Vite, custom SVG canvas, Yjs + `y-websocket`, Tailwind CSS, React Router.
 
@@ -124,4 +125,3 @@ See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/REA
 ## License
 
 MIT
-</content>

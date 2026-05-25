@@ -9,10 +9,10 @@ The client for the real-time collaborative workspace, built with **React 19 + Vi
 - **Custom multi-page canvas** — fixed 16:9 slides with freeform / grid / column layout modes, pan & zoom, marquee select, and explicit z-order layering.
 - **Rich elements** — sticky notes, Kanban cards (labels, assignees, subcards, due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
 - **Real-time collaboration** — element edits sync instantly via Yjs CRDTs; conflicts resolve automatically.
-- **Live presence** — teammate cursors with name tags and a broadcast laser pointer.
+- **Live presence** — teammate cursors with name tags and a broadcast laser pointer, powered by the Yjs Awareness protocol.
 - **Comments & voting** on elements for async feedback.
 - **AI brainstorming** panel powered by the Gemini API.
-- **Sharing roles** — Viewer, Commenter, and Editor.
+- **Sharing roles** — Viewer, Commenter, and Editor; enforced client-side and at the server trust boundary.
 - **Polished UI** — floating-card design, dark mode, responsive layout, and micro-animations.
 
 ---
@@ -20,11 +20,33 @@ The client for the real-time collaborative workspace, built with **React 19 + Vi
 ## 🛠️ Tech Stack
 
 - **Framework:** React 19, Vite
-- **Canvas:** Custom SVG rendering (self-contained element registry)
-- **Realtime:** Yjs, `y-websocket`
+- **Canvas:** Custom SVG rendering — a self-contained element registry (sticky notes, Kanban cards, text, connectors, polls, embeds, shapes, media). Element coordinates live in fixed slide units so rendering is zoom-independent.
+- **Realtime:** Yjs + `y-websocket` (`WebsocketProvider`), Yjs Awareness for presence
 - **Routing:** React Router
 - **Styling:** Tailwind CSS
 - **Auth:** JWT (access/refresh), Google OAuth 2.0
+
+---
+
+## 📂 Key Structure
+
+```
+frontend/src/
+├── crdt/
+│   ├── useYjsBoard.js        # Y.Doc + WebsocketProvider init; tracks hasSyncedOnce to avoid blank-board flicker on reconnect
+│   └── useBoardHistory.js    # Per-client undo/redo via Yjs UndoManager
+├── Components/Board/
+│   ├── BoardRoom.jsx         # Main 3-pane layout (sidebar + toolbar + canvas); resolves user role and permissions
+│   ├── useBoardSync.js       # Yjs ↔ React state bridge: observe shared types, expose CRUD helpers
+│   ├── SlideCanvas.jsx       # SVG render loop + pointer/keyboard input
+│   ├── Sidebar.jsx           # Page list with drag-reorder (fractional ordering)
+│   ├── TopUtilityBar.jsx     # Toolbar (tools, layout modes, zoom)
+│   ├── PresenceLayer.jsx     # Remote cursors + laser pointer overlay
+│   └── elements/             # StickyNote, KanbanCard, PollBlock, TextBox, ConnectorLayer, ShapeBlock, MediaBlock, IframeWindow
+├── Components/AuthPages/     # Login, Register
+├── Components/Dashboard/     # Board + workspace list
+└── Components/Profile/       # User profile
+```
 
 ---
 
@@ -58,4 +80,3 @@ The app runs at `http://localhost:5173`.
 ## 📜 License
 
 MIT
-</content>

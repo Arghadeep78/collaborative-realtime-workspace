@@ -6,18 +6,17 @@ import ConnectorLayer from './ConnectorLayer.jsx';
 import PresenceLayer from './PresenceLayer.jsx';
 import RadialMenu from './RadialMenu.jsx';
 import { getThemeColor } from './theme/themeUtils.js';
-import { lightColors } from './theme/lightThemeMap.js';
-import { darkColors } from './theme/darkThemeMap.js';
+import { themeColors } from './theme/colorMap.js';
 
 const FIT_PADDING = 64; // breathing room around the slide within the viewport
 
 export function getSlideBackground(bg, isDark) {
-  const defaultBg = isDark ? darkColors.boardBg : lightColors.boardBg;
+  const defaultBg = isDark ? themeColors.boardBg.dark : themeColors.boardBg.light;
   let bgColor = bg?.value || defaultBg;
   bgColor = getThemeColor(bgColor, isDark); // Map custom board colors if any
 
-  const gridColor = isDark ? darkColors.boardGrid : lightColors.boardGrid;
-  const gridColorLighter = isDark ? darkColors.boardGridLighter : lightColors.boardGridLighter;
+  const gridColor = isDark ? themeColors.boardGrid.dark : themeColors.boardGrid.light;
+  const gridColorLighter = isDark ? themeColors.boardGridLighter.dark : themeColors.boardGridLighter.light;
 
   if (!bg || bg.type === 'dots' || !bg.type) {
     return {
