@@ -57,6 +57,9 @@ const LogoIcon = () => (
 const BuildingIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
 );
+const MoveIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+);
 const MenuIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
 );
@@ -200,8 +203,41 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
   );
 }
 
+// ── MoveToWorkspaceModal ──────────────────────────────────────────────────────
+function MoveToWorkspaceModal({ board, workspaces, currentWorkspaceId, onMove, onClose }) {
+  const others = workspaces.filter(w => w.id !== currentWorkspaceId);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
+      <div className="relative bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 rb-anim-pop" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-gray-900 dark:text-white font-semibold text-base">Move to workspace</h2>
+          <button onClick={onClose} className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 dark:text-white/40 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"><XIcon /></button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-white/40 mb-3 truncate">Moving: <span className="font-medium text-gray-700 dark:text-white/70">{board.title}</span></p>
+        {others.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-white/40 py-4 text-center">No other workspaces available.<br/>Create one first.</p>
+        ) : (
+          <div className="space-y-1 max-h-60 overflow-y-auto">
+            {others.map(ws => (
+              <button key={ws.id} onClick={() => onMove(ws.id)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 dark:text-white/70 hover:bg-gray-50 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors">
+                <div className="w-7 h-7 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  {ws.name[0]?.toUpperCase()}
+                </div>
+                <span className="truncate font-medium">{ws.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── BoardCard ─────────────────────────────────────────────────────────────────
-function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, onToggleFavorite, openMenu, setOpenMenu, renamingId, renameVal, setRenameVal, saveRename, setRenamingId }) {
+function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, onToggleFavorite, onMoveToWorkspace, canMove, openMenu, setOpenMenu, renamingId, renameVal, setRenameVal, saveRename, setRenamingId }) {
   const isGradient = (v) => v && v.startsWith('linear-gradient');
 
   return (
@@ -263,6 +299,9 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
               <div className="absolute right-0 top-8 w-44 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-20 rb-anim-pop py-1">
                 <button onClick={() => onRename(board)} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><EditIcon /> Rename</button>
                 <button onClick={() => { onChangeThumbnail(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><ImageIcon /> Change cover</button>
+                {canMove && (
+                  <button onClick={() => { onMoveToWorkspace(board); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-white/70 dark:hover:bg-white/[0.06] dark:hover:text-white transition-colors flex items-center gap-2.5"><MoveIcon /> Move to workspace</button>
+                )}
                 <div className="h-px bg-gray-100 dark:bg-white/[0.06] my-1" />
                 <button onClick={() => { onDelete(board.id); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400/80 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center gap-2.5"><TrashIcon /> Delete</button>
               </div>
@@ -328,6 +367,7 @@ export default function Dashboard({ logout }) {
   const [showCreateWs, setShowCreateWs]   = useState(false);
   const [renamingWs, setRenamingWs]       = useState(false);
   const [wsRenameVal, setWsRenameVal]     = useState('');
+  const [movingBoard, setMovingBoard]     = useState(null); // board to move between workspaces
   const wsDropdownRef = useRef(null);
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
@@ -522,6 +562,37 @@ export default function Dashboard({ logout }) {
       setRenamingWs(false);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const moveBoardToWorkspace = async (targetWorkspaceId) => {
+    if (!movingBoard) return;
+    const boardId = movingBoard.id;
+    try {
+      const res = await fetch(`${BACKEND_URL}/workspaces/${targetWorkspaceId}/add-board`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boardId }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || 'Failed to move board');
+      }
+      // Update local workspace state: remove from all workspaces, add to target
+      setWorkspaces(prev => prev.map(w => {
+        if (w.id === targetWorkspaceId) return { ...w, boardIds: [...(w.boardIds || []).filter(id => id !== boardId), boardId] };
+        return { ...w, boardIds: (w.boardIds || []).filter(id => id !== boardId) };
+      }));
+      setActiveWs(prev => {
+        if (!prev) return prev;
+        if (prev.id === targetWorkspaceId) return { ...prev, boardIds: [...(prev.boardIds || []).filter(id => id !== boardId), boardId] };
+        return { ...prev, boardIds: (prev.boardIds || []).filter(id => id !== boardId) };
+      });
+      toast.success('Board moved');
+    } catch (e) {
+      toast.error(e.message || 'Failed to move board');
+    } finally {
+      setMovingBoard(null);
     }
   };
 
@@ -740,6 +811,8 @@ export default function Dashboard({ logout }) {
                   onDelete={deleteBoard}
                   onChangeThumbnail={(b) => setPickerBoard(b)}
                   onToggleFavorite={toggleFavorite}
+                  onMoveToWorkspace={(b) => setMovingBoard(b)}
+                  canMove={workspaces.length > 1}
                   openMenu={openMenu}
                   setOpenMenu={setOpenMenu}
                   renamingId={renamingId}
@@ -787,6 +860,15 @@ export default function Dashboard({ logout }) {
         <CreateWorkspaceModal
           onClose={() => setShowCreateWs(false)}
           onCreate={createWorkspace}
+        />
+      )}
+      {movingBoard && (
+        <MoveToWorkspaceModal
+          board={movingBoard}
+          workspaces={workspaces}
+          currentWorkspaceId={activeWorkspace?.id}
+          onMove={moveBoardToWorkspace}
+          onClose={() => setMovingBoard(null)}
         />
       )}
     </div>

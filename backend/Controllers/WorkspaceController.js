@@ -82,6 +82,12 @@ export const addBoardToWorkspace = async (req, res) => {
     const hasAccess = board.owner === req.email || board.collaborators.some(c => c.email === req.email);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this board' });
 
+    // Enforce one-workspace-per-board: remove from any other workspace first
+    await Workspace.updateMany(
+      { id: { $ne: req.params.id }, boardIds: boardId },
+      { $pull: { boardIds: boardId } }
+    );
+
     if (!ws.boardIds.includes(boardId)) {
       ws.boardIds.push(boardId);
       await ws.save();

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { User, Lock, Edit3, Save, X, Camera, Loader, Home } from 'lucide-react';
+import { User, Lock, Edit3, Save, X, Camera, Loader, Home, Sun, Moon } from 'lucide-react';
 import { BACKEND_URL } from '../../constants/apiConfig';
 import toast from 'react-hot-toast';
 import Loading from '../Loading/Loading.jsx';
+import { useTheme } from '../../contexts/ThemeContext.jsx';
 
 
 const Profile = () => {
-    const [userData, setUserData] = useState({ name: '', profilePic: '' });
+    const { isDark, toggleTheme } = useTheme();
+    const [userData, setUserData] = useState({ name: '', profilePic: '', authProvider: 'local' });
     const [editedData, setEditedData] = useState({ name: '', profilePic: '' });
+    const isGoogleUser = userData.authProvider === 'google';
     const [isEditing, setIsEditing] = useState(false);
     
     // State for password change
@@ -49,6 +52,7 @@ const Profile = () => {
                 const normalizedData = {
                     ...data,
                     profilePic: data.profilePic ?? data.profilePicture ?? '',
+                    authProvider: data.authProvider || 'local',
                 };
                 setUserData(normalizedData);
                 setEditedData(normalizedData);
@@ -210,23 +214,23 @@ const Profile = () => {
     
     if (error && !userData.name) {
         return (
-            <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-950 text-white">
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-red-400">{error}</div>
+            <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-50 dark:bg-[#212121]">
+                <div className="bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl p-8 text-red-600 dark:text-red-400">{error}</div>
             </div>
         );
     }
 
     return (
-        <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-950 text-white font-sans p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-black">
-            <div className="w-full max-w-lg bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden">
-                {error && <p className="bg-red-900/30 border-b border-red-800 text-red-400 text-sm px-6 py-3">{error}</p>}
-                
+        <div className="h-full min-h-full overflow-auto flex items-center justify-center bg-gray-50 dark:bg-[#212121] font-sans p-6">
+            <div className="w-full max-w-lg bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden">
+                {error && <p className="bg-red-50 dark:bg-red-500/10 border-b border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm px-6 py-3">{error}</p>}
+
                 {/* Header */}
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-gray-800/50">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-5 border-b border-gray-100 dark:border-white/[0.07]">
                     <div className="flex items-center gap-4 min-w-0">
                         {/* Avatar */}
                         <div className="relative group">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden border-2 border-gray-800 shadow-lg shadow-indigo-500/20">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center overflow-hidden border-2 border-gray-200 dark:border-white/15 shadow-sm">
                                 {(isEditing ? editedData.profilePic : userData.profilePic) ? (
                                     <img
                                         src={isEditing ? editedData.profilePic : userData.profilePic}
@@ -242,7 +246,7 @@ const Profile = () => {
                             {isEditing && (
                                 <button
                                     onClick={() => !isUpdating && document.getElementById('profile-pic-input').click()}
-                                    className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                                    className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
                                 >
                                     <Camera size={20} className="text-white" />
                                 </button>
@@ -257,32 +261,41 @@ const Profile = () => {
                             />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold text-white">{userData.name || 'User'}</h1>
-                            <p className="text-gray-500 text-xs mt-0.5">Manage your account</p>
+                            <h1 className="text-base font-semibold text-gray-900 dark:text-white">{userData.name || 'User'}</h1>
+                            <p className="text-gray-500 dark:text-white/40 text-xs mt-0.5">
+                                {isGoogleUser ? 'Signed in with Google' : 'Manage your account'}
+                            </p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/10 rounded-full transition-colors"
+                            title="Toggle theme"
+                        >
+                            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+                        </button>
                         <button onClick={handleGoHome} disabled={isUpdating}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white text-xs font-medium rounded-xl transition-colors disabled:opacity-50">
+                            className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/4 dark:hover:bg-white/[0.07] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white/70 dark:hover:text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50">
                             <Home size={14} />
                             Home
                         </button>
                         {!isEditing ? (
                             <button onClick={handleEditToggle}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-xl transition-colors">
+                                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors">
                                 <Edit3 size={14} />
                                 Edit
                             </button>
                         ) : (
                             <div className="flex items-center gap-1.5">
                                 <button onClick={handleSave} disabled={isUpdating}
-                                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-xl transition-colors disabled:opacity-50">
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50">
                                     {isUpdating ? <Loader className="animate-spin" size={14} /> : <Save size={14} />}
                                     {isUpdating ? 'Saving…' : 'Save'}
                                 </button>
                                 <button onClick={handleEditToggle} disabled={isUpdating}
-                                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-xl transition-colors disabled:opacity-50">
+                                    className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/4 dark:hover:bg-white/[0.07] text-gray-500 dark:text-white/40 dark:hover:text-white rounded-lg transition-colors disabled:opacity-50">
                                     <X size={14} />
                                 </button>
                             </div>
@@ -294,72 +307,74 @@ const Profile = () => {
                 <div className="px-6 py-6 flex flex-col gap-5">
                     {/* Name field */}
                     <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                            <User size={14} />
+                        <label className="flex items-center gap-2 text-gray-500 dark:text-white/40 text-xs font-medium">
+                            <User size={13} />
                             Full Name
                         </label>
                         {!isEditing ? (
-                            <div className="bg-gray-800/50 text-white text-sm px-4 py-3 rounded-xl border border-gray-700/50">{userData.name}</div>
+                            <div className="bg-gray-50 dark:bg-white/4 text-gray-900 dark:text-white text-sm px-4 py-3 rounded-lg border border-gray-200 dark:border-white/[0.07]">{userData.name}</div>
                         ) : (
                             <input
                                 type="text"
                                 value={editedData.name}
                                 onChange={(e) => handleInputChange('name', e.target.value)}
-                                className="bg-gray-800/50 text-white text-sm px-4 py-3 rounded-xl border border-gray-700/80 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                className="bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white text-sm px-4 py-3 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 transition-all placeholder:text-gray-400 dark:placeholder:text-white/25"
                                 placeholder="Enter your full name"
                                 disabled={isUpdating}
                             />
                         )}
                     </div>
 
-                    {/* Password section */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                            <Lock size={14} />
-                            Password
-                        </label>
-                        {!isChangingPassword ? (
-                            <button onClick={() => setIsChangingPassword(true)}
-                                className="self-start px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium rounded-xl transition-colors">
-                                Change Password
-                            </button>
-                        ) : (
-                            <div className="flex flex-col gap-3">
-                                <input
-                                    type="password"
-                                    value={oldPassword}
-                                    onChange={(e) => setOldPassword(e.target.value)}
-                                    className="bg-gray-800/50 text-white text-sm px-4 py-3 rounded-xl border border-gray-700/80 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                    placeholder="Old Password"
-                                    disabled={isUpdating}
-                                />
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    className="bg-gray-800/50 text-white text-sm px-4 py-3 rounded-xl border border-gray-700/80 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                                    placeholder="New Password"
-                                    disabled={isUpdating}
-                                />
-                                {passwordError && <p className="text-red-400 text-xs">{passwordError}</p>}
-                                <div className="flex items-center gap-2">
-                                    <button onClick={handleUpdatePassword} disabled={isUpdating}
-                                        className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50">
-                                        {isUpdating ? <Loader className="animate-spin" size={14}/> : 'Update Password'}
-                                    </button>
-                                    <button onClick={() => {
-                                        setIsChangingPassword(false);
-                                        setPasswordError('');
-                                        setOldPassword('');
-                                        setNewPassword('');
-                                    }} disabled={isUpdating}
-                                        className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-xl transition-colors disabled:opacity-50">
-                                        Cancel
-                                    </button>
+                    {/* Password section — hidden for Google users */}
+                    {!isGoogleUser && (
+                        <div className="flex flex-col gap-1.5">
+                            <label className="flex items-center gap-2 text-gray-500 dark:text-white/40 text-xs font-medium">
+                                <Lock size={13} />
+                                Password
+                            </label>
+                            {!isChangingPassword ? (
+                                <button onClick={() => setIsChangingPassword(true)}
+                                    className="self-start px-4 py-2.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/4 dark:hover:bg-white/[0.07] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white/70 dark:hover:text-white text-sm font-medium rounded-lg transition-colors">
+                                    Change Password
+                                </button>
+                            ) : (
+                                <div className="flex flex-col gap-3">
+                                    <input
+                                        type="password"
+                                        value={oldPassword}
+                                        onChange={(e) => setOldPassword(e.target.value)}
+                                        className="bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white text-sm px-4 py-3 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 transition-all placeholder:text-gray-400 dark:placeholder:text-white/25"
+                                        placeholder="Current password"
+                                        disabled={isUpdating}
+                                    />
+                                    <input
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        className="bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white text-sm px-4 py-3 rounded-lg border border-gray-200 dark:border-white/10 outline-none focus:border-indigo-500 dark:focus:border-white/25 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-0 transition-all placeholder:text-gray-400 dark:placeholder:text-white/25"
+                                        placeholder="New password (min 8 chars)"
+                                        disabled={isUpdating}
+                                    />
+                                    {passwordError && <p className="text-red-500 dark:text-red-400 text-xs">{passwordError}</p>}
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={handleUpdatePassword} disabled={isUpdating}
+                                            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                                            {isUpdating ? <Loader className="animate-spin" size={14}/> : 'Update Password'}
+                                        </button>
+                                        <button onClick={() => {
+                                            setIsChangingPassword(false);
+                                            setPasswordError('');
+                                            setOldPassword('');
+                                            setNewPassword('');
+                                        }} disabled={isUpdating}
+                                            className="px-4 py-2.5 bg-gray-50 hover:bg-gray-100 dark:bg-white/4 dark:hover:bg-white/[0.07] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white/70 text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

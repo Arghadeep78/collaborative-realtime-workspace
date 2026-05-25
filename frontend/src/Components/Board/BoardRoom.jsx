@@ -733,7 +733,7 @@ export default function BoardRoom() {
           />
 
           {/* Slide Navigation (Bottom Center) */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 z-50">
+          <div className="absolute bottom-6 left-4 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 z-50">
             <button
               onClick={() => {
                 const idx = pages.findIndex((p) => p.id === activePageId);

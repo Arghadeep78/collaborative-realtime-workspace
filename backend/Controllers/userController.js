@@ -171,6 +171,7 @@ const getUserProfile = async (req, res) => {
     res.status(200).json({
       name: user.name,
       profilePicture: user.profilePicture,
+      authProvider: user.authProvider || 'local',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
