@@ -35,10 +35,10 @@ export default function PresenceLayer({ peers, activePageId, scale }) {
                 <div
                   className="rounded-full"
                   style={{
-                    width: 20, height: 20,
-                    marginLeft: -10, marginTop: -10,
+                    width: 10, height: 10,
+                    marginLeft: -5, marginTop: -5,
                     background: PRESENCE_RED,
-                    boxShadow: `0 0 0 4px ${PRESENCE_RED}55, 0 0 16px 6px ${PRESENCE_RED}80`,
+                    boxShadow: `0 0 0 2px ${PRESENCE_RED}55, 0 0 8px 3px ${PRESENCE_RED}80`,
                   }}
                 />
                 <span

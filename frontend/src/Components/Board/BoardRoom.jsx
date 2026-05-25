@@ -12,11 +12,45 @@ import { useTheme } from '../../contexts/ThemeContext.jsx';
 import { ELEMENT_DEFAULTS, GRID_STEP, SLIDE_W, SLIDE_H, clamp, myColor, boardShellClass } from './boardConstants.js';
 
 import Sidebar from './Sidebar.jsx';
-import TopUtilityBar from './TopUtilityBar.jsx';
-import SlideCanvas from './SlideCanvas.jsx';
+import TopUtilityBar, { ToolbarCore } from './TopUtilityBar.jsx';
+import SlideCanvas, { ZoomControls } from './SlideCanvas.jsx';
 import ShareModal from './ShareModal.jsx';
 import ElementContextMenu from './ElementContextMenu.jsx';
 import CommentsDialog from './CommentsDialog.jsx';
+
+export function PageSlider({ pages, activePageId, selectPage }) {
+  return (
+    <div className="flex items-center gap-4">
+      <button
+        onClick={() => {
+          const idx = pages.findIndex((p) => p.id === activePageId);
+          if (idx > 0) selectPage(pages[idx - 1].id);
+        }}
+        disabled={pages.findIndex((p) => p.id === activePageId) <= 0}
+        className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
+        title="Previous Slide (Left Arrow)"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+      </button>
+
+      <span className="text-sm font-semibold text-content min-w-[3rem] text-center select-none">
+        {pages.findIndex((p) => p.id === activePageId) + 1} / {pages.length}
+      </span>
+
+      <button
+        onClick={() => {
+          const idx = pages.findIndex((p) => p.id === activePageId);
+          if (idx < pages.length - 1) selectPage(pages[idx + 1].id);
+        }}
+        disabled={pages.findIndex((p) => p.id === activePageId) >= pages.length - 1}
+        className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
+        title="Next Slide (Right Arrow)"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+      </button>
+    </div>
+  );
+}
 
 /**
  * The 3-pane discussion board: slide sidebar · top utility bar · slide canvas.
@@ -87,6 +121,13 @@ export default function BoardRoom() {
   const [presentationMode, setPresentationMode] = useState(false);
   const boardRoomRef = useRef(null);
   const [spawnProps, setSpawnProps] = useState(null); // holds extra props for next spawn (e.g., shapeType)
+
+  // ── Zoom State ─────────────────────────────────────────────────────────────
+  const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  const [zoomMult, setZoomMult] = useState(1);
+  const zoomIn = useCallback(() => setZoomMult(prev => ZOOM_STEPS.find(s => s > prev + 0.01) ?? 3), []);
+  const zoomOut = useCallback(() => setZoomMult(prev => [...ZOOM_STEPS].reverse().find(s => s < prev - 0.01) ?? 0.25), []);
+  const zoomFit = useCallback(() => setZoomMult(1), []);
 
   // Auto-collapse on resize
   useEffect(() => {
@@ -700,6 +741,30 @@ export default function BoardRoom() {
         />
       )}
 
+      {presentationMode && (
+        <div className="w-full flex justify-center pt-4 pb-2 shrink-0 z-[60]">
+          <div className="dark flex items-center gap-4 bg-surface/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-edge text-content">
+            <ToolbarCore
+              activeTool={activeTool}
+              onSelectTool={setActiveTool}
+              editable={editable}
+              onUndo={undo}
+              onRedo={redo}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              activePage={activePage}
+              onUpdateBackground={handleUpdateBackground}
+              isDark={true}
+              presentationMode={true}
+            />
+            <div className="h-6 w-px bg-edge" />
+            <PageSlider pages={pages} activePageId={activePageId} selectPage={selectPage} />
+            <div className="h-6 w-px bg-edge" />
+            <ZoomControls zoomMult={zoomMult} setZoomMult={setZoomMult} zoomIn={zoomIn} zoomOut={zoomOut} zoomFit={zoomFit} />
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex min-h-0 relative">
         {!presentationMode && (
           <Sidebar
@@ -765,38 +830,20 @@ export default function BoardRoom() {
             members={members}
             activePage={activePage}
             isDark={isDark}
+            zoomMult={zoomMult}
+            setZoomMult={setZoomMult}
+            zoomIn={zoomIn}
+            zoomOut={zoomOut}
+            zoomFit={zoomFit}
+            presentationMode={presentationMode}
           />
 
           {/* Slide Navigation (Bottom Center) */}
-          <div className="absolute bottom-6 left-4 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-4 bg-surface/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-edge z-50">
-            <button
-              onClick={() => {
-                const idx = pages.findIndex((p) => p.id === activePageId);
-                if (idx > 0) selectPage(pages[idx - 1].id);
-              }}
-              disabled={pages.findIndex((p) => p.id === activePageId) <= 0}
-              className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
-              title="Previous Slide (Left Arrow)"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-
-            <span className="text-sm font-semibold text-content min-w-[3rem] text-center select-none">
-              {pages.findIndex((p) => p.id === activePageId) + 1} / {pages.length}
-            </span>
-
-            <button
-              onClick={() => {
-                const idx = pages.findIndex((p) => p.id === activePageId);
-                if (idx < pages.length - 1) selectPage(pages[idx + 1].id);
-              }}
-              disabled={pages.findIndex((p) => p.id === activePageId) >= pages.length - 1}
-              className="text-content-muted hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30 transition"
-              title="Next Slide (Right Arrow)"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </button>
-          </div>
+          {!presentationMode && (
+            <div className="absolute bottom-6 left-4 sm:left-1/2 sm:-translate-x-1/2 flex items-center gap-4 bg-surface/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-edge z-50">
+              <PageSlider pages={pages} activePageId={activePageId} selectPage={selectPage} />
+            </div>
+          )}
         </div>
       </div>
 

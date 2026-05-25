@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as Y from 'yjs';
+import { STICKY_COLORS as _STICKY_COLORS } from './theme/colorMap.js';
 
 // A slide is a discrete, fixed-size page (presentation-style 16:9). The canvas
 // scales this rectangle to fit the viewport; all element coordinates are in
@@ -21,8 +22,8 @@ export const PRESENCE_RED = '#FF4A4A';
 const PALETTE = ['#e0457b', '#0b69ff', '#0a9d62', '#f5821f', '#7c4dff', '#0bb4c4'];
 export const myColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
 
-// Pastel options for sticky notes (matching the premium Poll Block palette).
-export const STICKY_COLORS = ['#fdf4c8', '#d3f1df', '#cce0ff', '#fdedd8', '#ffdce0', '#e8dffe'];
+// Pastel options for sticky notes — source of truth is colorMap.js.
+export const STICKY_COLORS = _STICKY_COLORS;
 
 // Element toolbar — keyboard shortcuts 1–8 + L. The connector tool puts the
 // canvas into "link mode"; the laser tool broadcasts a glowing pointer to peers.

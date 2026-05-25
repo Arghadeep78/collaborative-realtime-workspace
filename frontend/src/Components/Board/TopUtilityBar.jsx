@@ -3,10 +3,10 @@ import { UI, TOOLS } from './boardConstants.js';
 import { getThemeColor } from './theme/themeUtils';
 
 const BG_PATTERNS = [
-  { id: 'dots',  label: 'Dots',  preview: 'radial-gradient(circle, rgba(15,23,42,0.25) 1.5px, transparent 1.5px)', darkPreview: 'radial-gradient(circle, rgba(255,255,255,0.2) 1.5px, transparent 1.5px)', size: '12px 12px' },
-  { id: 'grid',  label: 'Grid',  preview: 'linear-gradient(to right,rgba(15,23,42,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to right,rgba(255,255,255,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
+  { id: 'dots', label: 'Dots', preview: 'radial-gradient(circle, rgba(15,23,42,0.25) 1.5px, transparent 1.5px)', darkPreview: 'radial-gradient(circle, rgba(255,255,255,0.2) 1.5px, transparent 1.5px)', size: '12px 12px' },
+  { id: 'grid', label: 'Grid', preview: 'linear-gradient(to right,rgba(15,23,42,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to right,rgba(255,255,255,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
   { id: 'lines', label: 'Lines', preview: 'linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
-  { id: 'none',  label: 'Clean', preview: 'none', darkPreview: 'none', size: 'auto' },
+  { id: 'none', label: 'Clean', preview: 'none', darkPreview: 'none', size: 'auto' },
 ];
 
 // Neutrals light→dark, then hues arranged by spectrum, rainbow last
@@ -66,11 +66,10 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
                       key={p.id}
                       onClick={() => set({ type: p.id, value: bg?.value || '' })}
                       title={p.label}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl p-1.5 border-2 transition-all ${
-                        currentType === p.id
+                      className={`flex flex-col items-center gap-1.5 rounded-xl p-1.5 border-2 transition-all ${currentType === p.id
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
                           : 'border-transparent hover:border-edge hover:bg-hover'
-                      }`}
+                        }`}
                     >
                       <div
                         className="w-full rounded-lg border border-edge bg-muted"
@@ -94,18 +93,16 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
                       key={c}
                       onClick={() => set({ type: currentType === 'image' ? 'solid' : currentType, value: c })}
                       title={c}
-                      className={`w-6 h-6 rounded-full border-2 transition-all ${
-                        bg?.value === c ? 'border-blue-500 scale-110 shadow-sm' : 'border-edge hover:border-blue-400 hover:scale-105'
-                      }`}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${bg?.value === c ? 'border-blue-500 scale-110 shadow-sm' : 'border-edge hover:border-blue-400 hover:scale-105'
+                        }`}
                       style={{ backgroundColor: getThemeColor(c, isDark) }}
                     />
                   ))}
                   {/* Custom colour — must be 15th cell so it lands in row 2, col 7 */}
                   <label
                     title="Custom color"
-                    className={`relative w-6 h-6 rounded-full border-2 cursor-pointer transition-all overflow-hidden ${
-                      bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-edge hover:border-blue-400 hover:scale-105'
-                    }`}
+                    className={`relative w-6 h-6 rounded-full border-2 cursor-pointer transition-all overflow-hidden ${bg?.value && !BG_COLORS.includes(bg.value) ? 'border-blue-500 scale-110' : 'border-edge hover:border-blue-400 hover:scale-105'
+                      }`}
                     style={{ background: 'conic-gradient(from 180deg at 50% 50%, #ff0000 0deg, #ff8a00 60deg, #ffe500 120deg, #14ff00 180deg, #00a3ff 240deg, #0500ff 300deg, #ff0000 360deg)' }}
                   >
                     <input
@@ -273,6 +270,85 @@ function PeersMenu({ peers, board }) {
   );
 }
 
+export function ToolbarCore({
+  activeTool,
+  onSelectTool,
+  editable,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  activePage,
+  onUpdateBackground,
+  isDark,
+  presentationMode,
+}) {
+  return (
+    <div className={`flex items-center justify-center gap-2 ${presentationMode ? 'flex-nowrap' : 'flex-wrap px-1'}`}>
+      <div className={`flex items-center gap-1 shrink-0 ${presentationMode ? '' : `rounded-2xl p-1.5 ${UI.surface}`}`}>
+        {TOOLS.map((tool) => {
+          const active = activeTool === tool.id;
+          const disabled = tool.disabled || (!editable && tool.id !== 'pointer' && tool.id !== 'laser');
+          return (
+            <button
+              key={tool.id}
+              disabled={disabled}
+              onClick={() => onSelectTool(tool.id)}
+              title={`${tool.label}${tool.disabled ? ' (coming soon)' : ` · ${tool.key}`}`}
+              className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition ${active
+                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-1 ring-blue-400/50'
+                  : 'text-content-muted hover:bg-hover'
+                } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
+            >
+              <ToolGlyph id={tool.id} />
+              <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-content-subtle">{tool.key}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {editable && (
+        <div className={`flex items-center gap-1 shrink-0 ${presentationMode ? '' : `rounded-2xl p-1.5 ${UI.surface}`}`}>
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo your last change (⌘Z)"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${canUndo
+                ? 'text-content-muted hover:bg-hover'
+                : 'text-content-subtle opacity-35 cursor-not-allowed'
+              }`}
+          >
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+            </svg>
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (⌘⇧Z)"
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${canRedo
+                ? 'text-content-muted hover:bg-hover'
+                : 'text-content-subtle opacity-35 cursor-not-allowed'
+              }`}
+          >
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 14l5-5-5-5" />
+              <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {!presentationMode && (
+        <div className="shrink-0">
+          <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TopUtilityBar({
   board,
   role,
@@ -303,69 +379,18 @@ export default function TopUtilityBar({
   onPresent,
 }) {
   const toolbar = (
-    <div className="flex flex-wrap items-center justify-center gap-2 px-1">
-      <div className={`flex items-center gap-1 rounded-2xl p-1.5 shrink-0 ${UI.surface}`}>
-        {TOOLS.map((tool) => {
-          const active = activeTool === tool.id;
-          const disabled = tool.disabled || (!editable && tool.id !== 'pointer' && tool.id !== 'laser');
-          return (
-            <button
-              key={tool.id}
-              disabled={disabled}
-              onClick={() => onSelectTool(tool.id)}
-              title={`${tool.label}${tool.disabled ? ' (coming soon)' : ` · ${tool.key}`}`}
-              className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition ${
-                active
-                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 ring-1 ring-blue-400/50'
-                  : 'text-content-muted hover:bg-hover'
-              } ${disabled ? 'opacity-35 cursor-not-allowed' : ''}`}
-            >
-              <ToolGlyph id={tool.id} />
-              <span className="absolute bottom-0.5 right-1 text-[8px] font-bold text-content-subtle">{tool.key}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {editable && (
-        <div className={`flex items-center gap-1 rounded-2xl p-1.5 shrink-0 ${UI.surface}`}>
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Undo your last change (⌘Z)"
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
-              canUndo
-                ? 'text-content-muted hover:bg-hover'
-                : 'text-content-subtle opacity-35 cursor-not-allowed'
-            }`}
-          >
-            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 14 4 9l5-5" />
-              <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
-            </svg>
-          </button>
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            title="Redo (⌘⇧Z)"
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
-              canRedo
-                ? 'text-content-muted hover:bg-hover'
-                : 'text-content-subtle opacity-35 cursor-not-allowed'
-            }`}
-          >
-            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 14l5-5-5-5" />
-              <path d="M20 9H10a6 6 0 0 0 0 12h3" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      <div className="shrink-0">
-        <BackgroundPicker activePage={activePage} onUpdateBackground={onUpdateBackground} editable={editable} isDark={isDark} />
-      </div>
-    </div>
+    <ToolbarCore
+      activeTool={activeTool}
+      onSelectTool={onSelectTool}
+      editable={editable}
+      onUndo={onUndo}
+      onRedo={onRedo}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      activePage={activePage}
+      onUpdateBackground={onUpdateBackground}
+      isDark={isDark}
+    />
   );
 
   return (

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { FloatBar, Sep, Swatch, Popover, TextFormatToolbar, TEXT_COLORS } from './SharedUI';
+import { FloatBar, Sep, Swatch, Popover, TextFormatToolbar } from './SharedUI';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { FILL_COLORS, STROKE_OPTIONS } from '../theme/colorMap.js';
 
 // ── Shape geometry helpers ─────────────────────────────────────────────────
 
@@ -84,17 +85,7 @@ function getTextPadding(type, strokeWidth, w, h) {
   }
 }
 
-// ── Palette helpers ────────────────────────────────────────────────────────
-
-const FILL_COLORS = [
-  '#a5b4fc', '#fca5a5', '#6ee7b7', '#fcd34d', '#f9a8d4',
-  '#93c5fd', '#d1d5db', '#ffffff', '#1e293b', '#f97316',
-];
-const STROKE_OPTIONS = [
-  { v: 'transparent', label: '×' },
-  { v: '#6366f1' }, { v: '#ef4444' }, { v: '#10b981' },
-  { v: '#f59e0b' }, { v: '#1e293b' }, { v: '#ffffff' },
-];
+// Palette arrays are imported from colorMap.js — edit there to change all UIs at once.
 const SHAPES = [
   { id: 'rect', icon: '▭' },
   { id: 'roundrect', icon: '▢' },
@@ -230,7 +221,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
             title="Fill Color"
             activeIcon={<Swatch color={rawFill} active={false} />}
           >
-            <div className="grid grid-cols-5 gap-1.5 w-36">
+            <div className="grid grid-cols-5 gap-1.5 w-35">
               {FILL_COLORS.map((c) => (
                 <Swatch key={c} color={c} active={rawFill === c} onClick={() => onEditProps({ fill: c })} />
               ))}
@@ -245,7 +236,7 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
             activeIcon={<Swatch color={rawStroke} transparent={rawStroke === 'transparent'} active={false} />}
           >
             <div className="flex flex-col gap-3 w-36">
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5 w-[108px]">
                 {STROKE_OPTIONS.map(({ v, label }) => (
                   <Swatch key={v} color={v} active={rawStroke === v} onClick={() => onEditProps({ stroke: v })} transparent={v === 'transparent'} label={label} />
                 ))}

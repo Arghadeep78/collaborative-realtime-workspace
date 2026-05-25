@@ -95,7 +95,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
 
   const modalContent = (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onPointerDown={stop}>
-      <div className="bg-white dark:bg-[#22272b] w-full max-w-2xl max-h-full overflow-y-auto rounded-xl shadow-2xl flex flex-col relative" onClick={stop}>
+      <div className="bg-surface w-full max-w-2xl max-h-full overflow-y-auto rounded-xl shadow-2xl flex flex-col relative" onClick={stop}>
         
         {card.coverColor && (
           <div className="w-full h-24 shrink-0 rounded-t-xl" style={{ backgroundColor: getThemeColor(card.coverColor, isDark) }} />
@@ -117,7 +117,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
             <input
               value={card.title}
               onChange={e => onUpdate({ title: e.target.value })}
-              className="flex-1 bg-transparent text-[30px] font-bold text-[#172b4d] dark:text-[#b6c2cf] outline-none placeholder:text-content-subtle"
+              className="flex-1 bg-transparent text-[30px] font-bold text-content outline-none placeholder:text-content-subtle"
               placeholder="Card title..."
               data-gramm="false"
               data-gramm_editor="false"
@@ -130,18 +130,18 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
         {/* Action Buttons Row */}
         <div className="px-14 flex flex-wrap gap-2 mt-4">
           <div className="relative flex items-center justify-center">
-             <div className="absolute left-3 pointer-events-none text-[#172b4d] dark:text-[#b6c2cf]">
+             <div className="absolute left-3 pointer-events-none text-content">
                <Clock className="w-4 h-4" />
              </div>
-             <input type="date" value={card.due || ''} onClick={e => { try { e.target.showPicker() } catch {} }} onChange={e => onUpdate({ due: e.target.value })} className="pl-9 pr-3 py-1.5 border border-edge hover:bg-hover rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition outline-none bg-transparent" />
+             <input type="date" value={card.due || ''} onClick={e => { try { e.target.showPicker() } catch {} }} onChange={e => onUpdate({ due: e.target.value })} className="pl-9 pr-3 py-1.5 border border-edge hover:bg-hover rounded-lg text-[17px] font-semibold text-content transition outline-none bg-transparent" />
           </div>
           
-          <button onClick={() => onUpdate({ checklist: [...cChecklist, { id: makeId('chk'), text: '', done: false }] })} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition">
+          <button onClick={() => onUpdate({ checklist: [...cChecklist, { id: makeId('chk'), text: '', done: false }] })} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-content transition">
             <CheckSquare className="w-4 h-4" /> Checklist
           </button>
           
           <div className="relative">
-            <button onClick={() => setShowMemberPicker(!showMemberPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition">
+            <button onClick={() => setShowMemberPicker(!showMemberPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-content transition">
               <Plus className="w-4 h-4" /> Members
             </button>
             {showMemberPicker && (
@@ -159,7 +159,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
           </div>
           
           <div className="relative">
-            <button onClick={() => setShowCoverPicker(!showCoverPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition">
+            <button onClick={() => setShowCoverPicker(!showCoverPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-content transition">
               <ImageIcon className="w-4 h-4" /> Cover
             </button>
             {showCoverPicker && (
@@ -178,17 +178,17 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
           </div>
           
           <div className="relative">
-            <button onClick={() => setShowLocationPicker(!showLocationPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition">
+            <button onClick={() => setShowLocationPicker(!showLocationPicker)} className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-content transition">
               <MapPin className="w-4 h-4" /> Location
             </button>
             {showLocationPicker && (
                <div className="absolute top-full left-0 mt-1 w-56 bg-surface border border-edge shadow-xl rounded-lg p-2 z-10 flex flex-col gap-2">
-                 <input autoFocus value={card.location || ''} onChange={e => onUpdate({ location: e.target.value })} placeholder="Enter location..." className="text-[14px] p-1.5 border rounded outline-none w-full bg-transparent text-[#172b4d] dark:text-[#b6c2cf]" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
+                 <input autoFocus value={card.location || ''} onChange={e => onUpdate({ location: e.target.value })} placeholder="Enter location..." className="text-[14px] p-1.5 border rounded outline-none w-full bg-transparent text-content" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
                </div>
             )}
           </div>
           
-          <label className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-[#172b4d] dark:text-[#b6c2cf] cursor-pointer transition">
+          <label className="flex items-center gap-1.5 border border-edge hover:bg-hover px-3 py-1.5 rounded-lg text-[17px] font-semibold text-content cursor-pointer transition">
             {uploading ? <Spinner /> : <ImageIcon className="w-4 h-4" />} Image
             <input type="file" accept="image/*" className="hidden" onChange={e => handleUpload(e.target.files?.[0])} />
           </label>
@@ -196,7 +196,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
 
         {/* Labels Block */}
         <div className="px-14 mt-6">
-          <div className="text-[17px] font-bold text-[#172b4d] dark:text-[#b6c2cf] mb-2">Labels</div>
+          <div className="text-[17px] font-bold text-content mb-2">Labels</div>
           <div className="flex flex-wrap items-center gap-2 relative">
             {cLabels.map(color => (
               <button key={color} onClick={() => onUpdate({ labels: cLabels.filter(c => c !== color) })} className="w-12 h-8 rounded text-transparent hover:text-black/50 flex items-center justify-center transition" style={{ backgroundColor: getThemeColor(color, isDark) }}>
@@ -222,7 +222,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <AlignLeft className="w-6 h-6 text-content -ml-8" />
-              <div className="text-[22px] font-bold text-[#172b4d] dark:text-[#b6c2cf]">Description</div>
+              <div className="text-[22px] font-bold text-content">Description</div>
             </div>
             {desc !== (card.description || '') && (
               <span className="text-[11px] font-bold border border-amber-400 text-amber-700 dark:text-amber-500 px-2 py-0.5 rounded">UNSAVED CHANGES</span>
@@ -233,7 +233,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
             onChange={(e) => setDesc(e.target.value)}
             onBlur={handleSaveDesc}
             placeholder="Add a more detailed description..."
-            className="w-full min-h-[100px] border border-edge rounded-lg p-3 text-[18px] text-[#172b4d] dark:text-[#b6c2cf] outline-none focus:ring-2 focus:ring-blue-500 resize-y bg-transparent"
+            className="w-full min-h-[100px] border border-edge rounded-lg p-3 text-[18px] text-content outline-none focus:ring-2 focus:ring-blue-500 resize-y bg-transparent"
             data-gramm="false"
             data-gramm_editor="false"
             data-enable-grammarly="false"
@@ -246,7 +246,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
           <div className="px-14 mt-8 flex flex-col gap-4">
              <div className="flex items-center gap-3">
                 <CheckSquare className="w-6 h-6 text-content -ml-8" />
-                <div className="text-[22px] font-bold text-[#172b4d] dark:text-[#b6c2cf]">Checklist</div>
+                <div className="text-[22px] font-bold text-content">Checklist</div>
              </div>
              <div className="flex items-center gap-3">
                 <span className="text-[14px] text-content-muted w-8">{Math.round((doneCount / cChecklist.length) * 100)}%</span>
@@ -260,12 +260,12 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
                      <button onClick={() => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })} className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${chk.done ? 'bg-teal-500 border-teal-500 text-white' : 'border-edge-strong bg-surface'}`}>
                        {chk.done && <Check className="w-3.5 h-3.5" />}
                      </button>
-                     <input value={chk.text} onChange={e => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, text: e.target.value } : c) })} className={`flex-1 text-[18px] bg-transparent outline-none ${chk.done ? 'line-through text-content-subtle' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`} placeholder="Item..." data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
+                     <input value={chk.text} onChange={e => onUpdate({ checklist: cChecklist.map(c => c.id === chk.id ? { ...c, text: e.target.value } : c) })} className={`flex-1 text-[18px] bg-transparent outline-none ${chk.done ? 'line-through text-content-subtle' : 'text-content'}`} placeholder="Item..." data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" spellCheck={false} />
                      <button onClick={() => onUpdate({ checklist: cChecklist.filter(c => c.id !== chk.id) })} className="opacity-0 group-hover/chk:opacity-100 text-content-subtle hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
                   </div>
                 ))}
              </div>
-             <button onClick={() => onUpdate({ checklist: [...cChecklist, { id: makeId('chk'), text: '', done: false }] })} className="self-start text-[16px] bg-muted hover:bg-hover px-3 py-1.5 rounded font-semibold text-[#172b4d] dark:text-[#b6c2cf] transition">Add an item</button>
+             <button onClick={() => onUpdate({ checklist: [...cChecklist, { id: makeId('chk'), text: '', done: false }] })} className="self-start text-[16px] bg-muted hover:bg-hover px-3 py-1.5 rounded font-semibold text-content transition">Add an item</button>
           </div>
         )}
         
@@ -274,7 +274,7 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
           <div className="px-14 mt-8 flex flex-col gap-3 pb-8">
              <div className="flex items-center gap-3">
                 <ImageIcon className="w-6 h-6 text-content -ml-8" />
-                <div className="text-[22px] font-bold text-[#172b4d] dark:text-[#b6c2cf]">Images</div>
+                <div className="text-[22px] font-bold text-content">Images</div>
              </div>
              <div className="grid grid-cols-2 gap-4">
                 {card.images.map((img, i) => (
@@ -406,16 +406,16 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
   const listPastel = labelColor ? LIST_COLORS[labelColor] : null;
   const bgColor = listPastel 
     ? getThemeColor(listPastel, isDark) 
-    : getThemeColor('#f1f2f4', isDark);
+    : getThemeColor('kanbanEmptyBg', isDark);
 
   if (props.collapsed) {
     return (
       <div className="w-full h-full flex flex-col items-center rounded-2xl shadow-sm transition-all py-4 border border-black/5" style={{ backgroundColor: bgColor }} onPointerDown={editing ? stop : undefined}>
-         <button onClick={() => { onEditProps({ collapsed: false }); onUpdateElement?.({ w: 380, h: Math.max(element.h, 340) }); }} onPointerDown={stop} className="p-3 bg-transparent border-[3px] border-blue-600 text-[#172b4d] dark:text-[#b6c2cf] rounded-[20px] shadow-sm hover:opacity-80 transition flex items-center justify-center shrink-0">
+         <button onClick={() => { onEditProps({ collapsed: false }); onUpdateElement?.({ w: 380, h: Math.max(element.h, 340) }); }} onPointerDown={stop} className="p-3 bg-transparent border-[3px] border-blue-600 text-content rounded-[20px] shadow-sm hover:opacity-80 transition flex items-center justify-center shrink-0">
            <ArrowRightLeft className="w-6 h-6" strokeWidth={3} />
          </button>
          <div className="mt-8 flex-1 flex items-start justify-center">
-            <span className="font-bold text-[#172b4d] dark:text-[#b6c2cf] tracking-widest uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: fs(24) }}>
+            <span className="font-bold text-content tracking-widest uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: fs(24) }}>
               {props.title || 'Untitled'}
             </span>
          </div>
@@ -439,7 +439,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               onChange={(e) => onEditProps({ title: e.target.value })}
               onPointerDown={stop}
               placeholder="List title..."
-              className="flex-1 min-w-0 bg-surface/90 px-3 py-1.5 rounded-lg outline-none font-bold text-[#172b4d] dark:text-[#b6c2cf] placeholder:text-[#172b4d]/50 transition-colors"
+              className="flex-1 min-w-0 bg-surface/90 px-3 py-1.5 rounded-lg outline-none font-bold text-content placeholder:text-content/50 transition-colors"
               style={{ fontSize: fs(28) }}
               data-gramm="false"
               data-gramm_editor="false"
@@ -447,7 +447,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               spellCheck={false}
             />
           ) : (
-            <div className="font-bold text-[#172b4d] dark:text-[#b6c2cf] min-w-0 flex-1" style={{ fontSize: fs(28) }}>
+            <div className="font-bold text-content min-w-0 flex-1" style={{ fontSize: fs(28) }}>
               <span className="block bg-surface/90 px-3 py-1.5 rounded-lg shadow-sm min-w-0 max-w-full whitespace-normal wrap-break-word leading-tight">
                 {props.title || 'Untitled'}
               </span>
@@ -460,7 +460,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               const textLen = (props.title || 'Untitled').length;
               onUpdateElement?.({ w: 64, h: Math.max(200, textLen * 18 + 120) }); 
             }} className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors">
-              <ArrowRightLeft className="w-4 h-4 text-[#172b4d] dark:text-[#b6c2cf]" />
+              <ArrowRightLeft className="w-4 h-4 text-content" />
             </button>
             {/* removed redundant three-dot menu (MoreHorizontal) per UX request */}
           </div>
@@ -483,7 +483,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
             if (isActive) {
               // Inline Edit Mode
               return (
-                <div key={s.id} ref={activeCardRef} className="bg-white dark:bg-[#22272b] rounded-xl shadow-md border-2 border-blue-500 flex flex-col shrink-0" onPointerDown={stop}>
+                <div key={s.id} ref={activeCardRef} className="bg-surface rounded-xl shadow-md border-2 border-blue-500 flex flex-col shrink-0" onPointerDown={stop}>
                   {coverImage && <div className="overflow-hidden rounded-t-xl"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
                   {!coverImage && s.coverColor && <div className="w-full h-10 rounded-t-xl shrink-0" style={{ backgroundColor: s.coverColor }} />}
 
@@ -529,7 +529,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                       onChange={(e) => patchSubcard(s.id, { title: e.target.value })}
                       placeholder="Card title..."
                       rows={1}
-                      className="w-full bg-transparent outline-none resize-none font-medium text-[#172b4d] dark:text-[#b6c2cf] leading-snug"
+                      className="w-full bg-transparent outline-none resize-none font-medium text-content leading-snug"
                       style={{ fontSize: fs(20) }}
                       onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                       data-gramm="false"
@@ -558,7 +558,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        <button onClick={() => setModalCardId(s.id)} className="font-semibold bg-muted hover:bg-hover text-[#172b4d] dark:text-[#b6c2cf] px-3 py-1.5 rounded-lg transition" style={{ fontSize: fs(13) }}>Details</button>
+                        <button onClick={() => setModalCardId(s.id)} className="font-semibold bg-muted hover:bg-hover text-content px-3 py-1.5 rounded-lg transition" style={{ fontSize: fs(13) }}>Details</button>
                         <button onClick={() => { setActiveCardId(null); removeSubcard(s.id); }} className="px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-content-subtle hover:text-red-500 rounded-lg transition font-semibold" style={{ fontSize: fs(13) }} title="Delete card">
                           Delete
                         </button>
@@ -574,12 +574,12 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
               <div
                 key={s.id}
                 onClick={() => { if(editable) setActiveCardId(s.id); }}
-                className="bg-white dark:bg-[#22272b] rounded-lg shadow-sm flex flex-col group/card shrink-0 cursor-pointer hover:ring-1 hover:ring-blue-400 transition-all border border-transparent dark:border-edge"
+                className="bg-surface rounded-lg shadow-sm flex flex-col group/card shrink-0 cursor-pointer hover:ring-1 hover:ring-blue-400 transition-all border border-transparent dark:border-edge"
               >
                 {coverImage && <div className="overflow-hidden rounded-t-lg"><img src={coverImage} className="w-full h-24 object-cover" alt="" /></div>}
                 {!coverImage && s.coverColor && <div className="w-full h-8 rounded-t-lg shrink-0" style={{ backgroundColor: s.coverColor }} />}
                 <div className="px-3 py-2.5 flex flex-col gap-1.5">
-                  <div className={`font-medium leading-snug break-words ${s.done ? 'line-through text-content-subtle' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`} style={{ fontSize: fs(20) }}>
+                  <div className={`font-medium leading-snug break-words ${s.done ? 'line-through text-content-subtle' : 'text-content'}`} style={{ fontSize: fs(20) }}>
                     {s.title ? s.title : <span className="text-content-subtle italic">Untitled card</span>}
                   </div>
 
@@ -631,7 +631,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                                 onChange={() => patchSubcard(s.id, { checklist: s.checklist.map(c => c.id === chk.id ? { ...c, done: !c.done } : c) })}
                                 className="mt-0.5 shrink-0"
                               />
-                              <span className={`text-[14px] flex-1 leading-snug ${chk.done ? 'line-through text-content-subtle' : 'text-[#172b4d] dark:text-[#b6c2cf]'}`}>{chk.text || <span className="italic text-content-subtle">Empty item</span>}</span>
+                              <span className={`text-[14px] flex-1 leading-snug ${chk.done ? 'line-through text-content-subtle' : 'text-content'}`}>{chk.text || <span className="italic text-content-subtle">Empty item</span>}</span>
                             </label>
                           ))}
                         </div>
@@ -648,7 +648,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
         <div className="mt-1 px-1 shrink-0">
           {editing && (
             <div className="flex items-center gap-2 px-2 py-2 border-t border-black/10 dark:border-white/10" onPointerDown={stop}>
-              <span className="font-medium text-[#172b4d]/60 dark:text-[#b6c2cf]/60 mr-1" style={{ fontSize: fs(15) }}>Color:</span>
+              <span className="font-medium text-content/60 mr-1" style={{ fontSize: fs(15) }}>Color:</span>
               {PICKER_COLORS.map((pastel) => (
                 <button
                   key={pastel || 'default'}
@@ -658,7 +658,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
                   style={{ backgroundColor: pastel || 'transparent' }}
                   title={pastel ? 'Color' : 'Default'}
                 >
-                  {!pastel && <div className="w-full h-full rounded-full bg-[#f1f2f4] dark:bg-[#22272b] border border-edge-strong" />}
+                  {!pastel && <div className="w-full h-full rounded-full bg-muted border border-edge-strong" />}
                 </button>
               ))}
             </div>
@@ -666,7 +666,7 @@ export default function KanbanCard({ element, editable, editing, onEditProps, on
           <button
             onPointerDown={stop}
             onClick={addSubcard}
-            className="w-full flex items-center justify-start gap-2 px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-[#172b4d] dark:text-[#b6c2cf] transition-colors"
+            className="w-full flex items-center justify-start gap-2 px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-content transition-colors"
           >
             <Plus className="w-5 h-5" />
             <span className="font-medium" style={{ fontSize: fs(19) }}>Add a card</span>

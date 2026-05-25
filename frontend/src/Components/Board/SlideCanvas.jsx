@@ -74,6 +74,56 @@ export function getSlideBackground(bg, isDark) {
  * Pointer tool drag on empty canvas draws a marquee selection rectangle; on
  * pointer-up all overlapping elements are added to selectedIds.
  */
+export function ZoomControls({ zoomMult, setZoomMult, zoomIn, zoomOut, zoomFit }) {
+  if (!setZoomMult) return null;
+  return (
+    <div className="flex items-center gap-1.5 pointer-events-auto">
+      {/* Zoom out */}
+      <button
+        onClick={zoomOut}
+        title="Zoom out"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+        </svg>
+      </button>
+
+      {/* Log-scale slider: 0→200 maps 0.25× → 1× (midpoint) → 4× */}
+      <input
+        type="range"
+        min="0"
+        max="200"
+        step="1"
+        value={Math.round(Math.log(zoomMult / 0.25) / Math.log(16) * 200)}
+        onChange={(e) => setZoomMult(0.25 * Math.pow(16, Number(e.target.value) / 200))}
+        title="Drag to zoom"
+        className="w-20 h-1 accent-blue-500 cursor-pointer"
+      />
+
+      {/* Zoom in */}
+      <button
+        onClick={zoomIn}
+        title="Zoom in"
+        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
+      {/* Percentage / fit reset */}
+      <button
+        onClick={zoomFit}
+        title="Reset to fit view"
+        className="min-w-10 text-[11px] font-semibold text-content-muted text-center hover:text-blue-600 dark:hover:text-blue-400 transition tabular-nums"
+      >
+        {Math.abs(zoomMult - 1) < 0.01 ? 'Fit' : `${Math.round(zoomMult * 100)}%`}
+      </button>
+    </div>
+  );
+}
+
 export default function SlideCanvas({
   elements,
   activePageId,
@@ -123,11 +173,16 @@ export default function SlideCanvas({
   // Active page (background)
   activePage,
   isDark,
+  zoomMult,
+  setZoomMult,
+  zoomIn,
+  zoomOut,
+  zoomFit,
+  presentationMode,
 }) {
   const containerRef = useRef(null);
   const slideRef = useRef(null);
   const [fitScale, setFitScale] = useState(1);
-  const [zoomMult, setZoomMult] = useState(1);
   const scale = fitScale * zoomMult;
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
@@ -139,7 +194,7 @@ export default function SlideCanvas({
   const [radial, setRadial] = useState(null);
 
   const connectMode = editable && activeTool === 'connector';
-  const laserMode   = activeTool === 'laser';
+  const laserMode = activeTool === 'laser';
   const [linkPoint, setLinkPoint] = useState(null);   // rubber-band pointer (slide coords)
   const [laserClient, setLaserClient] = useState(null); // local laser dot (screen coords)
   const connectRef = useRef({ on: false, from: null });
@@ -167,6 +222,8 @@ export default function SlideCanvas({
     if (!el) return;
     const recompute = () => {
       const { clientWidth: cw, clientHeight: ch } = el;
+      // We subtract this from the available height so the fitScale shrinks the slide
+      // enough that its centered top edge clears the toolbar without creating a massive bottom gap.
       const heightFit = (ch - FIT_PADDING) / SLIDE_H;
       const widthFit = (cw - FIT_PADDING) / SLIDE_W;
       const next = clamp(Math.min(heightFit, widthFit), 0.35, 2);
@@ -176,7 +233,7 @@ export default function SlideCanvas({
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [presentationMode]);
 
   // Stores the cursor's slide-space position + viewport offset just before each
   // wheel zoom so the layout effect can scroll to keep that point fixed.
@@ -189,7 +246,7 @@ export default function SlideCanvas({
     if (!anchor) return;
     zoomAnchorRef.current = null;
     const container = containerRef.current;
-    const slide     = slideRef.current;
+    const slide = slideRef.current;
     if (!container || !slide) return;
 
     // Where the anchored slide point now appears in the viewport (new scale,
@@ -197,10 +254,10 @@ export default function SlideCanvas({
     const sr = slide.getBoundingClientRect();
     const cr = container.getBoundingClientRect();
     const currentX = sr.left - cr.left + anchor.cursorSlideX * scale;
-    const currentY = sr.top  - cr.top  + anchor.cursorSlideY * scale;
+    const currentY = sr.top - cr.top + anchor.cursorSlideY * scale;
 
     container.scrollLeft += currentX - anchor.viewportX;
-    container.scrollTop  += currentY - anchor.viewportY;
+    container.scrollTop += currentY - anchor.viewportY;
   }, [zoomMult]); // scale is derived from zoomMult so it's up-to-date here
 
   // Ctrl+wheel zoom — capture cursor anchor synchronously before updating state.
@@ -217,7 +274,7 @@ export default function SlideCanvas({
         const cr = el.getBoundingClientRect();
         zoomAnchorRef.current = {
           cursorSlideX: (e.clientX - sr.left) / scaleRef.current,
-          cursorSlideY: (e.clientY - sr.top)  / scaleRef.current,
+          cursorSlideY: (e.clientY - sr.top) / scaleRef.current,
           viewportX: e.clientX - cr.left,
           viewportY: e.clientY - cr.top,
         };
@@ -228,12 +285,7 @@ export default function SlideCanvas({
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-
-  const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
-  const zoomIn  = useCallback(() => setZoomMult(prev => ZOOM_STEPS.find(s => s > prev + 0.01) ?? 3), []);
-  const zoomOut = useCallback(() => setZoomMult(prev => [...ZOOM_STEPS].reverse().find(s => s < prev - 0.01) ?? 0.25), []);
-  const zoomFit = useCallback(() => setZoomMult(1), []);
+  }, [setZoomMult]);
 
   // Split the active slide's elements: connectors paint in their own SVG layer;
   // everything else paints back-to-front by z as positioned divs.
@@ -340,10 +392,10 @@ export default function SlideCanvas({
           // Tiny drag = click → deselect all
           onSelect(null);
         } else {
-          const left  = Math.min(pt.x, end.x);
-          const top   = Math.min(pt.y, end.y);
+          const left = Math.min(pt.x, end.x);
+          const top = Math.min(pt.y, end.y);
           const right = Math.max(pt.x, end.x);
-          const bot   = Math.max(pt.y, end.y);
+          const bot = Math.max(pt.y, end.y);
           const ids = pageElementsRef.current
             .filter((el) => el.x < right && el.x + el.w > left && el.y < bot && el.y + el.h > top)
             .map((el) => el.id);
@@ -377,7 +429,7 @@ export default function SlideCanvas({
     if (!cRect || !pt) return;
     setRadial({
       menuX: e.clientX - cRect.left + (containerRef.current?.scrollLeft ?? 0),
-      menuY: e.clientY - cRect.top  + (containerRef.current?.scrollTop  ?? 0),
+      menuY: e.clientY - cRect.top + (containerRef.current?.scrollTop ?? 0),
       slideX: pt.x, slideY: pt.y,
     });
   };
@@ -386,191 +438,153 @@ export default function SlideCanvas({
 
   return (
     <div className="relative flex-1 min-h-0">
-    {/* Local laser dot — portaled to <body> in screen coords so it floats above
+      {/* Local laser dot — portaled to <body> in screen coords so it floats above
         every layer (toolbar included), never clipped by the slide or header. */}
-    {laserMode && laserClient && createPortal(
-      <div
-        className="fixed pointer-events-none rounded-full"
-        style={{
-          width: 20, height: 20,
-          left: laserClient.x - 10,
-          top: laserClient.y - 10,
-          background: '#FF4A4A',
-          boxShadow: '0 0 0 5px rgba(255,74,74,0.35), 0 0 20px 8px rgba(255,74,74,0.55)',
-          zIndex: 2147483000,
-        }}
-      />,
-      document.body,
-    )}
-    <div
-      ref={containerRef}
-      className="absolute inset-0 overflow-auto"
-      style={{ scrollbarGutter: 'stable', cursor: creating || connectMode ? 'crosshair' : undefined }}
-      onPointerDown={handleContainerPointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={onCursorLeave}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minWidth: SLIDE_W * scale + FIT_PADDING,
-          minHeight: SLIDE_H * scale + FIT_PADDING,
-          width: '100%',
-          height: '100%',
-        }}
-      >
-      <div className="relative shrink-0" style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }}>
-      <div
-        ref={slideRef}
-        onDoubleClick={handleSlideDoubleClick}
-        className="absolute top-0 left-0 rounded-2xl shadow-[0_30px_80px_rgba(15,23,42,0.25)] ring-1 ring-black/5"
-        style={{
-          width: SLIDE_W,
-          height: SLIDE_H,
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
-          cursor: creating || connectMode ? 'crosshair' : laserMode ? 'none' : 'default',
-          ...slideBg,
-        }}
-      >
-        {/* Connectors sit beneath elements */}
-        <ConnectorLayer
-          connectors={pageConnectors}
-          elements={elements}
-          obstacles={pageElements}
-          editable={editable}
-          selectable={editable && activeTool === 'pointer'}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          onDelete={onDelete}
-          pending={connectMode && connectFromId ? { fromId: connectFromId, point: linkPoint } : null}
-          scale={scale}
-        />
-
-        {pageElements.map((el) => (
-          <BoardElement
-            key={el.id}
-            element={el}
-            getScale={getScale}
-            selectedIds={selectedIds}
-            editing={editingId === el.id}
-            editable={editable}
-            onSelect={onSelect}
-            onToggleSelect={onToggleSelect}
-            onStartEdit={onStartEdit}
-            onUpdate={onUpdate}
-            onUpdateProps={onUpdateProps}
-            onDelete={onDelete}
-            onContextMenu={onElementContextMenu}
-            connectMode={connectMode}
-            connectSource={connectFromId === el.id}
-            onConnectClick={onConnectClick}
-            snapStep={snapStep}
-            graduationTarget={graduationTargetId === el.id}
-            onDragMove={onDragMove}
-            onDragEnd={onDragEnd}
-            groupDragOffset={groupDragOffset}
-            onGroupDragPreview={onGroupDragPreview}
-            onGroupDragCommit={onGroupDragCommit}
-            onGroupDragEnd={onGroupDragEnd}
-            votes={votes}
-            castPollVote={castPollVote}
-            removePollVote={removePollVote}
-            canVote={canVote}
-            canComment={canComment}
-            boardId={boardId}
-            members={members}
-            activeTool={activeTool}
-          />
-        ))}
-
-        <PresenceLayer peers={peers} activePageId={activePageId} scale={scale} />
-
-        {/* Marquee selection rectangle — clamped to slide bounds since drag
-            may have started in the grey area outside the slide surface */}
-        {marquee && (() => {
-          const left  = clamp(Math.min(marquee.start.x, marquee.end.x), 0, SLIDE_W);
-          const top   = clamp(Math.min(marquee.start.y, marquee.end.y), 0, SLIDE_H);
-          const right = clamp(Math.max(marquee.start.x, marquee.end.x), 0, SLIDE_W);
-          const bot   = clamp(Math.max(marquee.start.y, marquee.end.y), 0, SLIDE_H);
-          const w = right - left;
-          const h = bot - top;
-          if (w < 1 || h < 1) return null;
-          return (
-            <div
-              className="absolute pointer-events-none rounded border border-blue-500 bg-blue-400/10"
-              style={{ left, top, width: w, height: h, zIndex: 9500 }}
-            />
-          );
-        })()}
-      </div>
-      </div>
-      </div>
-
-      {radial && (
-        <RadialMenu
-          x={radial.menuX}
-          y={radial.menuY}
-          onPick={(type) => {
-            if (SPAWN_TOOLS.includes(type)) {
-              onCreate(type, radial.slideX, radial.slideY);
-            } else if (onSelectTool) {
-              onSelectTool(type);
-            }
-            setRadial(null);
+      {laserMode && laserClient && createPortal(
+        <div
+          className="fixed pointer-events-none rounded-full"
+          style={{
+            width: 10, height: 10,
+            left: laserClient.x - 5,
+            top: laserClient.y - 5,
+            background: '#FF4A4A',
+            boxShadow: '0 0 0 3px rgba(255,74,74,0.35), 0 0 10px 4px rgba(255,74,74,0.55)',
+            zIndex: 2147483000,
           }}
-          onClose={() => setRadial(null)}
-        />
+        />,
+        document.body,
+      )}
+      <div
+        ref={containerRef}
+        className="absolute inset-0 overflow-auto"
+        style={{ scrollbarGutter: 'stable', cursor: creating || connectMode ? 'crosshair' : undefined }}
+        onPointerDown={handleContainerPointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={onCursorLeave}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingTop: '0px',
+            minWidth: SLIDE_W * scale + FIT_PADDING,
+            minHeight: SLIDE_H * scale + FIT_PADDING,
+            width: '100%',
+            height: '100%',
+          }}
+        >
+          <div className="relative shrink-0" style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }}>
+            <div
+              ref={slideRef}
+              onDoubleClick={handleSlideDoubleClick}
+              className="absolute top-0 left-0 rounded-2xl shadow-[0_30px_80px_rgba(15,23,42,0.25)] ring-1 ring-black/5"
+              style={{
+                width: SLIDE_W,
+                height: SLIDE_H,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                cursor: creating || connectMode ? 'crosshair' : laserMode ? 'none' : 'default',
+                ...slideBg,
+              }}
+            >
+              {/* Connectors sit beneath elements */}
+              <ConnectorLayer
+                connectors={pageConnectors}
+                elements={elements}
+                obstacles={pageElements}
+                editable={editable}
+                selectable={editable && activeTool === 'pointer'}
+                selectedId={selectedId}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                pending={connectMode && connectFromId ? { fromId: connectFromId, point: linkPoint } : null}
+                scale={scale}
+              />
+
+              {pageElements.map((el) => (
+                <BoardElement
+                  key={el.id}
+                  element={el}
+                  getScale={getScale}
+                  selectedIds={selectedIds}
+                  editing={editingId === el.id}
+                  editable={editable}
+                  onSelect={onSelect}
+                  onToggleSelect={onToggleSelect}
+                  onStartEdit={onStartEdit}
+                  onUpdate={onUpdate}
+                  onUpdateProps={onUpdateProps}
+                  onDelete={onDelete}
+                  onContextMenu={onElementContextMenu}
+                  connectMode={connectMode}
+                  connectSource={connectFromId === el.id}
+                  onConnectClick={onConnectClick}
+                  snapStep={snapStep}
+                  graduationTarget={graduationTargetId === el.id}
+                  onDragMove={onDragMove}
+                  onDragEnd={onDragEnd}
+                  groupDragOffset={groupDragOffset}
+                  onGroupDragPreview={onGroupDragPreview}
+                  onGroupDragCommit={onGroupDragCommit}
+                  onGroupDragEnd={onGroupDragEnd}
+                  votes={votes}
+                  castPollVote={castPollVote}
+                  removePollVote={removePollVote}
+                  canVote={canVote}
+                  canComment={canComment}
+                  boardId={boardId}
+                  members={members}
+                  activeTool={activeTool}
+                />
+              ))}
+
+              <PresenceLayer peers={peers} activePageId={activePageId} scale={scale} />
+
+              {/* Marquee selection rectangle — clamped to slide bounds since drag
+            may have started in the grey area outside the slide surface */}
+              {marquee && (() => {
+                const left = clamp(Math.min(marquee.start.x, marquee.end.x), 0, SLIDE_W);
+                const top = clamp(Math.min(marquee.start.y, marquee.end.y), 0, SLIDE_H);
+                const right = clamp(Math.max(marquee.start.x, marquee.end.x), 0, SLIDE_W);
+                const bot = clamp(Math.max(marquee.start.y, marquee.end.y), 0, SLIDE_H);
+                const w = right - left;
+                const h = bot - top;
+                if (w < 1 || h < 1) return null;
+                return (
+                  <div
+                    className="absolute pointer-events-none rounded border border-blue-500 bg-blue-400/10"
+                    style={{ left, top, width: w, height: h, zIndex: 9500 }}
+                  />
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {radial && (
+          <RadialMenu
+            x={radial.menuX}
+            y={radial.menuY}
+            onPick={(type) => {
+              if (SPAWN_TOOLS.includes(type)) {
+                onCreate(type, radial.slideX, radial.slideY);
+              } else if (onSelectTool) {
+                onSelectTool(type);
+              }
+              setRadial(null);
+            }}
+            onClose={() => setRadial(null)}
+          />
+        )}
+      </div>
+
+      {/* Zoom controls — floats over the canvas, anchored to the outer wrapper */}
+      {!presentationMode && (
+        <div className="absolute bottom-5 right-4 z-50 bg-surface/90 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-lg border border-edge select-none">
+          <ZoomControls zoomMult={zoomMult} setZoomMult={setZoomMult} zoomIn={zoomIn} zoomOut={zoomOut} zoomFit={zoomFit} />
+        </div>
       )}
     </div>
-
-    {/* Zoom controls — floats over the canvas, anchored to the outer wrapper */}
-    <div className="absolute bottom-5 right-4 z-50 flex items-center gap-1.5 bg-surface/90 backdrop-blur-md px-2.5 py-1.5 rounded-full shadow-lg border border-edge select-none pointer-events-auto">
-      {/* Zoom out */}
-      <button
-        onClick={zoomOut}
-        title="Zoom out"
-        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
-      >
-        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-        </svg>
-      </button>
-
-      {/* Log-scale slider: 0→200 maps 0.25× → 1× (midpoint) → 4× */}
-      <input
-        type="range"
-        min="0"
-        max="200"
-        step="1"
-        value={Math.round(Math.log(zoomMult / 0.25) / Math.log(16) * 200)}
-        onChange={(e) => setZoomMult(0.25 * Math.pow(16, Number(e.target.value) / 200))}
-        title="Drag to zoom"
-        className="w-20 h-1 accent-blue-500 cursor-pointer"
-      />
-
-      {/* Zoom in */}
-      <button
-        onClick={zoomIn}
-        title="Zoom in"
-        className="w-6 h-6 flex items-center justify-center rounded-full text-content-muted hover:bg-hover hover:text-content transition shrink-0"
-      >
-        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
-
-      {/* Percentage / fit reset */}
-      <button
-        onClick={zoomFit}
-        title="Reset to fit view"
-        className="min-w-10 text-[11px] font-semibold text-content-muted text-center hover:text-blue-600 dark:hover:text-blue-400 transition tabular-nums"
-      >
-        {Math.abs(zoomMult - 1) < 0.01 ? 'Fit' : `${Math.round(zoomMult * 100)}%`}
-      </button>
-    </div>
-  </div>
   );
 }

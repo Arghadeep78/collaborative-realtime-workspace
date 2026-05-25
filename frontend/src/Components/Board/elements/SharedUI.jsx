@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { TEXT_COLORS as _TEXT_COLORS } from '../theme/colorMap.js';
 
 export function FloatBar({ children, scale, elementY }) {
   const inv = 1 / (scale || 1);
@@ -37,7 +38,7 @@ export function Swatch({ color, active, onClick, label, transparent }) {
       onClick={onClick}
       title={label || color}
       className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition shrink-0 ${active ? 'border-blue-500 scale-110' : 'border-transparent hover:border-edge-strong'}`}
-      style={{ backgroundColor: transparent ? 'transparent' : displayColor, boxShadow: '0 0 0 1px #e2e8f0 inset' }}
+      style={{ backgroundColor: transparent ? 'transparent' : displayColor, boxShadow: '0 0 0 1px var(--c-edge) inset' }}
     >
       {transparent && <span className="text-[10px] text-content-subtle font-bold leading-none">/</span>}
     </button>
@@ -96,7 +97,7 @@ export function Popover({ activeIcon, children, title }) {
   );
 }
 
-export const TEXT_COLORS = ['#1e293b', '#ffffff', '#6366f1', '#ef4444', '#10b981', '#f59e0b'];
+export const TEXT_COLORS = _TEXT_COLORS;
 
 export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAlign, textColor, scale, elementY }) {
   return (
@@ -141,6 +142,7 @@ export function TextFormatToolbar({ onEditProps, fontSize, bold, italic, textAli
           ))}
         </div>
       </Popover>
+
     </FloatBar>
   );
 }

@@ -149,152 +149,173 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, onClo
   };
 
   const Avatar = ({ email, tone = 'slate' }) => (
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ${
-      tone === 'indigo' ? 'bg-gradient-to-br from-blue-600 to-indigo-600' : 'bg-gradient-to-br from-slate-500 to-slate-600'
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm shrink-0 transition-transform hover:scale-105 ${
+      tone === 'indigo' ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/30' : 'bg-gradient-to-br from-slate-600 to-slate-800 dark:from-slate-700 dark:to-slate-900 shadow-slate-500/20'
     }`}>
       {email?.[0]?.toUpperCase()}
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm rb-anim-fade p-4">
-      <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-[560px] max-h-[88vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-edge-subtle flex items-center justify-between shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-content font-semibold text-lg tracking-tight truncate">Manage &ldquo;{workspaceName || data?.workspace?.name || 'Workspace'}&rdquo;</h2>
-            <p className="text-content-muted text-xs mt-0.5">Members see every board as a viewer; elevate them per board below.</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-content-subtle hover:text-content hover:bg-hover rounded-full transition-colors cursor-pointer shrink-0">
-            <X size={20} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md transition-all" />
+      <div className="relative w-full max-w-[900px] h-full max-h-[85vh] flex flex-col rb-anim-pop" onClick={e => e.stopPropagation()}>
+        
+        {/* Premium Glass Container */}
+        <div className="flex-1 flex flex-col rounded-3xl overflow-hidden bg-surface/95 backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">
+           
+           {/* Top Animated Header */}
+           <div className="relative px-8 py-8 shrink-0 overflow-hidden bg-surface">
+             <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl opacity-70 animate-pulse" />
+             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl opacity-70 animate-pulse" style={{ animationDelay: '2s' }} />
+             
+             <div className="relative flex justify-between items-start z-10">
+               <div>
+                 <h2 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">
+                   Access Control
+                 </h2>
+                 <p className="mt-1.5 text-content-muted text-sm font-medium">
+                   Manage who collaborates in <span className="text-content font-bold">{workspaceName || data?.workspace?.name || 'Workspace'}</span>
+                 </p>
+               </div>
+               <button onClick={onClose} className="p-2 bg-muted hover:bg-hover rounded-full transition-all text-content-subtle hover:text-content shadow-sm">
+                 <X size={20} />
+               </button>
+             </div>
+           </div>
 
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {[1, 2, 3].map((i) => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
-          </div>
-        ) : (
-          <div className="overflow-y-auto p-6 space-y-7">
-            {/* ── Workspace members ─────────────────────────────────────── */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 text-content">
-                <Users size={16} />
-                <h3 className="text-sm font-semibold">Workspace members</h3>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  value={shareEmail}
-                  onChange={(e) => setShareEmail(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') shareWorkspace(); }}
-                  placeholder="Add a person by email"
-                  className="flex-1 min-w-0 bg-surface border border-edge-strong rounded-lg px-3 py-2 text-content text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition shadow-sm"
-                />
-                <button
-                  onClick={shareWorkspace}
-                  disabled={!shareEmail.trim() || busy}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all shadow-sm active:scale-95"
-                >
-                  Share
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {/* Owner row */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar email={data?.workspace?.owner} tone="indigo" />
-                    <div className="min-w-0">
-                      <p className="text-content text-sm font-medium truncate">{data?.workspace?.owner}</p>
-                      <p className="text-content-muted text-xs">Owner</p>
+           {loading ? (
+             <div className="flex-1 flex items-center justify-center bg-muted/20">
+               <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
+             </div>
+           ) : (
+             <div className="flex-1 flex flex-col md:flex-row overflow-hidden border-t border-edge-subtle">
+               
+               {/* Left: Members */}
+               <div className="w-full md:w-[45%] flex flex-col bg-muted/30 border-r border-edge-subtle">
+                  <div className="p-6 shrink-0 border-b border-edge-subtle bg-surface/50">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                        <Users size={18} />
+                      </div>
+                      <h3 className="font-bold text-content text-lg">Workspace Team</h3>
                     </div>
-                  </div>
-                </div>
-                {members.length === 0 ? (
-                  <p className="text-content-subtle text-sm py-1">No members yet. Share the workspace to add people.</p>
-                ) : members.map((m) => (
-                  <div key={m.email} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Avatar email={m.email} />
-                      <div className="min-w-0">
-                        <p className="text-content text-sm font-medium truncate">{m.name || m.email}</p>
-                        <p className="text-content-muted text-xs">Member · viewer baseline</p>
+                    
+                    {/* Share Input */}
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 blur-[2px]" />
+                      <div className="relative flex gap-2 bg-surface p-1.5 rounded-xl border border-edge-subtle shadow-inner">
+                        <input
+                          value={shareEmail}
+                          onChange={(e) => setShareEmail(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') shareWorkspace(); }}
+                          placeholder="Invite via email..."
+                          className="flex-1 bg-transparent px-3 text-sm text-content focus:outline-none placeholder:text-content-subtle"
+                        />
+                        <button
+                          onClick={shareWorkspace}
+                          disabled={!shareEmail.trim() || busy}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:scale-100"
+                        >
+                          Invite
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeMember(m.email)}
-                      className="text-content-subtle hover:text-red-500 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                      title="Remove from workspace"
-                    >
-                      <Trash2 size={15} />
-                    </button>
                   </div>
-                ))}
-              </div>
-            </section>
 
-            {/* ── Per-board access ──────────────────────────────────────── */}
-            <section className="space-y-3 pt-5 border-t border-edge-subtle">
-              <div className="flex items-center gap-2 text-content">
-                <Layers size={16} />
-                <h3 className="text-sm font-semibold">Board access</h3>
-              </div>
-
-              {boards.length === 0 ? (
-                <p className="text-content-subtle text-sm">This workspace has no boards yet.</p>
-              ) : boards.map((board) => {
-                const participants = participantsFor(board);
-                return (
-                  <div key={board.id} className="rounded-xl border border-edge-subtle bg-muted/40 p-3">
-                    <p className="text-content text-sm font-semibold mb-2 truncate">{board.title}</p>
-                    {participants.length === 0 ? (
-                      <p className="text-content-subtle text-xs">No one shared on this board yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {participants.map((p) => (
-                          <div key={p.email} className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Avatar email={p.email} />
-                              <span className="text-content text-sm truncate">{p.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <select
-                                value={p.role}
-                                onChange={(e) => setBoardRole(board.id, p.email, e.target.value)}
-                                className="bg-surface border border-edge-strong rounded-lg px-2 py-1 text-content-muted text-xs focus:outline-none cursor-pointer"
-                              >
-                                {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
-                              </select>
-                              {p.source === 'board' && (
-                                <button
-                                  onClick={() => removeBoardCollab(board.id, p.email)}
-                                  className="text-content-subtle hover:text-red-500 p-1 rounded-md transition-colors cursor-pointer"
-                                  title="Remove from board"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </div>
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                    {/* Owner */}
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-transparent border border-indigo-500/20 shadow-sm">
+                      <div className="flex items-center gap-3.5">
+                        <Avatar email={data?.workspace?.owner} tone="indigo" />
+                        <div>
+                          <p className="text-sm font-bold text-content">{data?.workspace?.owner}</p>
+                          <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mt-0.5">Owner</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Members */}
+                    {members.map(m => (
+                      <div key={m.email} className="group flex items-center justify-between p-3.5 rounded-2xl bg-surface border border-edge-subtle hover:border-indigo-500/30 hover:shadow-md transition-all duration-300">
+                        <div className="flex items-center gap-3.5">
+                          <Avatar email={m.email} />
+                          <div>
+                            <p className="text-sm font-semibold text-content">{m.name || m.email}</p>
+                            <p className="text-xs text-content-subtle font-medium mt-0.5">Viewer baseline</p>
                           </div>
-                        ))}
+                        </div>
+                        <button onClick={() => removeMember(m.email)} className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all" title="Remove member">
+                          <Trash2 size={16} />
+                        </button>
                       </div>
+                    ))}
+                    {members.length === 0 && (
+                       <p className="text-center text-sm text-content-subtle py-8">No extra members yet.</p>
                     )}
                   </div>
-                );
-              })}
-            </section>
-          </div>
-        )}
+               </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-end shrink-0">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-content hover:opacity-90 text-app text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-          >
-            Done
-          </button>
+               {/* Right: Board Access */}
+               <div className="w-full md:w-[55%] flex flex-col bg-surface/50">
+                  <div className="p-6 shrink-0 border-b border-edge-subtle bg-surface/50">
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                        <Layers size={18} />
+                      </div>
+                      <h3 className="font-bold text-content text-lg">Board Permissions</h3>
+                    </div>
+                    <p className="text-xs text-content-subtle ml-[52px]">Elevate member roles on specific boards</p>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+                    {boards.length === 0 ? (
+                      <div className="text-center py-10 text-content-subtle border-2 border-dashed border-edge-subtle rounded-2xl">No boards to manage yet</div>
+                    ) : boards.map((board) => {
+                       const participants = participantsFor(board);
+                       return (
+                         <div key={board.id} className="relative overflow-hidden rounded-2xl bg-surface border border-edge-subtle hover:border-purple-500/30 hover:shadow-xl shadow-sm transition-all duration-300">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-500 to-indigo-500 opacity-60" />
+                            <div className="p-5 pl-6">
+                              <h4 className="font-bold text-content text-sm mb-4 truncate">{board.title}</h4>
+                              <div className="space-y-2.5">
+                                 {participants.length === 0 ? (
+                                    <p className="text-xs text-content-subtle py-2">No active collaborators</p>
+                                 ) : participants.map(p => (
+                                    <div key={p.email} className="flex items-center justify-between bg-muted/30 rounded-xl p-2 border border-transparent hover:border-edge-subtle transition-colors">
+                                       <div className="flex items-center gap-3 min-w-0">
+                                          <Avatar email={p.email} />
+                                          <span className="text-sm font-medium text-content truncate">{p.name}</span>
+                                       </div>
+                                       <div className="flex items-center gap-2 shrink-0">
+                                          <div className="relative">
+                                            <select
+                                              value={p.role}
+                                              onChange={(e) => setBoardRole(board.id, p.email, e.target.value)}
+                                              className="appearance-none bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 border border-transparent hover:border-indigo-500/30 rounded-lg pl-3 pr-7 py-1.5 text-xs font-bold tracking-wide focus:outline-none cursor-pointer transition-all uppercase"
+                                            >
+                                              {ROLES.map(r => <option key={r} value={r} className="text-black">{roleLabel(r)}</option>)}
+                                            </select>
+                                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
+                                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            </div>
+                                          </div>
+                                          {p.source === 'board' && (
+                                            <button onClick={() => removeBoardCollab(board.id, p.email)} className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all" title="Remove from board">
+                                               <Trash2 size={15} />
+                                            </button>
+                                          )}
+                                       </div>
+                                    </div>
+                                 ))}
+                              </div>
+                            </div>
+                         </div>
+                       )
+                    })}
+                  </div>
+               </div>
+             </div>
+           )}
         </div>
       </div>
     </div>

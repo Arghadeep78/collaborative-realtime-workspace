@@ -69,22 +69,22 @@ export default function BoardElement({
   members,
   activeTool,
 }) {
-  const selected       = selectedIds?.has(element.id) ?? false;
+  const selected = selectedIds?.has(element.id) ?? false;
   const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
   // Commenters (who aren't editors) may right-click commentable elements to
   // open the comment thread, even though they can't select/drag/edit them.
   const commentable = canComment && COMMENTABLE_TYPES.includes(element.type);
 
   const [live, setLive] = useState(null); // { x?, y?, w?, h?, props? } gesture override
-  const lastClickRef   = useRef({ time: 0, x: 0, y: 0 });
+  const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
   const resizeOriginRef = useRef(null); // captures font size at resize start
-  const isGroupAnchor  = useRef(false);   // true when this element is driving the group drag
-  const dragOriginRef  = useRef(null);    // {x,y} of this element at drag start
+  const isGroupAnchor = useRef(false);   // true when this element is driving the group drag
+  const dragOriginRef = useRef(null);    // {x,y} of this element at drag start
 
   const clampX = (x) => clamp(x, 0, Math.max(0, SLIDE_W - element.w));
   const clampY = (y) => clamp(y, 0, Math.max(0, SLIDE_H - element.h));
-  const fitW   = (w) => Math.min(w, SLIDE_W - element.x);
-  const fitH   = (h) => Math.min(h, SLIDE_H - element.y);
+  const fitW = (w) => Math.min(w, SLIDE_W - element.x);
+  const fitH = (h) => Math.min(h, SLIDE_H - element.y);
 
   const { dragging, startDrag } = useElementDrag({
     getScale,
@@ -130,7 +130,7 @@ export default function BoardElement({
   // Returns the current font size and which prop name to write for text-bearing elements.
   const getFontInfo = (el) => {
     if (el.type === 'shape') return { fs: el.props?.fontSize ?? 28, prop: 'fontSize' };
-    if (el.type === 'text')  return { fs: el.props?.fontSize ?? el.props?.size ?? 34, prop: 'fontSize' };
+    if (el.type === 'text') return { fs: el.props?.fontSize ?? el.props?.size ?? 34, prop: 'fontSize' };
     // Sticky: only when user has explicitly set a fontSize (otherwise autoSize formula scales naturally)
     if (el.type === 'sticky' && el.props?.fontSize) return { fs: el.props.fontSize, prop: 'fontSize' };
     return null;
@@ -149,7 +149,7 @@ export default function BoardElement({
     onPreview: (w, h) => {
       const fw = fitW(w), fh = fitH(h);
       const origin = resizeOriginRef.current;
-      
+
       if (origin?.isOverflowing && origin.textContainer) {
         const stillOverflowing = origin.textContainer.scrollHeight > origin.textContainer.clientHeight + 2 || origin.textContainer.scrollWidth > origin.textContainer.clientWidth + 2;
         if (!stillOverflowing && fw >= origin.origW && fh >= origin.origH) {
@@ -245,7 +245,7 @@ export default function BoardElement({
         top: geom.y,
         width: geom.w,
         height: geom.h,
-        zIndex: (selected || editing) ? (element.z ?? 1) + 10000 : (element.z ?? 1),
+        zIndex: element.z ?? 1,
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
         pointerEvents: (
           (!editable && !(element.type === 'poll' && canVote) && !commentable) ||
@@ -284,9 +284,8 @@ export default function BoardElement({
       {/* Connector affordance: highlight the chosen source / hint targets */}
       {connectMode && (
         <div
-          className={`absolute -inset-0.75 rounded-[9px] pointer-events-none ring-2 ${
-            connectSource ? 'ring-blue-500' : 'ring-blue-400/40'
-          }`}
+          className={`absolute -inset-0.75 rounded-[9px] pointer-events-none ring-2 ${connectSource ? 'ring-blue-500' : 'ring-blue-400/40'
+            }`}
         />
       )}
       {/* Graduation drop-zone: this card is the active drop target for a sticky */}
@@ -349,10 +348,10 @@ export default function BoardElement({
               // Check if scrollHeight is strictly greater than clientHeight. Also check scrollWidth.
               // We use a small epsilon (e.g. 2px) to avoid false positives from browser subpixel rendering.
               const isOverflowing = textContainer ? textContainer.scrollHeight > textContainer.clientHeight + 2 || textContainer.scrollWidth > textContainer.clientWidth + 2 : false;
-              resizeOriginRef.current = { 
-                origW: element.w, 
-                origH: element.h, 
-                fontInfo: getFontInfo(element), 
+              resizeOriginRef.current = {
+                origW: element.w,
+                origH: element.h,
+                fontInfo: getFontInfo(element),
                 isOverflowing,
                 textContainer
               };

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { BarChart2, CheckCircle2, Plus, Trash2, Users, X } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { POLL_BG_COLORS } from '../theme/colorMap.js';
 
 const OPTION_COLORS = [
   { bar: 'bg-blue-500/20 dark:bg-blue-500/30', fill: 'bg-blue-500', active: 'border-blue-500 ring-1 ring-blue-500', text: 'text-blue-600 dark:text-blue-400' },
@@ -13,15 +14,6 @@ const OPTION_COLORS = [
   { bar: 'bg-cyan-500/20 dark:bg-cyan-500/30', fill: 'bg-cyan-500', active: 'border-cyan-500 ring-1 ring-cyan-500', text: 'text-cyan-600 dark:text-cyan-400' },
 ];
 
-const BG_COLORS = [
-  null,
-  '#d3f1df',
-  '#fdf4c8',
-  '#fdedd8',
-  '#ffdce0',
-  '#e8dffe',
-  '#cce0ff',
-];
 
 const POLL_BASE_W = 380;
 // Only font sizes scale with width — structural spacing stays fixed.
@@ -343,7 +335,7 @@ export default function PollBlock({
 
               <div className={`flex items-center gap-2 pt-2 border-t ${footerBorder}`}>
                 <span className={`text-xs font-medium ${textMuted} mr-1`}>Color:</span>
-                {BG_COLORS.map((c) => (
+                {POLL_BG_COLORS.map((c) => (
                   <button
                     key={c || 'default'}
                     onClick={() => onEditProps({ bgColor: c })}
@@ -352,7 +344,7 @@ export default function PollBlock({
                         ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 border-transparent'
                         : 'border-edge-strong hover:scale-110'
                     }`}
-                    style={{ backgroundColor: c || 'transparent' }}
+                    style={{ backgroundColor: c ? getThemeColor(c, isDark) : 'transparent' }}
                     title={c ? 'Color' : 'Default'}
                   >
                     {!c && <div className="w-full h-full rounded-full bg-surface border border-edge" />}
