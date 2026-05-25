@@ -1,6 +1,7 @@
 # Collaborative Realtime Workspace
 
-<img width="1470" height="833" alt="image" src="https://github.com/user-attachments/assets/a2ef5d47-9451-43d9-9345-0830f16b55ba" />
+<img width="1470" height="837" alt="image" src="https://github.com/user-attachments/assets/be998997-e3ae-4890-bf98-06a189b26b25" />
+
 
 A full-stack, real-time collaborative workspace where teams ideate and organize on a shared, multi-page canvas — sticky notes, Kanban cards, connectors, polls, embeds, and more. State syncs conflict-free across clients with **Yjs CRDTs**, and the backend is built to run horizontally behind a load balancer: Redis-backed pub/sub, write-behind persistence, distributed rate limiting, health probes, and resilient external calls.
 
