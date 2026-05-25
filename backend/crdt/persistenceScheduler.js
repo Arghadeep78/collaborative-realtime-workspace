@@ -24,7 +24,7 @@ export function startPersistenceScheduler(redisOpts) {
   });
 
   const intervalId = setInterval(async () => {
-    const dirtyIds = documentManager.flushDirtyIds();
+    const dirtyIds = documentManager.peekDirtyIds();
 
     if (dirtyIds.length === 0) return; // silent skip — no dirty docs
 
@@ -39,9 +39,11 @@ export function startPersistenceScheduler(redisOpts) {
           removeOnComplete: true,
           removeOnFail: 50,
         });
+        // Only clear after the job is durably enqueued — prevents loss on crash
+        documentManager.clearDirty(boardId);
         enqueued++;
       } catch (err) {
-        lerr(`Failed to enqueue job for boardId: ${boardId} —`, err.message);
+        lerr(`Failed to enqueue job for boardId: ${boardId} — left dirty for retry:`, err.message);
       }
     }
 

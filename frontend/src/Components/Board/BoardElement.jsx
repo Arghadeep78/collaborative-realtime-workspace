@@ -237,7 +237,7 @@ export default function BoardElement({
         top: geom.y,
         width: geom.w,
         height: geom.h,
-        zIndex: (element.z ?? 1) + (selected ? 1000 : 0),
+        zIndex: element.z ?? 1,
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
         pointerEvents: (!editable || (activeTool && activeTool !== 'pointer' && !connectMode && !editing)) ? 'none' : 'auto',
       }}

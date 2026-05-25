@@ -191,12 +191,11 @@ class DocumentManager {
     this.dirtyDocs.add(boardId);
   }
 
-  /** @returns {string[]} All dirty board IDs (clears the set). */
-  flushDirtyIds() {
-    const ids = [...this.dirtyDocs];
-    this.dirtyDocs.clear();
-    return ids;
-  }
+  /** @returns {string[]} All dirty board IDs without clearing the set. */
+  peekDirtyIds() { return [...this.dirtyDocs]; }
+
+  /** @param {string} id */
+  clearDirty(id) { this.dirtyDocs.delete(id); }
 
   /** @param {string} boardId @returns {Uint8Array|null} */
   encodeState(boardId) {

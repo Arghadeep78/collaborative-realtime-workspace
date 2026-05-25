@@ -12,7 +12,7 @@ import { BACKEND_URL } from '../constants/apiConfig.js';
  *
  * The `synced` flag tracks whether the provider has completed its initial
  * sync.  It intentionally does NOT flip to `false` on transient disconnects
- * so that the Tldraw canvas stays mounted during brief network blips.
+ * so that the board canvas stays mounted during brief network blips.
  *
  * @param {string} boardId
  * @returns {{ ydoc: Y.Doc|null, provider: WebsocketProvider|null, synced: boolean }}
@@ -24,7 +24,7 @@ export function useYjsBoard(boardId) {
 
   // Track whether we've ever completed a sync for this connection.
   // Once true, we keep the canvas mounted even during brief disconnects
-  // so the Tldraw editor isn't unmounted/remounted (which causes the
+  // so the board canvas isn't unmounted/remounted (which causes the
   // blank board issue).
   const hasSyncedOnceRef = useRef(false);
 
@@ -55,7 +55,7 @@ export function useYjsBoard(boardId) {
         setSynced(true);
       }
       // Don't set synced=false on disconnect — the canvas should stay mounted
-      // so the Tldraw editor isn't destroyed and rebuilt.
+      // so the board canvas isn't destroyed and rebuilt.
     };
 
     // Handle status changes (connection/disconnection)

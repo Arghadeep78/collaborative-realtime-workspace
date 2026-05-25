@@ -34,8 +34,10 @@ const callGemini = async (prompt) => {
 };
 
 // Compose: circuit breaker → retry (exp backoff, transient-only) → timed call.
+// In HALF_OPEN the breaker allows a single trial; use 1 attempt to avoid hammering a recovering service.
 const generateAIContent = (prompt) =>
-  geminiBreaker.exec(() => retry(() => callGemini(prompt), { attempts: 3, baseDelayMs: 300 }));
+  geminiBreaker.exec(() =>
+    retry(() => callGemini(prompt), { attempts: geminiBreaker.isHalfOpen() ? 1 : 3, baseDelayMs: 300 }));
 
 // Map an internal error to an HTTP status + message. An open circuit means the
 // dependency is down — surface 503 (Service Unavailable) so clients can back off.

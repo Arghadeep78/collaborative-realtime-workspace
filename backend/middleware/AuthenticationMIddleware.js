@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'; // Import JWT library
-const JWT_SECRET = process.env.JWT_SECRET || "my-secret";  // Get secret key from environment variables
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is not set — refusing to start without a real secret');
 
 const authMiddleware = (req, res, next) => {
     try {

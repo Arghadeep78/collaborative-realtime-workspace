@@ -170,7 +170,7 @@ const getUserProfile = async (req, res) => {
     }
     res.status(200).json({
       name: user.name,
-      profilePic: user.profilePicture,
+      profilePicture: user.profilePicture,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -180,13 +180,13 @@ const getUserProfile = async (req, res) => {
 const updateUserProfile = async (req, res) => {
   try {
     const userEmail = req.email; // Assuming req.user is set by authMiddleware
-    const { name, profilePic } = req.body;
+    const { name, profilePicture } = req.body;
 
     const updatedUser = await userModel.findOneAndUpdate(
       { email: userEmail },
       {
         name: name,
-        profilePicture: profilePic,
+        profilePicture: profilePicture,
       },
       { new: true } // return updated user
     );
@@ -198,7 +198,7 @@ const updateUserProfile = async (req, res) => {
       message: "Profile updated successfully",
       user: {
         name: updatedUser.name,
-        profilePic: updatedUser.profilePicture,
+        profilePicture: updatedUser.profilePicture,
       },
     });
   } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Lock, Edit3, Save, X, Camera, Loader, Home } from 'lucide-react';
 import { BACKEND_URL } from '../../constants/apiConfig';
 import toast from 'react-hot-toast';
@@ -95,7 +95,7 @@ const Profile = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ name: editedData.name, profilePic: editedData.profilePic }),
+                body: JSON.stringify({ name: editedData.name, profilePicture: editedData.profilePicture ?? editedData.profilePic }),
             });
 
             if (!response.ok) {
@@ -105,7 +105,7 @@ const Profile = () => {
             const updatedUser = await response.json();
             const normalizedUser = {
                 ...updatedUser.user,
-                profilePic: updatedUser.user.profilePic ?? updatedUser.user.profilePicture ?? '',
+                profilePicture: updatedUser.user.profilePicture ?? '',
             };
             setUserData(normalizedUser);
             setEditedData(normalizedUser);

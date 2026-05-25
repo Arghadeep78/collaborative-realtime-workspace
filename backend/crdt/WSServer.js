@@ -62,8 +62,9 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       boardId = url.pathname.split('/').filter(Boolean).pop();
       const token = url.searchParams.get('token');
 
-      if (!boardId) {
-        ws.close(4401, 'Missing boardId');
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!boardId || !UUID_RE.test(boardId)) {
+        ws.close(4401, 'Invalid boardId');
         return;
       }
 

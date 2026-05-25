@@ -58,7 +58,7 @@ export default function BoardRoom() {
 
   // ── Board metadata / role ───────────────────────────────────────────────
   const [board, setBoard] = useState(null);
-  const [role, setRole] = useState('editor');
+  const [role, setRole] = useState(null); // null = unresolved / no access (mirrors backend deny-by-default)
   const [isEditingTitle, setEditTitle] = useState(false);
   const [titleInput, setTitleInput] = useState('');
   const editable = role === 'editor';
@@ -187,6 +187,8 @@ export default function BoardRoom() {
               sessionStorage.setItem(seenKey, '1');
               setShowWorkspacePicker(true);
             }
+          } else {
+            setRole(null); // unknown user on private board — mirrors resolveRole deny-by-default
           }
         }
       })
@@ -593,11 +595,16 @@ export default function BoardRoom() {
     setBoard((b) => ({ ...b, title: titleInput }));
     setEditTitle(false);
     const token = localStorage.getItem('token');
-    await fetch(`${BACKEND_URL}/boards/title/${boardId}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titleInput }),
-    }).catch(() => { });
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/title/${boardId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: titleInput }),
+      });
+      if (!res.ok) throw new Error('Could not save the board title');
+    } catch (e) {
+      toast.error(e.message || 'Could not save the board title');
+    }
   }, [titleInput, board, boardId, ydoc]);
 
   const handleSignOut = useCallback(() => {
@@ -607,7 +614,7 @@ export default function BoardRoom() {
   }, [navigate]);
 
   // ── Loading gate ───────────────────────────────────────────────────────────
-  if (!synced) {
+  if (!synced || !board || role === null) {
     return (
       <div ref={boardRoomRef} className={`w-screen h-screen flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
@@ -797,7 +804,7 @@ function WorkspacePickerModal({ boardId, boardTitle, onClose }) {
     fetch(`${BACKEND_URL}/workspaces/list`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => setWorkspaces(Array.isArray(data) ? data : []))
-      .catch(() => { })
+      .catch((e) => { toast.error(e.message || 'Could not load workspaces'); })
       .finally(() => setLoading(false));
   }, [token]);
 

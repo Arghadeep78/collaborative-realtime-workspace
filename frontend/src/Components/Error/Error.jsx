@@ -1,5 +1,4 @@
 // Components/Error/Error.jsx
-import React from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 const Error = ({ 

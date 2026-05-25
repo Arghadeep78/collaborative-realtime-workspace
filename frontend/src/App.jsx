@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { Toaster } from 'react-hot-toast';
@@ -61,58 +61,54 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
-// Function to schedule token renewal
-const scheduleTokenRenewal = (token) => {
-  try {
-    const decoded = jwtDecode(token);
-    const currentTime = Date.now() / 1000;
-    const expiryTime = decoded.exp;
-    const timeUntilRenewal = (expiryTime - currentTime - 180) * 1000; // renew 3 mins before expiry
-    
-    if (timeUntilRenewal <= 0) {
-      logout();
-      return;
-    }
-    
-    setTimeout(async () => {
+function App() {
+  const renewalTimerRef = useRef(null);
+
+  useEffect(() => {
+    const scheduleTokenRenewal = (token) => {
       try {
-        const currentToken = localStorage.getItem('token');
-        const response = await fetch(`${BACKEND_URL}/users/renew-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${currentToken}`,
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error('Token renewal failed');
-        }
-        
-        const data = await response.json();
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-          scheduleTokenRenewal(data.token);
-        } else {
-          throw new Error('No token in renewal response');
-        }
-      } catch (error) {
-        console.error('Error renewing token:', error);
+        const decoded = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        const timeUntilRenewal = (decoded.exp - currentTime - 180) * 1000; // renew 3 mins before expiry
+
+        if (timeUntilRenewal <= 0) { logout(); return; }
+
+        clearTimeout(renewalTimerRef.current);
+        renewalTimerRef.current = setTimeout(async () => {
+          try {
+            const currentToken = localStorage.getItem('token');
+            const response = await fetch(`${BACKEND_URL}/users/renew-token`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`,
+              },
+            });
+
+            if (!response.ok) throw new Error('Token renewal failed');
+
+            const data = await response.json();
+            if (data.token) {
+              localStorage.setItem('token', data.token);
+              scheduleTokenRenewal(data.token);
+            } else {
+              throw new Error('No token in renewal response');
+            }
+          } catch (error) {
+            console.error('Error renewing token:', error);
+            logout();
+          }
+        }, timeUntilRenewal);
+      } catch (err) {
+        console.error('Invalid token:', err);
         logout();
       }
-    }, timeUntilRenewal);
-  } catch (err) {
-    console.error('Invalid token:', err);
-    logout();
-  }
-};
+    };
 
-function App() {
-  useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      scheduleTokenRenewal(token);
-    }
+    if (token) scheduleTokenRenewal(token);
+
+    return () => clearTimeout(renewalTimerRef.current);
   }, []);
 
   return (

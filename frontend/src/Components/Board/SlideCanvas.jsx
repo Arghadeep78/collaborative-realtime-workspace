@@ -411,6 +411,8 @@ export default function SlideCanvas({
           justifyContent: 'center',
           minWidth: SLIDE_W * scale + FIT_PADDING,
           minHeight: SLIDE_H * scale + FIT_PADDING,
+          width: '100%',
+          height: '100%',
         }}
       >
       <div className="relative shrink-0" style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
 
@@ -425,10 +426,18 @@ export default function Dashboard({ logout }) {
 
   const deleteBoard = async (id) => {
     if (!window.confirm('Delete this collab board?')) return;
-    await fetch(`${BACKEND_URL}/boards/delete/${id}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
-    });
-    setBoards(bs => bs.filter(b => b.id !== id));
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/delete/${id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || 'Failed to delete board');
+      }
+      setBoards(bs => bs.filter(b => b.id !== id));
+    } catch (e) {
+      toast.error(e.message || 'Failed to delete board');
+    }
   };
 
   const startRename = (board) => {
@@ -438,23 +447,35 @@ export default function Dashboard({ logout }) {
   };
 
   const saveRename = async (id) => {
-    await fetch(`${BACKEND_URL}/boards/title/${id}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: renameVal }),
-    });
-    setBoards(bs => bs.map(b => b.id === id ? { ...b, title: renameVal } : b));
-    setRenamingId(null);
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/title/${id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: renameVal }),
+      });
+      if (!res.ok) throw new Error('Failed to rename board');
+      setBoards(bs => bs.map(b => b.id === id ? { ...b, title: renameVal } : b));
+    } catch (e) {
+      toast.error(e.message || 'Failed to rename board');
+    } finally {
+      setRenamingId(null);
+    }
   };
 
   const saveThumbnail = async (boardId, thumbnail) => {
-    await fetch(`${BACKEND_URL}/boards/thumbnail/${boardId}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ thumbnail }),
-    });
-    setBoards(bs => bs.map(b => b.id === boardId ? { ...b, thumbnail } : b));
-    setPickerBoard(null);
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/thumbnail/${boardId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thumbnail }),
+      });
+      if (!res.ok) throw new Error('Failed to save thumbnail');
+      setBoards(bs => bs.map(b => b.id === boardId ? { ...b, thumbnail } : b));
+    } catch (e) {
+      toast.error(e.message || 'Failed to save thumbnail');
+    } finally {
+      setPickerBoard(null);
+    }
   };
 
   const toggleFavorite = async (boardId) => {

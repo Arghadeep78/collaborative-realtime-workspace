@@ -117,6 +117,8 @@ export class CircuitBreaker {
     this.state = 'CLOSED';
   }
 
+  isHalfOpen() { return this.state === 'HALF_OPEN'; }
+
   _onFailure() {
     this.failures += 1;
     if (this.state === 'HALF_OPEN' || this.failures >= this.failureThreshold) {
