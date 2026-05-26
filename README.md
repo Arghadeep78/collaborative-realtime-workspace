@@ -42,7 +42,7 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 - **Rich elements:** sticky notes, Kanban cards (labels, assignees, subcards, due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
 - **Live presence:** real-time teammate cursors with name tags and a laser pointer, broadcast via Yjs Awareness.
 - **Comments & voting** on elements for async decision-making.
-- **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing.
+- **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing. Non-owners can leave a board or workspace; owners delete instead.
 - **AI brainstorming** via the Google Gemini API.
 - **Secure auth** with email/password and Google OAuth 2.0 (JWT access/refresh).
 
@@ -92,9 +92,18 @@ See [architecture.md](architecture.md) for the full design and [PRD.md](PRD.md) 
 
 ## Tech Stack
 
-**Backend** — Node.js, Express, Yjs (`y-protocols`, `y-websocket`, `ws`), MongoDB/Mongoose, Redis (pub/sub, cache, rate-limit store), BullMQ + ioredis, JWT + Google OAuth 2.0, Google Gemini API.
+### Frontend
+- **Framework & UI:** React 19, Vite, React Router, Tailwind CSS v4, Lucide React
+- **Real-time & Sync:** Yjs, `y-websocket` (custom SVG canvas synchronization)
+- **Auth & Utilities:** `jwt-decode`, React Hot Toast
 
-**Frontend** — React 19, Vite, custom SVG canvas, Yjs + `y-websocket`, Tailwind CSS, React Router.
+### Backend
+- **Core Server:** Node.js, Express 5
+- **Real-time & CRDT:** Yjs, `y-protocols`, `ws`
+- **Database & ORM:** MongoDB, Mongoose
+- **Caching, Pub/Sub & Queues:** Redis, `ioredis`, BullMQ, `rate-limit-redis`
+- **Authentication & Security:** JWT (`jsonwebtoken`), Google OAuth 2.0, `bcryptjs`
+- **External Services & APIs:** Google Gemini API, Cloudinary, Nodemailer
 
 ---
 
@@ -129,7 +138,3 @@ The frontend runs on `http://localhost:5173` and talks to the backend on `http:/
 See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for environment-variable details.
 
 ---
-
-## License
-
-MIT

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, Lock, Edit3, Save, X, Camera, Loader, Home, Sun, Moon } from 'lucide-react';
 import { BACKEND_URL } from '../../constants/apiConfig';
 import toast from 'react-hot-toast';
@@ -12,6 +12,7 @@ const Profile = () => {
     const [editedData, setEditedData] = useState({ name: '', profilePic: '' });
     const isGoogleUser = userData.authProvider === 'google';
     const [isEditing, setIsEditing] = useState(false);
+    const pendingPicFile = useRef(null); // holds the File object until Save is clicked
     
     // State for password change
     const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -73,6 +74,7 @@ const Profile = () => {
     const handleEditToggle = () => {
         if (isEditing) {
             setEditedData({ ...userData });
+            pendingPicFile.current = null;
         }
         setIsEditing(!isEditing);
     };
@@ -93,18 +95,33 @@ const Profile = () => {
         setError(null);
         try {
             const token = localStorage.getItem('token');
+
+            // Upload the pending picture file first if the user picked one.
+            let pictureUrl = editedData.profilePicture ?? editedData.profilePic;
+            if (pendingPicFile.current) {
+                const formData = new FormData();
+                formData.append('image', pendingPicFile.current);
+                const uploadRes = await fetch(`${BACKEND_URL}/users/profile/picture`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: formData,
+                });
+                if (!uploadRes.ok) throw new Error('Failed to upload profile picture.');
+                const uploadData = await uploadRes.json();
+                pictureUrl = uploadData.url;
+                pendingPicFile.current = null;
+            }
+
             const response = await fetch(`${BACKEND_URL}/users/profile`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ name: editedData.name, profilePicture: editedData.profilePicture ?? editedData.profilePic }),
+                body: JSON.stringify({ name: editedData.name, profilePicture: pictureUrl }),
             });
 
-            if (!response.ok) {
-                throw new Error('Failed to update profile.');
-            }
+            if (!response.ok) throw new Error('Failed to update profile.');
 
             const updatedUser = await response.json();
             const normalizedUser = {
@@ -127,55 +144,16 @@ const Profile = () => {
         }
     };
 
-    const handleProfilePicChange = async (event) => {
+    // Only preview locally — actual upload happens in handleSave.
+    const handleProfilePicChange = (event) => {
         const file = event.target.files[0];
-        const token = localStorage.getItem('token');
         if (!file) return;
-
+        pendingPicFile.current = file;
         const reader = new FileReader();
         reader.onload = (e) => {
             setEditedData(prev => ({ ...prev, profilePic: e.target.result }));
         };
         reader.readAsDataURL(file);
-
-        try {
-            const formData = new FormData();
-            formData.append('image', file);
-
-            const response = await fetch(`${BACKEND_URL}/users/profile/picture`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                body: formData,
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to upload profile picture.');
-            }
-
-            const data = await response.json();
-
-            // Persist the new picture URL to the user's profile immediately
-            await fetch(`${BACKEND_URL}/users/profile`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ name: userData.name, profilePicture: data.url }),
-            });
-
-            const updated = { ...userData, profilePic: data.url, profilePicture: data.url };
-            setUserData(updated);
-            setEditedData(updated);
-            syncStoredUser({ profilePic: data.url, profilePicture: data.url });
-            toast.success('Profile picture updated!');
-        } catch (error) {
-            console.error('Error uploading profile picture:', error);
-            toast.error(error.message);
-            setEditedData(prev => ({ ...prev, profilePic: userData.profilePic }));
-        }
     };
 
     const handleUpdatePassword = async () => {
@@ -250,7 +228,6 @@ const Profile = () => {
                                         src={isEditing ? editedData.profilePic : userData.profilePic}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
-                                        crossOrigin="anonymous"
                                         onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = `<span class="text-white text-2xl font-bold">${userData.name?.[0]?.toUpperCase() || 'U'}</span>`; }}
                                     />
                                 ) : (

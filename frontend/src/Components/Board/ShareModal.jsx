@@ -42,7 +42,6 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
 
   const [collaborators, setCollabs]   = useState(board?.collaborators || []);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [linkRole, setLinkRole]       = useState('editor'); // role baked into the copied link
   const [copying, setCopying]         = useState(false);
 
   const token = () => localStorage.getItem('token');
@@ -67,7 +66,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         const d = await res.json();
         if (!res.ok) throw new Error(d.error || 'Failed to load access');
         const ws = d.workspace || {};
-        setOwner({ email: ws.owner, name: ws.ownerName || ws.owner, profilePicture: ws.ownerProfilePicture || '' });
+        setOwner({ email: ws.owner, name: ws.ownerName || '', profilePicture: ws.ownerProfilePicture || '' });
         setMembers(ws.members || []);
         const b = (d.boards || []).find((x) => x.id === boardId);
         if (b?.collaborators) setCollabs(b.collaborators);
@@ -95,10 +94,10 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
   const participants = (() => {
     const map = new Map();
     members.forEach((m) =>
-      map.set(m.email, { email: m.email, name: m.name || m.email, profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
+      map.set(m.email, { email: m.email, name: m.name || '', profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
     );
     collaborators.forEach((c) =>
-      map.set(c.email, { email: c.email, name: c.name || c.email, profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
+      map.set(c.email, { email: c.email, name: c.name || '', profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
     );
     return [...map.values()];
   })();
@@ -131,27 +130,13 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
     }
   };
 
-  // Mint a signed share token for the chosen role and copy a link that carries
-  // it (`?st=<token>`). The bare link still grants the viewer baseline; the
-  // token raises the opener to the selected role. Links expire after 7 days.
   const copyLink = async () => {
     setCopying(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/boards/share-token/${boardId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: linkRole }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Failed to create link');
-      const url = new URL(baseUrl);
-      url.searchParams.set('st', d.token);
-      await navigator.clipboard.writeText(url.toString());
-      // Minting a link turns on public viewer access — reflect it in the UI.
-      setIsPublic(true);
-      toast.success(`${roleLabel(linkRole)} link copied — valid for 7 days`);
+      await navigator.clipboard.writeText(baseUrl);
+      toast.success('Link copied');
     } catch (e) {
-      toast.error(e.message);
+      toast.error('Failed to copy link');
     } finally {
       setCopying(false);
     }
@@ -278,16 +263,15 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                 {/* Owner row */}
                 <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
                   <div className="flex items-center gap-3 min-w-0">
-                    {owner?.profilePicture ? (
-                      <img src={owner.profilePicture} alt={owner.name} className="w-9 h-9 rounded-xl object-cover shadow-sm shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm bg-linear-to-br from-amber-400 to-amber-600 shrink-0">
-                        {owner?.email?.[0]?.toUpperCase()}
-                      </div>
-                    )}
+                    <Avatar email={owner?.email} name={owner?.name} src={owner?.profilePicture} size={36} shapeClass="rounded-xl" color="#f59e0b" borderClass="border-transparent" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-content truncate">{owner?.name || owner?.email}</p>
-                      <p className="text-[11px] text-content-subtle">Board owner</p>
+                      {owner?.name && (
+                        <p className="text-[11px] text-content-subtle truncate">{owner.email} · Board owner</p>
+                      )}
+                      {!owner?.name && (
+                        <p className="text-[11px] text-content-subtle truncate">Board owner</p>
+                      )}
                     </div>
                   </div>
                   <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide ${roleColor('owner')}`}>
@@ -302,10 +286,13 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                     <div className="flex items-center gap-3 min-w-0">
                       <Avatar email={p.email} name={p.name} src={p.profilePicture} size={36} shapeClass="rounded-xl" color="#475569" borderClass="border-transparent" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-content truncate">{p.name}</p>
-                        <p className="text-[11px] text-content-subtle">
-                          {p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}
-                        </p>
+                        <p className="text-sm font-medium text-content truncate">{p.name || p.email}</p>
+                        {p.name && (
+                          <p className="text-[11px] text-content-subtle truncate">{p.email} · {p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}</p>
+                        )}
+                        {!p.name && (
+                          <p className="text-[11px] text-content-subtle truncate">{p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}</p>
+                        )}
                       </div>
                     </div>
 
@@ -383,23 +370,6 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         {/* Footer */}
         <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <select
-                value={linkRole}
-                onChange={(e) => setLinkRole(e.target.value)}
-                className="appearance-none bg-surface border border-edge-strong rounded-xl pl-3 pr-8 py-2.5 text-content text-sm font-semibold focus:outline-none shadow-sm cursor-pointer"
-                title="Access granted by the copied link"
-              >
-                <option value="viewer">Viewer link</option>
-                <option value="commenter">Commenter link</option>
-                <option value="editor">Editor link</option>
-              </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </div>
-            </div>
             <button
               onClick={copyLink}
               disabled={copying}

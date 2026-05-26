@@ -28,7 +28,7 @@ The monorepo has two independently deployable apps:
 ### 2.2 Backend
 
 | Concern | Choice |
-|---|---|
+|----|----|
 | Runtime | Node.js, Express.js |
 | WebSocket | `ws` library (native, not Socket.IO) |
 | CRDT sync | `yjs`, `y-protocols`, `lib0` |
@@ -209,7 +209,9 @@ Avoids a cold MongoDB read on every WebSocket connection.
 - Public board → `meta.publicRole`
 - Otherwise → `null`
 
-**Invalidation** (`invalidateBoardMeta(boardId)`) — called on share, unshare, publish, unpublish, and delete. Next access falls through to MongoDB and repopulates the cache.
+**Invalidation** (`invalidateBoardMeta(boardId)`) — called on share, unshare, publish, unpublish, delete, and when a collaborator leaves a board or workspace. Next access falls through to MongoDB and repopulates the cache.
+
+**Leaving** — a non-owner collaborator can remove themselves from a board (`DELETE /boards/leave/:id`) or a workspace (`DELETE /workspaces/:id/leave`, which also strips them from that workspace's boards). Owners are rejected — they must delete instead. Each path invalidates the affected boards' metadata cache so the next sync connection re-resolves the departed user's role to `null`.
 
 ---
 

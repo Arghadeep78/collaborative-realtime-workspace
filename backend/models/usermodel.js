@@ -160,9 +160,9 @@ userSchema.statics.googleAuth = async function (
     let user = await this.findOne({ googleId });
 
     if (user) {
-      // Update user info if needed
+      // Update name but never overwrite a custom-uploaded profile picture.
       user.name = name;
-      user.profilePicture = profilePicture;
+      if (!user.profilePicture) user.profilePicture = profilePicture;
       await user.save();
       return user;
     }
@@ -172,7 +172,7 @@ userSchema.statics.googleAuth = async function (
     if (user) {
       // Link Google account to existing user
       user.googleId = googleId;
-      user.profilePicture = profilePicture;
+      if (!user.profilePicture) user.profilePicture = profilePicture;
       user.authProvider = "google";
       await user.save();
       return user;

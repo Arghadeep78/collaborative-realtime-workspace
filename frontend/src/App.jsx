@@ -10,6 +10,18 @@ import { BACKEND_URL } from './constants/apiConfig.js';
 import Profile from './Components/Profile/Profile.jsx';
 import BoardRoom from './Components/Board/BoardRoom.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
+import { primePhotoCache } from './hooks/usePhotoResolver.js';
+
+// Seed the photo cache from localStorage so the current user's avatar is
+// available immediately on every page without waiting for a network fetch.
+(() => {
+  try {
+    const u = JSON.parse(localStorage.getItem('userData') || '{}');
+    if (u.email && (u.profilePicture || u.profilePic)) {
+      primePhotoCache({ [u.email]: u.profilePicture || u.profilePic });
+    }
+  } catch { /* ignore */ }
+})();
 
 // Logout function
 const logout = () => {

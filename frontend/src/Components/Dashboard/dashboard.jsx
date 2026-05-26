@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
 import ManageWorkspaceModal from '../Board/ManageWorkspaceModal.jsx';
+import Avatar from '../common/Avatar.jsx';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const PlusIcon = () => (
@@ -240,14 +241,29 @@ function MoveToWorkspaceModal({ board, workspaces, currentWorkspaceId, onMove, o
   );
 }
 
+// ── RoleBadge ─────────────────────────────────────────────────────────────────
+const ROLE_BADGE = {
+  owner:     'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300',
+  editor:    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+  commenter: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
+  viewer:    'bg-edge text-content-subtle',
+};
+function RoleBadge({ role }) {
+  if (!role) return null;
+  return (
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded capitalize ${ROLE_BADGE[role] ?? ROLE_BADGE.viewer}`}>
+      {role}
+    </span>
+  );
+}
+
 // ── BoardCard ─────────────────────────────────────────────────────────────────
-function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, onToggleFavorite, onMoveToWorkspace, canMove, openMenu, setOpenMenu, renamingId, renameVal, setRenameVal, saveRename, setRenamingId }) {
+function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, onToggleFavorite, onMoveToWorkspace, onLeaveBoard, canMove, openMenu, setOpenMenu, renamingId, renameVal, setRenameVal, saveRename, setRenamingId }) {
   const isGradient = (v) => v && v.startsWith('linear-gradient');
-  // Owner & editor can edit; only the owner can delete. Boards shared with you
-  // as a viewer/commenter expose no edit actions.
   const canEdit = board.myRole === 'owner' || board.myRole === 'editor';
   const canDelete = board.myRole === 'owner';
-  const hasMenu = canEdit || canDelete || canMove;
+  const canLeave = board.myRole && board.myRole !== 'owner';
+  const hasMenu = canEdit || canDelete || canMove || canLeave;
 
   return (
     <div
@@ -283,8 +299,8 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
           )}
           <p className="text-content-subtle text-xs mt-1 flex items-center gap-1.5">
             {timeAgo(board.updatedAt || board.createdAt)}
-            {board.isPublic && (
-              <><span className="w-0.5 h-0.5 rounded-full bg-edge-strong inline-block" /><span className="text-content-subtle">Public</span></>
+            {board.myRole && (
+              <><span className="w-0.5 h-0.5 rounded-full bg-edge-strong inline-block" /><RoleBadge role={board.myRole} /></>
             )}
           </p>
         </div>
@@ -320,6 +336,12 @@ function BoardCard({ board, onNavigate, onRename, onDelete, onChangeThumbnail, o
                     <>
                       <div className="h-px bg-edge-subtle my-1" />
                       <button onClick={() => { onDelete(board.id); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400/80 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center gap-2.5"><TrashIcon /> Delete</button>
+                    </>
+                  )}
+                  {canLeave && (
+                    <>
+                      <div className="h-px bg-edge-subtle my-1" />
+                      <button onClick={() => { onLeaveBoard(board.id); setOpenMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400/80 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors flex items-center gap-2.5"><LogOutIcon /> Leave board</button>
                     </>
                   )}
                 </div>
@@ -396,8 +418,6 @@ export default function Dashboard({ logout }) {
 
   const token = () => localStorage.getItem('token');
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-  const profileImage = userData.profilePic || userData.profilePicture || '';
-  const profileInitial = userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || 'U';
 
   // ── Fetch boards ────────────────────────────────────────────────────────────
   const fetchBoards = async () => {
@@ -509,6 +529,22 @@ export default function Dashboard({ logout }) {
     }
   };
 
+  const leaveBoard = async (id) => {
+    if (!window.confirm('Leave this board? You will lose access unless re-invited.')) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/leave/${id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || 'Failed to leave board');
+      }
+      setBoards(bs => bs.filter(b => b.id !== id));
+    } catch (e) {
+      toast.error(e.message || 'Failed to leave board');
+    }
+  };
+
   const startRename = (board) => {
     setRenamingId(board.id);
     setRenameVal(board.title);
@@ -617,6 +653,28 @@ export default function Dashboard({ logout }) {
     } catch (e) {
       toast.error(e.message || 'Failed to delete workspace');
       setDeletingWs(null);
+    }
+  };
+
+  const leaveWorkspace = async (ws) => {
+    if (!window.confirm(`Leave "${ws.name}"? You will lose access to all its boards unless re-invited.`)) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/workspaces/${ws.id}/leave`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || 'Failed to leave workspace');
+      }
+      const remaining = workspaces.filter(w => w.id !== ws.id);
+      setWorkspaces(remaining);
+      const next = remaining.find(w => w.isOwner) || remaining[0] || null;
+      setActiveWs(next);
+      try { if (next) localStorage.setItem('activeWorkspaceId', next.id); } catch { /* ignore */ }
+      fetchBoards();
+      toast.success(`Left "${ws.name}"`);
+    } catch (e) {
+      toast.error(e.message || 'Failed to leave workspace');
     }
   };
 
@@ -752,11 +810,20 @@ export default function Dashboard({ logout }) {
               </button>
             </div>
           )}
-          {/* Shared-with-me indicator */}
+          {/* Shared-with-me: leave option */}
           {activeWorkspace && !activeWorkspace.isOwner && (
-            <p className="mt-1.5 px-2 text-xs text-content-subtle flex items-center gap-1.5">
-              <UsersIcon /> Shared with you · view access
-            </p>
+            <div className="mt-2 flex flex-col space-y-1">
+              <p className="px-2 text-xs text-content-subtle flex items-center gap-1.5">
+                <UsersIcon /> Shared with you · view access
+              </p>
+              <button
+                onClick={() => leaveWorkspace(activeWorkspace)}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-content-muted hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
+              >
+                <LogOutIcon />
+                Leave workspace
+              </button>
+            </div>
           )}
         </div>
 
@@ -827,23 +894,16 @@ export default function Dashboard({ logout }) {
             </button>
             <button
               onClick={() => navigate('/profile')}
-              className="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center overflow-hidden text-sm font-semibold text-indigo-600 dark:text-indigo-300 shadow-sm cursor-pointer"
+              className="rounded-full cursor-pointer"
               title="Open profile"
             >
-              {profileImage ? (
-                <img
-                  src={profileImage}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.parentElement.textContent = profileInitial;
-                  }}
-                />
-              ) : (
-                profileInitial
-              )}
+              <Avatar
+                email={userData.email}
+                name={userData.name}
+                src={userData.profilePic || userData.profilePicture}
+                size={32}
+                borderClass="border-indigo-500/20"
+              />
             </button>
           </div>
         </header>
@@ -889,6 +949,7 @@ export default function Dashboard({ logout }) {
                   onNavigate={(id) => navigate(`/board/${id}`)}
                   onRename={startRename}
                   onDelete={deleteBoard}
+                  onLeaveBoard={leaveBoard}
                   onChangeThumbnail={(b) => setPickerBoard(b)}
                   onToggleFavorite={toggleFavorite}
                   onMoveToWorkspace={(b) => setMovingBoard(b)}

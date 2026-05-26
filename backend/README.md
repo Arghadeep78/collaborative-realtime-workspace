@@ -14,12 +14,13 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 - **History compaction** — `DocumentManager` compacts each `Y.Doc` by replaying current logical values into a fresh doc (dropping tombstones and per-key history). Runs **asynchronously** (`setImmediate`) so it never blocks the first client's cold-load sync handshake; the rebuilt doc is swapped in atomically (the map updates first, an `onDocSwapped` callback moves the `update` listener and re-syncs peers, then the old doc is destroyed). Only runs when compacted size is ≤ 80% of original; nested Y.Maps (votes, comments) are reconstructed rather than flattened so CRDT merge semantics survive.
 - **Authorization at the trust boundary** — `viewer`/`commenter`/`editor` roles are enforced **per Yjs sync message**, so a viewer cannot mutate a board even over a raw WebSocket.
 - **Distributed rate limiting** — `express-rate-limit` + `rate-limit-redis` with shared Redis counters across instances, split into auth (50/15 min) / AI (40/15 min) / general (300/15 min) tiers.
-- **Board-metadata cache** — access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is Redis-cached (`board:meta:<id>`, 60 s TTL) with explicit invalidation, removing a cold MongoDB read from every WebSocket connection.
+- **Board-metadata cache** — access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is Redis-cached (`board:meta:<id>`, 60 s TTL) with explicit invalidation on share / unshare / publish / delete / leave, removing a cold MongoDB read from every WebSocket connection.
+- **Self-service membership** — non-owner collaborators can leave a board (`DELETE /boards/leave/:id`) or a workspace (`DELETE /workspaces/:id/leave`, which also removes them from that workspace's boards); owners are rejected and must delete instead. Both paths invalidate the affected boards' metadata cache.
 - **External API resilience** — Gemini calls wrapped with a 10 s timeout, exponential-backoff retries (transient errors only), and a shared circuit breaker (5 failure threshold, 30 s cooldown).
 - **Health & readiness probes** — `GET /health` (MongoDB + Redis) and `GET /ready` (+ BullMQ workers running, persist-queue backpressure via `getWaitingCount`, and active-board count). `/ready` reports `not-ready` when the flush backlog exceeds the threshold so an orchestrator stops adding load until it drains.
 - **Async board publishing** — BullMQ queue + worker generate a read-only public snapshot off the request path.
 - **Graceful shutdown** — `SIGTERM`/`SIGINT`/`SIGUSR2` drain workers, close queues, and quit Redis clients before process exit.
-- **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens.
+- **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens. A custom-uploaded profile picture is never overwritten by a subsequent Google sign-in.
 
 ---
 

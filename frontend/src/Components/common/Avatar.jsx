@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUserPhoto } from '../../hooks/usePhotoResolver.js';
 
 // One avatar for the whole app. Pass an email and it resolves the picture from
@@ -17,7 +17,13 @@ export default function Avatar({
 }) {
   const [imgError, setImgError] = useState(false);
   const resolved = useUserPhoto(email);
-  const url = src || resolved;
+  // Prefer the backend-resolved URL over the awareness broadcast src — the
+  // backend is authoritative and avoids stale base64/cloud URLs from peers.
+  const url = resolved || src;
+
+  // Reset the error flag whenever the URL changes so a newly-resolved URL gets a fresh attempt.
+  useEffect(() => { setImgError(false); }, [url]);
+
   const initial = (name || email)?.[0]?.toUpperCase() || '?';
 
   if (url && !imgError) {
@@ -26,7 +32,6 @@ export default function Avatar({
         src={url}
         alt={name || email}
         title={name || email}
-        crossOrigin="anonymous"
         onError={() => setImgError(true)}
         className={`${shapeClass} object-cover border-2 ${borderClass} shadow-sm shrink-0 ${className}`}
         style={{ width: size, height: size, minWidth: size }}

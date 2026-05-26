@@ -166,7 +166,7 @@ export const shareBoard = async (req, res) => {
     if (board.owner !== req.email) return res.status(403).json({ error: 'Only the owner can share this board' });
 
     const invitee = await User.findOne({ email }).select('name profilePicture').lean();
-    const resolvedName = invitee?.name || name || email;
+    const resolvedName = invitee?.name || name || '';
     const resolvedPhoto = invitee?.profilePicture || '';
 
     // Collapse any pre-existing entries for this email into one before applying
@@ -304,6 +304,29 @@ export const toggleFavorite = async (req, res) => {
   } catch (err) {
     console.error('toggleFavorite error:', err);
     return res.status(500).json({ error: 'Failed to toggle favorite' });
+  }
+};
+
+// ── leaveBoard ────────────────────────────────────────────────────────────────
+// Removes the calling user from board.collaborators. Owners cannot leave
+// (they must delete the board or transfer ownership instead).
+export const leaveBoard = async (req, res) => {
+  try {
+    const email = req.email;
+    const board = await Whiteboard.findOne({ id: req.params.id });
+    if (!board) return res.status(404).json({ error: 'Board not found' });
+    if (board.owner === email) return res.status(400).json({ error: 'Owners cannot leave a board; delete it instead.' });
+
+    const before = board.collaborators.length;
+    board.collaborators = board.collaborators.filter(c => c.email !== email);
+    if (board.collaborators.length === before) return res.status(400).json({ error: 'You are not a collaborator on this board.' });
+
+    await board.save();
+    invalidateBoardMeta(board.id);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('leaveBoard error:', err);
+    return res.status(500).json({ error: 'Failed to leave board' });
   }
 };
 

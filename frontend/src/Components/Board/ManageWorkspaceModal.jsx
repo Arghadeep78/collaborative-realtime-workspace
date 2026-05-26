@@ -155,18 +155,19 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
   const participantsFor = (board) => {
     const map = new Map();
     members.forEach((m) =>
-      map.set(m.email, { email: m.email, name: m.name || m.email, role: 'viewer', source: 'workspace' })
+      map.set(m.email, { email: m.email, name: m.name || '', profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
     );
     (board.collaborators || []).forEach((c) =>
-      map.set(c.email, { email: c.email, name: c.name || c.email, role: c.role, source: 'board' })
+      map.set(c.email, { email: c.email, name: c.name || '', profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
     );
     return [...map.values()];
   };
 
-  const MemberAvatar = ({ email, name, tone = 'slate' }) => (
+  const MemberAvatar = ({ email, name, profilePicture, tone = 'slate' }) => (
     <Avatar
       email={email}
       name={name || email}
+      src={profilePicture}
       size={36}
       shapeClass="rounded-xl"
       color={tone === 'indigo' ? '#8b5cf6' : '#475569'}
@@ -242,14 +243,22 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                   <div className="flex flex-wrap gap-2 mt-3">
                     {/* Owner pill */}
                     <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1">
-                      <Avatar email={data?.workspace?.owner} name={data?.workspace?.owner} size={20} color="#d97706" borderClass="border-transparent" />
-                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{data?.workspace?.owner}</span>
+                      <Avatar email={data?.workspace?.owner} name={data?.workspace?.ownerName || data?.workspace?.owner} size={20} color="#d97706" borderClass="border-transparent" />
+                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                        {data?.workspace?.ownerName || data?.workspace?.owner}
+                      </span>
+                      {data?.workspace?.ownerName && (
+                        <span className="text-xs text-amber-600/70 dark:text-amber-400/60">({data.workspace.owner})</span>
+                      )}
                       <Crown size={11} className="text-amber-500 ml-0.5" />
                     </div>
                     {members.map((m) => (
                       <div key={m.email} className="group flex items-center gap-1.5 bg-surface border border-edge-subtle rounded-full pl-1.5 pr-2 py-1 hover:border-red-400/50 transition-colors">
                         <Avatar email={m.email} name={m.name || m.email} size={20} color="#64748b" borderClass="border-transparent" />
-                        <span className="text-xs font-medium text-content">{m.name || m.email}</span>
+                        <span className="text-xs font-medium text-content">
+                          {m.name || m.email}
+                          {m.name && <span className="text-content-subtle font-normal ml-1">({m.email})</span>}
+                        </span>
                         <button
                           onClick={() => removeMember(m.email)}
                           className="ml-0.5 text-content-subtle hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -311,8 +320,14 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                             <div className="flex items-center gap-3 min-w-0">
                               <MemberAvatar email={data?.workspace?.owner} tone="indigo" />
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-content truncate">{data?.workspace?.owner}</p>
-                                <p className="text-[11px] text-content-subtle">Board owner</p>
+                                <p className="text-sm font-semibold text-content truncate">
+                                  {data?.workspace?.ownerName || data?.workspace?.owner}
+                                </p>
+                                <p className="text-[11px] text-content-subtle truncate">
+                                  {data?.workspace?.ownerName
+                                    ? `${data.workspace.owner} · Board owner`
+                                    : 'Board owner'}
+                                </p>
                               </div>
                             </div>
                             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide ${roleColor('owner')}`}>
@@ -325,11 +340,15 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                           {participants.map((p) => (
                             <div key={p.email} className="flex items-center justify-between py-2 px-3 rounded-xl bg-surface border border-edge-subtle hover:border-indigo-500/20 transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
-                                <MemberAvatar email={p.email} name={p.name} />
+                                <MemberAvatar email={p.email} name={p.name} profilePicture={p.profilePicture} />
                                 <div className="min-w-0">
-                                  <p className="text-sm font-medium text-content truncate">{p.name}</p>
-                                  <p className="text-[11px] text-content-subtle">
-                                    {p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}
+                                  <p className="text-sm font-medium text-content truncate">
+                                    {p.name || p.email}
+                                  </p>
+                                  <p className="text-[11px] text-content-subtle truncate">
+                                    {p.name
+                                      ? `${p.email} · ${p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}`
+                                      : `${p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'} · not registered`}
                                   </p>
                                 </div>
                               </div>

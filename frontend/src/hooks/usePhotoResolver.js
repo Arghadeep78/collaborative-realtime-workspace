@@ -25,7 +25,9 @@ const fetchProfiles = (emails) => {
       notify();
     })
     .catch(() => {
-      emails.forEach((e) => { if (!cache.has(e)) cache.set(e, ''); });
+      // On network error, remove from inflight but don't cache empty —
+      // let the next render retry rather than locking out forever.
+      emails.forEach((e) => inflight.delete(e));
     });
 };
 

@@ -12,7 +12,7 @@ The client for the real-time collaborative workspace, built with **React 19 + Vi
 - **Live presence** — teammate cursors with name tags and a broadcast laser pointer, powered by the Yjs Awareness protocol. Presence is relayed cross-instance on the backend, so cursors stay visible even when collaborators are connected to different server instances.
 - **Comments & voting** on elements for async feedback.
 - **AI brainstorming** panel powered by the Gemini API.
-- **Sharing roles** — Viewer, Commenter, and Editor; enforced client-side and at the server trust boundary.
+- **Sharing roles** — Viewer, Commenter, and Editor; enforced client-side and at the server trust boundary. The dashboard shows each board's role as a badge, and non-owners can leave a board or workspace from the board card menu.
 - **Polished UI** — floating-card design, dark mode, responsive layout, and micro-animations.
 
 ---

@@ -10,6 +10,7 @@ import {
   updateBoardTitle,
   updateBoardThumbnail,
   toggleFavorite,
+  leaveBoard,
 } from '../Controllers/BoardController.js';
 import authMiddleware from '../middleware/AuthenticationMIddleware.js';
 
@@ -25,5 +26,6 @@ router.post('/share-token/:id', authMiddleware, createShareToken);
 router.put('/title/:id',        authMiddleware, updateBoardTitle);
 router.put('/thumbnail/:id',    authMiddleware, updateBoardThumbnail);
 router.put('/favorite/:id',     authMiddleware, toggleFavorite);
+router.delete('/leave/:id',     authMiddleware, leaveBoard);
 
 export default router;

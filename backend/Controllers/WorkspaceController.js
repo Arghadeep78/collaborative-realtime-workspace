@@ -180,7 +180,7 @@ export const shareWorkspace = async (req, res) => {
     if (existing) {
       if (name) existing.name = name;
     } else {
-      ws.members.push({ email, name: name || email });
+      ws.members.push({ email, name: name || '' });
     }
     await ws.save();
     // Membership feeds the board-access cache (viewer baseline) — drop stale entries.
@@ -221,6 +221,36 @@ export const removeWorkspaceMember = async (req, res) => {
   }
 };
 
+// ── leaveWorkspace ────────────────────────────────────────────────────────────
+// Lets a non-owner member remove themselves from a workspace and its boards.
+export const leaveWorkspace = async (req, res) => {
+  try {
+    const email = req.email;
+    const ws = await Workspace.findOne({ id: req.params.id });
+    if (!ws) return res.status(404).json({ error: 'Workspace not found' });
+    if (ws.owner === email) return res.status(400).json({ error: 'Owners cannot leave a workspace; delete it instead.' });
+
+    const before = ws.members.length;
+    ws.members = ws.members.filter(m => m.email !== email);
+    if (ws.members.length === before) return res.status(400).json({ error: 'You are not a member of this workspace.' });
+
+    await ws.save();
+
+    if (ws.boardIds.length) {
+      const boards = await Whiteboard.find({ id: { $in: ws.boardIds }, 'collaborators.email': email });
+      await Promise.all(boards.map(b => {
+        b.collaborators = b.collaborators.filter(c => c.email !== email);
+        return b.save();
+      }));
+      await Promise.all(ws.boardIds.map(id => invalidateBoardMeta(id)));
+    }
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('leaveWorkspace error:', err);
+    return res.status(500).json({ error: 'Failed to leave workspace' });
+  }
+};
+
 // ── getWorkspaceManageData ────────────────────────────────────────────────────
 // Owner-only. Returns the workspace plus every board in it with its
 // collaborators, so the management dialog can show/change per-board roles.
@@ -247,12 +277,12 @@ export const getWorkspaceManageData = async (req, res) => {
 
     const wsObj = wsView(ws, req.email);
     wsObj.members = ws.members.map(m => ({
-      ...m,
-      name: nameLookup[m.email] || m.name || m.email,
+      email: m.email,
+      name: nameLookup[m.email] || m.name || '',
       profilePicture: photoLookup[m.email] ?? m.profilePicture ?? '',
     }));
     wsObj.ownerProfilePicture = photoLookup[ws.owner] || '';
-    wsObj.ownerName = nameLookup[ws.owner] || ws.owner;
+    wsObj.ownerName = nameLookup[ws.owner] || '';
 
     return res.status(200).json({
       workspace: wsObj,
@@ -262,7 +292,7 @@ export const getWorkspaceManageData = async (req, res) => {
         owner: b.owner,
         collaborators: (b.collaborators || []).map(c => ({
           ...c,
-          name: nameLookup[c.email] || c.name || c.email,
+          name: nameLookup[c.email] || c.name || '',
           profilePicture: photoLookup[c.email] ?? c.profilePicture ?? '',
         })),
         isPublic: !!b.isPublic,
