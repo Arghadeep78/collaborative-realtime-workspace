@@ -7,7 +7,7 @@ dotenv.config();
 import { connectToDatabase } from "./db.js";
 import userRoute from "./Routes/userRoute.js";
 import boardRoute from "./Routes/boardRoutes.js";
-import aiRoutes from "./Routes/aiRoutes.js";
+// import aiRoutes from "./Routes/aiRoutes.js"; // AI feature disabled
 import { setupYjsWSServer } from "./crdt/WSServer.js";
 import { startPersistenceWorker } from "./crdt/persistenceWorker.js";
 import { startPersistenceScheduler } from "./crdt/persistenceScheduler.js";
@@ -89,7 +89,7 @@ const startServer = async () => {
   initBoardCache(pubClient);
 
   // Distributed (Redis-backed) rate limiters — shared counters across instances.
-  const { authLimiter, aiLimiter, apiLimiter } = createRateLimiters(pubClient);
+  const { authLimiter, apiLimiter } = createRateLimiters(pubClient); // aiLimiter removed (AI feature disabled)
 
   app.use(
     cors({
@@ -120,7 +120,7 @@ const startServer = async () => {
 
   app.use("/users", authLimiter, userRoute);
   app.use("/boards", apiLimiter, boardRoute);
-  app.use("/ai", aiLimiter, aiRoutes);
+  // app.use("/ai", aiLimiter, aiRoutes); // AI feature disabled
   app.use("/publish", apiLimiter, publishRoute);
   app.use("/workspaces", apiLimiter, workspaceRoute);
   // ─── Yjs CRDT WebSocket server (co-exists on same HTTP server) ────────

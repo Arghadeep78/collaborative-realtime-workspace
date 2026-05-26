@@ -33,13 +33,13 @@ export function createRateLimiters(redisClient) {
     store: store('rl:auth:'),
   });
 
-  // AI endpoints: each call hits the paid Gemini API — guard against abuse.
-  const aiLimiter = rateLimit({
-    ...base,
-    max: 40,
-    message: { error: 'AI request limit reached, please slow down.' },
-    store: store('rl:ai:'),
-  });
+  // AI feature disabled — aiLimiter removed
+  // const aiLimiter = rateLimit({
+  //   ...base,
+  //   max: 40,
+  //   message: { error: 'AI request limit reached, please slow down.' },
+  //   store: store('rl:ai:'),
+  // });
 
   // General REST API (boards, publishing): generous but bounded.
   const apiLimiter = rateLimit({
@@ -49,5 +49,5 @@ export function createRateLimiters(redisClient) {
     store: store('rl:api:'),
   });
 
-  return { authLimiter, aiLimiter, apiLimiter };
+  return { authLimiter, apiLimiter };
 }

@@ -35,7 +35,7 @@ The monorepo has two independently deployable apps:
 | Database | MongoDB + Mongoose |
 | Cache / Pub-Sub | Redis (`redis` + `ioredis`) |
 | Background jobs | BullMQ + ioredis |
-| AI | Google Gemini API (`@google/generative-ai`) |
+| AI | ~~Google Gemini API~~ (removed) |
 | Auth | `bcryptjs`, `jsonwebtoken`, `google-auth-library` |
 | Rate limiting | `express-rate-limit` + `rate-limit-redis` |
 | Media | Cloudinary + multer |
@@ -69,8 +69,6 @@ graph TD
         Redis[(Redis<br/>pub/sub · board-meta cache · BullMQ queues · rate-limit counters)]
     end
 
-    Gemini[Google Gemini API]
-
     Client -- REST/HTTPS --> API
     YjsClient <-- WebSocket /yjs/boardId --> WSS
     Awareness <--> WSS
@@ -86,7 +84,6 @@ graph TD
     API --> Redis
     PublishWorker <--> Redis
     PublishWorker --> MongoDB
-    API -- HTTPS --> Gemini
 ```
 
 ---
@@ -117,10 +114,9 @@ The realtime core. A custom WebSocket server that implements the full `y-protoco
      - `SyncStep1` / `SyncStep2` — always served (read path)
      - `Update` — applied **only** for write-capable roles (`editor`, `commenter` for allowed ops); viewers' bytes are discarded before `Y.applyUpdate` is called
    - `MSG_AWARENESS (1)` — relayed to all other room peers **and** published to `awareness:<boardId>` on Redis for cross-instance relay
-8. **Update validation (`applyClientUpdate`)** — write-path updates are not handed to `Y.applyUpdate` blindly. Each is guarded by three checks first, so a buggy or hostile client can't stall the event loop or crash the process:
+8. **Update validation (`applyClientUpdate`)** — write-path updates are not handed to `Y.applyUpdate` blindly. Each is guarded by two checks first, so a buggy or hostile client can't stall the event loop or crash the process:
    - **Size cap** — updates larger than `MAX_UPDATE_BYTES` (512 KB) are dropped before parsing.
-   - **Pure-replay rejection** — the update's embedded state vector (`Y.encodeStateVectorFromUpdate`) is compared against the doc's current state vector (`Y.encodeStateVector`). If every client clock in the update is already covered, the update adds nothing and is dropped. The check is O(#clients), not O(document size).
-   - **Malformed-payload isolation** — both the replay inspection and `Y.applyUpdate` are wrapped in try/catch; a corrupt frame is logged and dropped rather than taking down the server for every peer.
+   - **Malformed-payload isolation** — `Y.applyUpdate` is wrapped in try/catch; a corrupt frame is logged and dropped rather than taking down the server for every peer. Pure-replay updates (already-seen operations) are handled natively by Yjs — re-applying them is idempotent via the state vector mechanism.
 9. **Cross-instance fanout** — after applying an update locally, publishes the raw binary to `yjs:<boardId>` on Redis. Subscriber handler on each instance applies the update to its local Y.Doc copy and rebroadcasts to its local peers.
 10. **Disconnect cleanup** — removes the connection from `DocumentManager`, evicts only that connection's `clientId` from the Awareness instance, broadcasts the removal to remaining local peers, and publishes it to `awareness:<boardId>` on Redis so other instances drop the departed peer's ghost cursor.
 
@@ -221,9 +217,8 @@ Three `express-rate-limit` instances backed by a shared `RedisStore`:
 
 | Tier | Limit | Applied to |
 |---|---|---|
-| Auth | 50 req / 15 min | `/api/auth/*` |
-| AI | 40 req / 15 min | `/api/ai/*` |
-| General | 300 req / 15 min | All other API routes |
+| Auth | 50 req / 15 min | `/users/*` |
+| General | 300 req / 15 min | `/boards/*`, `/workspaces/*`, `/publish/*` |
 
 Counters live in Redis, not process memory, so the limit holds globally across N instances. The server runs with `trust proxy: 1` so rate-limit keys use the real client IP behind the load balancer.
 
@@ -233,9 +228,11 @@ Counters live in Redis, not process memory, so the limit holds globally across N
 
 Three composable primitives used to harden Gemini API calls:
 
+These utilities exist in `backend/utils/resilience.js` but are **not currently wired to any active route** — the AI feature that used them has been removed. The code remains as reference.
+
 - **`withTimeout(promise, ms)`** — rejects after `ms` milliseconds with a transient-tagged error.
 - **`retry(fn, { attempts, baseDelayMs })`** — exponential backoff, retries only on transient errors (5xx, network, timeout). Permanent errors (4xx) propagate immediately.
-- **`CircuitBreaker`** — three-state machine:
+- **`CircuitBreaker`** — three-state machine (in-memory, per-process):
   - `CLOSED` → normal operation; failure counter incremented on each transient error
   - `OPEN` → after 5 consecutive failures; all calls rejected immediately (fail-fast)
   - `HALF_OPEN` → after 30 s cooldown; one trial request allowed. Success → `CLOSED`; failure → re-`OPEN`
@@ -313,7 +310,7 @@ Three-pane layout: page sidebar + top utility bar + SVG canvas. Resolves role-ba
 
 | Permission | Condition |
 |---|---|
-| `editable` | role is `owner` or `editor` |
+| `editable` | role is `editor` (owners resolve to `'editor'` too) |
 | `canComment` | role exists and is not `viewer` |
 | `canVote` | role exists and is not `viewer` |
 | `canShare` | role is `owner` only |
