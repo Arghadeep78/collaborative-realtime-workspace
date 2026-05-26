@@ -167,6 +167,8 @@ export default function SlideCanvas({
   removePollVote,
   canVote,
   canComment,
+  comments,
+  onOpenComments,
   boardId,
   // Kanban assignee options
   members,
@@ -535,6 +537,8 @@ export default function SlideCanvas({
                   removePollVote={removePollVote}
                   canVote={canVote}
                   canComment={canComment}
+                  commentCount={Object.keys(comments?.[el.id] || {}).length}
+                  onOpenComments={onOpenComments}
                   boardId={boardId}
                   members={members}
                   activeTool={activeTool}

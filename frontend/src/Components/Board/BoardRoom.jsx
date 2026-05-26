@@ -64,7 +64,7 @@ export default function BoardRoom() {
   const { isDark, toggleTheme } = useTheme();
   const userData = useMemo(() => JSON.parse(localStorage.getItem('userData') || '{}'), []);
 
-  const { ydoc, provider, synced } = useYjsBoard(boardId);
+  const { ydoc, provider, synced, liveRole, accessRevoked } = useYjsBoard(boardId);
   const {
     pages,
     elements,
@@ -209,7 +209,11 @@ export default function BoardRoom() {
   useEffect(() => {
     if (!boardId) return;
     const token = localStorage.getItem('token');
-    fetch(`${BACKEND_URL}/boards/${boardId}`, {
+    // Forward any signed share token from the URL so the backend can resolve the
+    // role it grants (raises a link visitor above the public viewer baseline).
+    const st = new URLSearchParams(window.location.search).get('st');
+    const url = `${BACKEND_URL}/boards/${boardId}${st ? `?st=${encodeURIComponent(st)}` : ''}`;
+    fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(async (r) => {
@@ -241,6 +245,34 @@ export default function BoardRoom() {
         navigate('/dashboard');
       });
   }, [boardId, navigate]);
+
+  // ── Live role changes (mid-session demotion / promotion) ──────────────────
+  // The server re-resolves a peer's role the instant the owner changes their
+  // access and pushes the new role over the WS. Apply it so the toolbar locks
+  // (demotion) or unlocks (promotion) immediately, without a reload. The server
+  // sends the WS-flavoured role where the owner is 'editor'; never downgrade a
+  // local 'owner' (it shares the same edit rights and keeps the manage-access
+  // controls the owner still needs).
+  useEffect(() => {
+    if (!liveRole) return;
+    setRole((prev) => {
+      if (prev === 'owner') return prev;
+      if (prev === liveRole) return prev;
+      const verb = liveRole === 'viewer' || (prev !== 'viewer' && liveRole === 'commenter')
+        ? 'reduced' : 'updated';
+      toast(`Your access to this board was ${verb} to ${liveRole}.`, { id: 'role-change-toast', icon: '🔒' });
+      return liveRole;
+    });
+  }, [liveRole]);
+
+  // ── Access revoked mid-session ────────────────────────────────────────────
+  // The server closed our socket because we lost all access (removed as a
+  // collaborator, board unpublished, etc.). Route back to the dashboard.
+  useEffect(() => {
+    if (!accessRevoked) return;
+    toast.error('Your access to this board was revoked.', { id: 'access-revoked-toast' });
+    navigate('/dashboard');
+  }, [accessRevoked, navigate]);
 
   // ── Live title sync via ySystem map ──────────────────────────────────────
   // Observe remote title changes so renaming propagates to every open tab.
@@ -487,8 +519,15 @@ export default function BoardRoom() {
   }, [commentsForId, addComment, userData.name, userData.email]);
 
   const handleRemoveComment = useCallback((commentId) => {
-    if (commentsForId) removeComment(commentsForId, commentId);
-  }, [commentsForId, removeComment]);
+    if (!commentsForId) return;
+    // The owner may delete anyone's comment; everyone else may only delete
+    // their own. Enforced here (not just in the dialog's button visibility) so
+    // the rule holds for any caller path.
+    const comment = comments[commentsForId]?.[commentId];
+    const mine = comment?.authorEmail && comment.authorEmail === userData.email;
+    if (role !== 'owner' && !mine) return;
+    removeComment(commentsForId, commentId);
+  }, [commentsForId, comments, removeComment, role, userData.email]);
 
   // A short human label for the comment-dialog header, per element type.
   const commentTargetTitle = useMemo(() => {
@@ -599,9 +638,20 @@ export default function BoardRoom() {
         const toCopy = [...selectedIds]
           .map(id => elements[id])
           .filter(Boolean);
-        if (toCopy.length > 0) {
-          clipboardRef.current = toCopy;
-          toast.success(`Copied ${toCopy.length} element${toCopy.length === 1 ? '' : 's'}`);
+        if (toCopy.length > 0) clipboardRef.current = toCopy;
+        return;
+      }
+      // Cut selected elements — copy to clipboard, then delete
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'x' || e.key === 'X')) {
+        if (!editable || selectedIds.size === 0) return;
+        e.preventDefault();
+        const toCut = [...selectedIds]
+          .map(id => elements[id])
+          .filter(Boolean);
+        if (toCut.length > 0) {
+          clipboardRef.current = toCut;
+          toCut.forEach(el => handleDelete(el.id));
+          setSelectedIds(new Set());
         }
         return;
       }
@@ -634,10 +684,7 @@ export default function BoardRoom() {
           });
           if (newId) { idMap[el.id] = newId; newIds.push(newId); }
         });
-        if (newIds.length > 0) {
-          setSelectedIds(new Set(newIds));
-          toast.success(`Pasted ${newIds.length} element${newIds.length === 1 ? '' : 's'}`);
-        }
+        if (newIds.length > 0) setSelectedIds(new Set(newIds));
         return;
       }
       // Layer shortcuts: Cmd/Ctrl+] = bring forward, Cmd/Ctrl+[ = send backward
@@ -863,6 +910,8 @@ export default function BoardRoom() {
             removePollVote={removePollVote}
             canVote={canVote}
             canComment={canComment}
+            comments={comments}
+            onOpenComments={setCommentsForId}
             boardId={boardId}
             members={members}
             photoMap={photoMap}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { UI, TOOLS } from './boardConstants.js';
 import { getThemeColor } from './theme/themeUtils';
+import Avatar from '../common/Avatar.jsx';
 
 const BG_PATTERNS = [
   { id: 'dots', label: 'Dots', preview: 'radial-gradient(circle, rgba(15,23,42,0.25) 1.5px, transparent 1.5px)', darkPreview: 'radial-gradient(circle, rgba(255,255,255,0.2) 1.5px, transparent 1.5px)', size: '12px 12px' },
@@ -214,16 +215,14 @@ function PeersMenu({ peers, board }) {
         title="View collaborators"
       >
         {peers.slice(0, 3).map((peer, i) => (
-          <div
-            key={peer.clientId}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold border-2 border-surface shadow-sm overflow-hidden z-10"
-            style={{ backgroundColor: peer.color, zIndex: 10 - i }}
-          >
-            {peer.profilePic ? (
-              <img src={peer.profilePic} alt={peer.name} className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = peer.name?.[0]?.toUpperCase() || '?'; }} />
-            ) : (
-              peer.name?.[0]?.toUpperCase() || '?'
-            )}
+          <div key={peer.clientId} className="relative" style={{ zIndex: 10 - i }}>
+            <Avatar
+              email={peer.email}
+              name={peer.name}
+              src={peer.profilePic}
+              color={peer.color}
+              size={28}
+            />
           </div>
         ))}
         {peers.length > 3 && (
@@ -246,16 +245,7 @@ function PeersMenu({ peers, board }) {
             <div className="max-h-60 overflow-y-auto px-2 py-2 flex flex-col gap-1">
               {peers.map((peer) => (
                 <div key={peer.clientId} className="flex items-center gap-3 p-2 rounded-xl hover:bg-hover transition">
-                  <div
-                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden"
-                    style={{ backgroundColor: peer.color }}
-                  >
-                    {peer.profilePic ? (
-                      <img src={peer.profilePic} alt={peer.name} className="w-full h-full object-cover" crossOrigin="anonymous" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = peer.name?.[0]?.toUpperCase() || '?'; }} />
-                    ) : (
-                      peer.name?.[0]?.toUpperCase() || '?'
-                    )}
-                  </div>
+                  <Avatar email={peer.email} name={peer.name} src={peer.profilePic} color={peer.color} size={32} borderClass="border-transparent" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-content truncate">{peer.name}</p>
                     <p className="text-[11px] text-content-muted capitalize">{getRole(peer.email)}</p>
@@ -425,7 +415,7 @@ export default function TopUtilityBar({
           </button>
         )}
         {role === 'viewer' && <span className={UI.chip}>View Only</span>}
-        {role === 'commenter' && <span className={UI.chip}>Polls Only</span>}
+        {role === 'commenter' && <span className={UI.chip}>Comments Only</span>}
       </div>
 
       {/* ── Centre: element toolbar — inline on lg+, full-width row below on smaller ── */}
@@ -458,13 +448,14 @@ export default function TopUtilityBar({
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-1 bg-emerald-50/80 dark:bg-emerald-900/30 pl-1.5 pr-1 py-1 rounded-full border border-emerald-100/80 dark:border-emerald-800/50 shadow-sm hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 transition"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-[11px] font-bold overflow-hidden">
-              {(userData.profilePic || userData.profilePicture) ? (
-                <img src={userData.profilePic || userData.profilePicture} alt={userData.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'; }} />
-              ) : (
-                userData.name?.[0]?.toUpperCase() || userData.email?.[0]?.toUpperCase() || '?'
-              )}
-            </div>
+            <Avatar
+              email={userData.email}
+              name={userData.name}
+              src={userData.profilePic || userData.profilePicture}
+              color="#10b981"
+              size={24}
+              borderClass="border-transparent"
+            />
             <svg className={`w-3 h-3 text-content-muted transition-transform ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>

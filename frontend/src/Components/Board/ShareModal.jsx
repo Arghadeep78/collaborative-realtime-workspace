@@ -1,15 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
-import { Globe, Lock, Copy, X, ExternalLink } from 'lucide-react';
+import { Globe, Lock, Copy, X, Crown, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ManageBoardAccessModal from './ManageBoardAccessModal.jsx';
+import Avatar from '../common/Avatar.jsx';
+
+const ROLES = ['editor', 'commenter', 'viewer'];
+const roleLabel = (r) => r.charAt(0).toUpperCase() + r.slice(1);
+
+const roleColor = (r) => {
+  if (r === 'owner')     return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20';
+  if (r === 'editor')    return 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+  if (r === 'commenter') return 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+  return 'text-slate-500 dark:text-slate-400 bg-slate-500/10 border-slate-500/20';
+};
+
+const roleIcon = (r) => {
+  if (r === 'owner')     return <Crown size={13} />;
+  if (r === 'editor')    return <Pencil size={13} />;
+  if (r === 'commenter') return <MessageSquare size={13} />;
+  return <Eye size={13} />;
+};
 
 export default function ShareModal({ boardId, board, workspace, onClose }) {
-  const [showManageBoard, setShowManageBoard] = useState(false);
-  const userEmail = (() => { try { return JSON.parse(localStorage.getItem('userData') || '{}').email; } catch { return null; } })();
-  const ownsWorkspace = workspace?.id && workspace?.owner === userEmail;
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('editor');
+
+  // Merged access data (workspace members + board collaborators), loaded like ManageBoardAccessModal did.
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [owner, setOwner]   = useState({ email: board?.owner, name: board?.owner, profilePicture: '' });
+  const [members, setMembers] = useState([]); // workspace members (viewer baseline)
 
   const [isPublic, setIsPublic]       = useState(board?.isPublic || false);
   const [publicRole, setPublicRole]   = useState(board?.publicRole || 'viewer');
@@ -23,13 +42,119 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
 
   const [collaborators, setCollabs]   = useState(board?.collaborators || []);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [linkRole, setLinkRole]       = useState('editor'); // role baked into the copied link
+  const [copying, setCopying]         = useState(false);
 
   const token = () => localStorage.getItem('token');
-  const shareUrl = window.location.href;
+  // Strip any existing share token so re-copying a different role doesn't stack params.
+  const baseUrl = (() => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete('st');
+    return u.toString();
+  })();
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
-    toast.success('Link copied to clipboard');
+  // Load workspace members (viewer baseline) + the board's current collaborators.
+  // We always re-fetch the board so people who joined via a share link (recorded
+  // server-side on connect) show up even when the board has no workspace and even
+  // if the `board` prop is stale from an earlier page load.
+  const loadAccess = useCallback(async () => {
+    setAccessLoading(true);
+    try {
+      if (workspace?.id) {
+        const res = await fetch(`${BACKEND_URL}/workspaces/${workspace.id}/manage`, {
+          headers: { Authorization: `Bearer ${token()}` },
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Failed to load access');
+        const ws = d.workspace || {};
+        setOwner({ email: ws.owner, name: ws.ownerName || ws.owner, profilePicture: ws.ownerProfilePicture || '' });
+        setMembers(ws.members || []);
+        const b = (d.boards || []).find((x) => x.id === boardId);
+        if (b?.collaborators) setCollabs(b.collaborators);
+      } else {
+        // No workspace: pull the latest collaborators straight from the board.
+        const res = await fetch(`${BACKEND_URL}/boards/${boardId}`, {
+          headers: { Authorization: `Bearer ${token()}` },
+        });
+        const b = await res.json();
+        if (!res.ok) throw new Error(b.error || 'Failed to load access');
+        if (Array.isArray(b.collaborators)) setCollabs(b.collaborators);
+      }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setAccessLoading(false);
+    }
+  }, [workspace?.id, boardId]);
+
+  useEffect(() => { loadAccess(); }, [loadAccess]);
+
+  const memberEmails = new Set(members.map((m) => m.email));
+
+  // Merge workspace members (viewer baseline) with explicit collaborators.
+  const participants = (() => {
+    const map = new Map();
+    members.forEach((m) =>
+      map.set(m.email, { email: m.email, name: m.name || m.email, profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
+    );
+    collaborators.forEach((c) =>
+      map.set(c.email, { email: c.email, name: c.name || c.email, profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
+    );
+    return [...map.values()];
+  })();
+
+  const setRole = async (email, role) => {
+    const isMember = memberEmails.has(email);
+    try {
+      if (role === 'viewer' && isMember) {
+        // Downgrade back to workspace baseline — just unshare the board entry.
+        const res = await fetch(`${BACKEND_URL}/boards/unshare/${boardId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error);
+        setCollabs(d.collaborators || []);
+      } else {
+        const res = await fetch(`${BACKEND_URL}/boards/share/${boardId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, role }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error);
+        setCollabs(d.collaborators || []);
+      }
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  // Mint a signed share token for the chosen role and copy a link that carries
+  // it (`?st=<token>`). The bare link still grants the viewer baseline; the
+  // token raises the opener to the selected role. Links expire after 7 days.
+  const copyLink = async () => {
+    setCopying(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/boards/share-token/${boardId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: linkRole }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to create link');
+      const url = new URL(baseUrl);
+      url.searchParams.set('st', d.token);
+      await navigator.clipboard.writeText(url.toString());
+      // Minting a link turns on public viewer access — reflect it in the UI.
+      setIsPublic(true);
+      toast.success(`${roleLabel(linkRole)} link copied — valid for 7 days`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setCopying(false);
+    }
   };
 
   const handleInvite = async () => {
@@ -142,47 +267,88 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
           </div>
 
           {/* People with access */}
-          <div className="space-y-4">
+          <div className="space-y-2">
             <h3 className="text-sm font-semibold text-content">People with access</h3>
-            <div className="max-h-50 overflow-y-auto space-y-3 pr-2">
-              {/* Owner */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
-                    {board?.owner?.[0]?.toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-content text-sm font-medium">{board?.owner}</p>
-                    <p className="text-content-muted text-xs">Owner</p>
-                  </div>
-                </div>
+            {accessLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="w-7 h-7 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin" />
               </div>
-
-              {/* Collaborators */}
-              {collaborators.map(c => (
-                <div key={c.email} className="flex items-center justify-between group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
-                      {c.email?.[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-content text-sm font-medium">{c.name || c.email}</p>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                {/* Owner row */}
+                <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {owner?.profilePicture ? (
+                      <img src={owner.profilePicture} alt={owner.name} className="w-9 h-9 rounded-xl object-cover shadow-sm shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm bg-linear-to-br from-amber-400 to-amber-600 shrink-0">
+                        {owner?.email?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-content truncate">{owner?.name || owner?.email}</p>
+                      <p className="text-[11px] text-content-subtle">Board owner</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-content-muted text-sm font-medium bg-muted px-2.5 py-1 rounded-md">
-                      {c.role.charAt(0).toUpperCase() + c.role.slice(1)}
-                    </span>
-                    <button
-                      onClick={() => handleRemove(c.email)}
-                      className="text-content-subtle hover:text-red-500 text-sm px-2 opacity-0 group-hover:opacity-100 transition-all font-medium cursor-pointer"
-                    >
-                      Remove
-                    </button>
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide ${roleColor('owner')}`}>
+                    {roleIcon('owner')}
+                    Owner
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* All other participants */}
+                {participants.map((p) => (
+                  <div key={p.email} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-surface border border-edge-subtle hover:border-indigo-500/20 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar email={p.email} name={p.name} src={p.profilePicture} size={36} shapeClass="rounded-xl" color="#475569" borderClass="border-transparent" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-content truncate">{p.name}</p>
+                        <p className="text-[11px] text-content-subtle">
+                          {p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative">
+                        <select
+                          value={p.role}
+                          onChange={(e) => setRole(p.email, e.target.value)}
+                          className={`appearance-none border rounded-lg pl-3 pr-7 py-1.5 text-xs font-bold tracking-wide uppercase focus:outline-none cursor-pointer transition-all ${roleColor(p.role)}`}
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r} value={r} className="text-black dark:text-white bg-white dark:bg-gray-800">
+                              {roleLabel(r)}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </div>
+                      </div>
+
+                      {p.source === 'board' && (
+                        <button
+                          onClick={() => handleRemove(p.email)}
+                          className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                          title="Remove from board"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {participants.length === 0 && (
+                  <p className="text-center text-sm text-content-subtle py-8">
+                    No members or collaborators on this board
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* General Access */}
@@ -217,22 +383,31 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         {/* Footer */}
         <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <select
+                value={linkRole}
+                onChange={(e) => setLinkRole(e.target.value)}
+                className="appearance-none bg-surface border border-edge-strong rounded-xl pl-3 pr-8 py-2.5 text-content text-sm font-semibold focus:outline-none shadow-sm cursor-pointer"
+                title="Access granted by the copied link"
+              >
+                <option value="viewer">Viewer link</option>
+                <option value="commenter">Commenter link</option>
+                <option value="editor">Editor link</option>
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
             <button
               onClick={copyLink}
-              className="flex items-center gap-2 px-5 py-2.5 bg-surface border border-edge-strong hover:bg-hover hover:border-edge-strong text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+              disabled={copying}
+              className="flex items-center gap-2 px-5 py-2.5 bg-surface border border-edge-strong hover:bg-hover hover:border-edge-strong text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Copy size={16} />
-              Copy link
+              {copying ? 'Copying…' : 'Copy link'}
             </button>
-            {ownsWorkspace && (
-              <button
-                onClick={() => setShowManageBoard(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-surface border border-edge-strong hover:bg-hover text-content text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-              >
-                <ExternalLink size={16} />
-                <span className="hidden sm:inline">Manage access</span>
-              </button>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -242,16 +417,6 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
           </button>
         </div>
       </div>
-
-      {showManageBoard && (
-        <ManageBoardAccessModal
-          boardId={boardId}
-          boardTitle={board?.title}
-          workspaceId={workspace?.id}
-          onClose={() => setShowManageBoard(false)}
-          onBack={() => setShowManageBoard(false)}
-        />
-      )}
     </div>
   );
 }

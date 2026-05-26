@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { X, Trash2, Users, ChevronRight, ChevronDown, Crown, Eye, MessageSquare, Pencil, UserMinus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Avatar from '../common/Avatar.jsx';
 
 const ROLES = ['owner', 'editor', 'commenter', 'viewer'];
 
@@ -162,14 +163,15 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
     return [...map.values()];
   };
 
-  const Avatar = ({ email, tone = 'slate' }) => (
-    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-extrabold shadow-sm shrink-0 ${
-      tone === 'indigo'
-        ? 'bg-linear-to-br from-indigo-500 to-purple-600 shadow-indigo-500/30'
-        : 'bg-linear-to-br from-slate-600 to-slate-800 dark:from-slate-700 dark:to-slate-900 shadow-slate-500/20'
-    }`}>
-      {email?.[0]?.toUpperCase()}
-    </div>
+  const MemberAvatar = ({ email, name, tone = 'slate' }) => (
+    <Avatar
+      email={email}
+      name={name || email}
+      size={36}
+      shapeClass="rounded-xl"
+      color={tone === 'indigo' ? '#8b5cf6' : '#475569'}
+      borderClass="border-transparent"
+    />
   );
 
   return (
@@ -240,17 +242,13 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                   <div className="flex flex-wrap gap-2 mt-3">
                     {/* Owner pill */}
                     <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1">
-                      <div className="w-5 h-5 rounded-full bg-linear-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-[10px] font-bold">
-                        {data?.workspace?.owner?.[0]?.toUpperCase()}
-                      </div>
+                      <Avatar email={data?.workspace?.owner} name={data?.workspace?.owner} size={20} color="#d97706" borderClass="border-transparent" />
                       <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{data?.workspace?.owner}</span>
                       <Crown size={11} className="text-amber-500 ml-0.5" />
                     </div>
                     {members.map((m) => (
                       <div key={m.email} className="group flex items-center gap-1.5 bg-surface border border-edge-subtle rounded-full pl-1.5 pr-2 py-1 hover:border-red-400/50 transition-colors">
-                        <div className="w-5 h-5 rounded-full bg-linear-to-br from-slate-500 to-slate-700 flex items-center justify-center text-white text-[10px] font-bold">
-                          {m.email?.[0]?.toUpperCase()}
-                        </div>
+                        <Avatar email={m.email} name={m.name || m.email} size={20} color="#64748b" borderClass="border-transparent" />
                         <span className="text-xs font-medium text-content">{m.name || m.email}</span>
                         <button
                           onClick={() => removeMember(m.email)}
@@ -311,7 +309,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                           {/* Owner row (always first, not editable) */}
                           <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
                             <div className="flex items-center gap-3 min-w-0">
-                              <Avatar email={data?.workspace?.owner} tone="indigo" />
+                              <MemberAvatar email={data?.workspace?.owner} tone="indigo" />
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold text-content truncate">{data?.workspace?.owner}</p>
                                 <p className="text-[11px] text-content-subtle">Board owner</p>
@@ -327,7 +325,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                           {participants.map((p) => (
                             <div key={p.email} className="flex items-center justify-between py-2 px-3 rounded-xl bg-surface border border-edge-subtle hover:border-indigo-500/20 transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
-                                <Avatar email={p.email} />
+                                <MemberAvatar email={p.email} name={p.name} />
                                 <div className="min-w-0">
                                   <p className="text-sm font-medium text-content truncate">{p.name}</p>
                                   <p className="text-[11px] text-content-subtle">

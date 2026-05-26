@@ -4,6 +4,8 @@ import { BarChart2, CheckCircle2, ClipboardList, Plus, Trash2, Users, X } from '
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
 import { POLL_BG_COLORS } from '../theme/colorMap.js';
+import Avatar from '../../common/Avatar.jsx';
+import { primePhotoCache } from '../../../hooks/usePhotoResolver.js';
 
 const OPTION_COLORS = [
   { bar: 'bg-blue-500/20 dark:bg-blue-500/30',    fill: 'bg-blue-500',    active: 'border-blue-500 ring-1 ring-blue-500',    text: 'text-blue-600 dark:text-blue-400' },
@@ -171,32 +173,6 @@ function PollSetupModal({ initialProps, isDark, onConfirm, onCancel }) {
   );
 }
 
-// ── Voter avatar ──────────────────────────────────────────────────────────────
-
-function VoterAvatar({ voter, size = 24, borderClass }) {
-  const [imgError, setImgError] = useState(false);
-  const initial = voter.name?.[0]?.toUpperCase() || '?';
-  if (voter.photoURL && !imgError) {
-    return (
-      <img
-        src={voter.photoURL} alt={voter.name} title={voter.name}
-        onError={() => setImgError(true)}
-        className={`rounded-full object-cover border-2 ${borderClass} shadow-sm`}
-        style={{ width: size, height: size, minWidth: size }}
-      />
-    );
-  }
-  return (
-    <div
-      title={voter.name}
-      className={`rounded-full flex items-center justify-center text-white font-bold border-2 ${borderClass} shadow-sm`}
-      style={{ width: size, height: size, minWidth: size, backgroundColor: voter.color || '#94a3b8', fontSize: Math.round(size * 0.42) }}
-    >
-      {initial}
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PollBlock({
@@ -218,6 +194,13 @@ export default function PollBlock({
 
   const [showSetup, setShowSetup] = useState(false);
 
+  // When double clicking the poll (editing = true triggers), show the setup modal.
+  useEffect(() => {
+    if (editing && editable) {
+      setShowSetup(true);
+    }
+  }, [editing, editable]);
+
   // Scale font sizes based on element width to fix visibility and squishing issues
   const BASE_W = 320;
   const textScale = Math.min(2.5, Math.max(0.5, element.w ? (element.w / BASE_W) : 1));
@@ -236,17 +219,14 @@ export default function PollBlock({
   const myName     = userData.name     || 'Anonymous';
   const myPhotoURL = userData.profilePic || userData.profilePicture || userData.photoURL || null;
 
-  const resolvedPhotoMap = useMemo(() => {
-    const map = { ...photoMap };
-    if (myEmail && myPhotoURL) map[myEmail] = myPhotoURL;
-    peers.forEach(p => { if (p.email && p.profilePic) map[p.email] = p.profilePic; });
-    return map;
+  // Seed the shared photo cache with pictures we already trust; everything else
+  // resolves by email through <Avatar/>. Backend stays authoritative.
+  useEffect(() => {
+    const seed = { ...photoMap };
+    if (myEmail && myPhotoURL) seed[myEmail] = myPhotoURL;
+    peers.forEach(p => { if (p.email && p.profilePic) seed[p.email] = p.profilePic; });
+    primePhotoCache(seed);
   }, [peers, photoMap, myEmail, myPhotoURL]);
-
-  const enrichVoter = (voter) => {
-    const photo = resolvedPhotoMap[voter.email];
-    return photo ? { ...voter, photoURL: photo } : voter;
-  };
 
   const [voterPopup, setVoterPopup] = useState(null);
   const containerRef = useRef(null);
@@ -280,10 +260,9 @@ export default function PollBlock({
     const grouped = {};
     Object.values(pollVotes).forEach(v => {
       if (!grouped[v.optionId]) grouped[v.optionId] = [];
-      grouped[v.optionId].push(enrichVoter(v));
+      grouped[v.optionId].push(v);
     });
     return grouped;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pollVotes]);
 
   const counts = options.map((o) => optionsVotes[o.id]?.length || 0);
@@ -316,25 +295,12 @@ export default function PollBlock({
     }
   };
 
-  const setOptionLabel = (id, label) =>
-    onEditProps({ options: options.map((o) => (o.id === id ? { ...o, label } : o)) });
-  const addOption = () =>
-    onEditProps({ options: [...options, { id: `o${Date.now().toString(36)}`, label: `Option ${options.length + 1}` }] });
-  const removeOption = (id) =>
-    onEditProps({ options: options.filter((o) => o.id !== id) });
-
-  const questionRef = useRef(null);
-  useEffect(() => { if (editing && questionRef.current) questionRef.current.focus(); }, [editing]);
-
   const hasColor      = !!props.bgColor;
   const displayBgColor = getThemeColor(props.bgColor, isDark);
 
   const textMain      = hasColor ? (isDark ? 'text-slate-100' : 'text-slate-900') : 'text-content';
   const textSub       = hasColor ? (isDark ? 'text-slate-300' : 'text-slate-700') : 'text-content';
   const textMuted     = hasColor ? (isDark ? 'text-slate-400' : 'text-slate-600') : 'text-content-muted';
-  const inputBg       = hasColor
-    ? (isDark ? 'bg-black/20 border-slate-700 text-slate-100 placeholder:text-slate-500' : 'bg-white/60 border-slate-300 text-slate-900 placeholder:text-slate-500')
-    : 'bg-muted border-edge text-content';
   const btnBase       = hasColor
     ? (isDark ? 'border-slate-700 hover:border-slate-500 bg-black/40' : 'border-slate-300 hover:border-slate-400 bg-white/50')
     : 'border-edge hover:border-edge-strong bg-surface';
@@ -395,22 +361,10 @@ export default function PollBlock({
             <BarChart2 className="text-white w-3.5 h-3.5" />
           </div>
           <div className="flex-1 min-w-0">
-            {editing ? (
-              <input
-                ref={questionRef}
-                value={props.question}
-                onChange={(e) => onEditProps({ question: e.target.value })}
-                onPointerDown={(e) => e.stopPropagation()}
-                placeholder="Ask a question…"
-                className={`w-full bg-transparent outline-none font-bold ${textMain} placeholder:text-content-subtle`}
-                style={{ fontSize: fsHeader }}
-              />
-            ) : (
-              <div className={`font-bold ${textMain} leading-snug break-words`} style={{ fontSize: fsHeader }}>
-                {props.question || <span className="text-content-subtle font-semibold italic">Untitled poll</span>}
-              </div>
-            )}
-            {props.multiChoice && !editing && (
+            <div className={`font-bold ${textMain} leading-snug break-words`} style={{ fontSize: fsHeader }}>
+              {props.question || <span className="text-content-subtle font-semibold italic">Untitled poll</span>}
+            </div>
+            {props.multiChoice && (
               <div className={`text-[10px] font-semibold mt-0.5 ${textMuted}`}>Multi-choice</div>
             )}
           </div>
@@ -420,7 +374,6 @@ export default function PollBlock({
         <div
           className="flex-1 flex flex-col overflow-y-auto pr-0.5 z-10"
           style={{ gap: 8 }}
-          onPointerDown={(e) => editing && e.stopPropagation()}
         >
           {options.map((opt, i) => {
             const pct   = total ? Math.round((counts[i] / total) * 100) : 0;
@@ -429,37 +382,18 @@ export default function PollBlock({
             const votersForOption = optionsVotes[opt.id] || [];
             const vCount = votersForOption.length;
 
-            if (editing) {
-              return (
-                <div key={opt.id} className="flex items-center gap-2 group shrink-0 min-w-0">
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${theme.fill}`} />
-                  <input
-                    value={opt.label}
-                    onChange={(e) => setOptionLabel(opt.id, e.target.value)}
-                    className={`flex-1 min-w-0 border focus:border-edge-strong rounded-lg outline-none transition-colors px-2.5 py-1.5 ${inputBg}`}
-                    style={{ fontSize: fsOption }}
-                  />
-                  {options.length > 2 && (
-                    <button onClick={() => removeOption(opt.id)} className="text-content-subtle hover:text-rose-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              );
-            }
-
             return (
               <button
                 key={opt.id}
                 onClick={(e) => { e.stopPropagation(); castVote(opt.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 className={`relative w-full text-left rounded-xl overflow-hidden border transition-all duration-200 group flex items-center shrink-0 min-w-0 ${
-                  mine ? theme.active + (hasColor ? ' bg-white/70' : ' bg-muted') : btnBase
+                  mine ? theme.active + (hasColor ? (isDark ? ' bg-white/10' : ' bg-white/70') : ' bg-muted') : btnBase
                 }`}
               >
                 {/* Progress bar */}
                 <div
-                  className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out ${mine ? theme.bar : (hasColor ? 'bg-white/40' : 'bg-muted')}`}
+                  className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out ${mine ? theme.bar : (hasColor ? (isDark ? 'bg-white/20' : 'bg-black/10') : 'bg-muted')}`}
                   style={{ width: `${pct}%` }}
                 />
                 {/* Row */}
@@ -498,8 +432,8 @@ export default function PollBlock({
                           voterPopup?.optId === opt.id
                             ? `${theme.text} ring-1 ring-current`
                             : mine
-                              ? `${theme.text} bg-white/50 hover:bg-white/70`
-                              : `${textMuted} ${hasColor ? 'bg-white/40 hover:bg-white/60' : 'bg-muted hover:bg-hover'}`
+                              ? `${theme.text} ${isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-white/50 hover:bg-white/70'}`
+                              : `${textMuted} ${hasColor ? (isDark ? 'bg-white/20 hover:bg-white/30' : 'bg-black/10 hover:bg-black/20') : 'bg-muted hover:bg-hover'}`
                         }`}
                         style={{ fontSize: 11 }}
                         title="See who voted"
@@ -521,53 +455,19 @@ export default function PollBlock({
             );
           })}
 
-          {editing && editable && (
-            <div className="flex flex-col gap-2 mt-1.5 shrink-0">
-              <button
-                onClick={addOption}
-                className={`flex w-max items-center gap-1.5 text-sm font-semibold self-start px-2 py-1 rounded transition-colors ${
-                  hasColor ? 'text-slate-700 hover:bg-white/40' : 'text-content-muted hover:text-content hover:bg-hover'
-                }`}
-              >
-                <Plus className="w-4 h-4" /> Add another option
-              </button>
-
-              <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 border-t ${footerBorder}`}>
-                {/* Background color */}
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xs font-medium ${textMuted}`}>Color:</span>
-                  {POLL_BG_COLORS.map((c) => (
-                    <button
-                      key={c || 'default'}
-                      onClick={() => onEditProps({ bgColor: c })}
-                      className={`w-5 h-5 rounded-full border transition-all ${
-                        props.bgColor === c
-                          ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 border-transparent'
-                          : 'border-edge-strong hover:scale-110'
-                      }`}
-                      style={{ backgroundColor: c ? getThemeColor(c, isDark) : 'transparent' }}
-                    >
-                      {!c && <div className="w-full h-full rounded-full bg-surface border border-edge" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
-        {!editing && (
-          <div className={`border-t flex items-center justify-between text-xs font-medium z-10 shrink-0 pt-2 mt-1 ${footerBorder} ${textMuted}`}>
-            <div className="flex items-center gap-1.5">
-              {(() => {
+        <div className={`border-t flex items-center justify-between text-xs font-medium z-10 shrink-0 pt-2 mt-1 ${footerBorder} ${textMuted}`}>
+          <div className="flex items-center gap-1.5">
+            {(() => {
                 const seen = new Set();
                 const unique = Object.values(pollVotes).filter(v => { if (seen.has(v.email)) return false; seen.add(v.email); return true; });
                 return (
                   <>
                     <div className="flex -space-x-1">
                       {unique.slice(0, 3).map((voter, idx) => (
-                        <VoterAvatar key={voter.email || idx} voter={enrichVoter(voter)} size={18} borderClass={hasColor ? 'border-white/60' : 'border-surface'} />
+                        <Avatar key={voter.email || idx} email={voter.email} name={voter.name} color={voter.color} size={18} borderClass={avatarBorder} />
                       ))}
                     </div>
                     <span>{unique.length} voter{unique.length === 1 ? '' : 's'}</span>
@@ -577,7 +477,6 @@ export default function PollBlock({
             </div>
             {selected && editable && <span>Double-click to edit</span>}
           </div>
-        )}
       </div>
 
       {/* Voter popup */}
@@ -600,7 +499,7 @@ export default function PollBlock({
           <div className="flex flex-col overflow-y-auto" style={{ maxHeight: 240 }}>
             {voterPopup.voters.map((voter) => (
               <div key={voter.email} className="flex items-center gap-2.5 px-3 py-2 hover:bg-hover transition-colors">
-                <VoterAvatar voter={voter} size={28} borderClass={avatarBorder} />
+                <Avatar email={voter.email} name={voter.name} color={voter.color} size={28} borderClass={avatarBorder} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-content truncate">{voter.name}</div>
                   {voter.email === myEmail && <div className="text-[10px] text-content-subtle leading-none mt-0.5">you</div>}
@@ -610,6 +509,16 @@ export default function PollBlock({
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Setup Modal trigger when opening via double click */}
+      {showSetup && (
+        <PollSetupModal
+          initialProps={props}
+          isDark={isDark}
+          onConfirm={(patch) => { onEditProps(patch); setShowSetup(false); }}
+          onCancel={() => setShowSetup(false)}
+        />
       )}
     </>
   );

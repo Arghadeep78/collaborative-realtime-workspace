@@ -64,6 +64,8 @@ export default function BoardElement({
   removePollVote,
   canVote,
   canComment,
+  commentCount = 0,
+  onOpenComments,
   boardId,
   // Kanban assignee options (board members)
   members,
@@ -318,6 +320,27 @@ export default function BoardElement({
         peers={peers}
         photoMap={photoMap}
       />
+      {/* Comment indicator — shown when the element has at least one comment.
+          Clicking it opens the thread (works for viewers/commenters too, since
+          the badge keeps its own pointer events even when the body is inert). */}
+      {commentCount > 0 && !connectMode && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenComments?.(element.id);
+          }}
+          className="absolute -top-2.5 -left-2.5 min-w-5 h-5 px-1 rounded-full bg-amber-500 text-white text-[11px] font-semibold flex items-center gap-0.5 shadow-md hover:bg-amber-600 transition"
+          style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: 200 }}
+          title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+        >
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M2 4a2 2 0 012-2h16a2 2 0 012 2v11a2 2 0 01-2 2H7.414L4 20.414A1 1 0 012 19.707V4z" />
+          </svg>
+          {commentCount}
+        </button>
+      )}
+
       {/* Intercept pointer events from iframe during drag so pointermove reaches window */}
       {dragging && element.type === 'iframe' && (
         <div className="absolute inset-0 z-10" style={{ cursor: 'move' }} />

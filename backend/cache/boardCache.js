@@ -15,6 +15,14 @@ import Workspace from '../models/workspaceModel.js';
 const TTL_SECONDS = 60;
 const key = (boardId) => `board:meta:${boardId}`;
 
+// Pub/sub channel the Yjs WS server listens on to re-evaluate the role of every
+// connected peer the instant a board's access changes (share / unshare /
+// role change / workspace membership change). Without this, a demoted editor
+// keeps writing — and a revoked collaborator keeps full access — until they
+// happen to reload, because the WS connection resolves the role only once at
+// connect time.
+const accessChannel = (boardId) => `board:access:${boardId}`;
+
 /** @type {import('redis').RedisClientType | null} */
 let redis = null;
 
@@ -41,7 +49,7 @@ export async function getBoardMeta(boardId) {
   }
 
   const board = await Whiteboard.findOne({ id: boardId })
-    .select('id owner collaborators isPublic publicRole')
+    .select('id owner collaborators isPublic publicRole revokedEmails')
     .lean();
   if (!board) return null;
 
@@ -57,6 +65,7 @@ export async function getBoardMeta(boardId) {
     collaborators: (board.collaborators || []).map((c) => ({ email: c.email, role: c.role })),
     isPublic: Boolean(board.isPublic),
     publicRole: board.publicRole || 'viewer',
+    revokedEmails: board.revokedEmails || [],
     workspaceMembers,
   };
 
@@ -66,13 +75,30 @@ export async function getBoardMeta(boardId) {
   return meta;
 }
 
-/** @param {string} boardId */
+/**
+ * Invalidate a board's cached access metadata AND signal every live Yjs WS
+ * connection (on any instance) to re-resolve the connected user's role.
+ *
+ * Order matters: we delete the cache entry first so the WS server's subsequent
+ * `getBoardMeta` re-read misses the cache and pulls the just-written state from
+ * MongoDB, then publish the access-change signal. Both are best-effort — a
+ * dropped signal self-heals within TTL_SECONDS on the next (re)connect, and a
+ * failed delete is covered by the same TTL.
+ *
+ * @param {string} boardId
+ */
 export async function invalidateBoardMeta(boardId) {
   if (!redis) return;
   try {
     await redis.del(key(boardId));
   } catch {
     // A stale entry self-heals within TTL_SECONDS; swallow transient Redis errors.
+  }
+  try {
+    await redis.publish(accessChannel(boardId), boardId);
+  } catch {
+    // A dropped access signal is recovered on the next reconnect; never let it
+    // fail the share/unshare request that triggered it.
   }
 }
 
@@ -82,14 +108,21 @@ export async function invalidateBoardMeta(boardId) {
  *
  * @param {{ owner: string, collaborators: {email:string, role:string}[], isPublic: boolean, publicRole: string }} meta
  * @param {string} userEmail
+ * @param {('viewer'|'commenter'|'editor'|null)} [shareRole] role from a verified `?st=` share token
  * @returns {'viewer'|'commenter'|'editor'|null}
  */
-export function resolveRole(meta, userEmail) {
+export function resolveRole(meta, userEmail, shareRole = null) {
   if (!meta) return null;
   if (meta.owner === userEmail) return 'editor';
   const collab = (meta.collaborators || []).find((c) => c.email === userEmail);
   if (collab) return collab.role || 'editor';
   if ((meta.workspaceMembers || []).includes(userEmail)) return 'viewer';
+  // Explicitly removed by the owner: deny even a still-valid share token. Named
+  // access (owner/collaborator/member) is checked first and wins, so re-inviting
+  // — which also clears revokedEmails — restores access immediately.
+  if (userEmail && (meta.revokedEmails || []).includes(userEmail)) return null;
+  // Signed share link raises a link visitor above the public viewer baseline.
+  if (shareRole) return shareRole;
   if (meta.isPublic) return meta.publicRole || 'viewer';
   return null;
 }

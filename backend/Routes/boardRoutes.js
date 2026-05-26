@@ -6,6 +6,7 @@ import {
   deleteBoard,
   shareBoard,
   unshareBoard,
+  createShareToken,
   updateBoardTitle,
   updateBoardThumbnail,
   toggleFavorite,
@@ -20,6 +21,7 @@ router.get('/:id',              getBoardById);           // ← intentionally pu
 router.delete('/delete/:id',    authMiddleware, deleteBoard);
 router.put('/share/:id',        authMiddleware, shareBoard);
 router.put('/unshare/:id',      authMiddleware, unshareBoard);
+router.post('/share-token/:id', authMiddleware, createShareToken);
 router.put('/title/:id',        authMiddleware, updateBoardTitle);
 router.put('/thumbnail/:id',    authMiddleware, updateBoardThumbnail);
 router.put('/favorite/:id',     authMiddleware, toggleFavorite);
