@@ -20,10 +20,5 @@ dist-ssr/
 .vscode/
 .idea/
 
-# Local scratch / planning notes
-suggestion.md
-audit-report/
-
-#theory
-concepts.md
-concepts2.md
+*.md
+!README.md

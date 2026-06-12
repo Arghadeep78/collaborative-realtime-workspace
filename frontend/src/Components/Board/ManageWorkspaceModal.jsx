@@ -58,12 +58,12 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
 
   const members     = data?.workspace?.members || [];
   const memberEmails = new Set(members.map((m) => m.email));
-  const boards      = data?.boards || [];
+  const boards      = data?.projects || [];
 
   const updateBoardCollabs = (boardId, collaborators) =>
     setData((prev) => ({
       ...prev,
-      boards: prev.boards.map((b) =>
+      projects: prev.projects.map((b) =>
         b.id === boardId ? { ...b, collaborators: collaborators || [] } : b
       ),
     }));
@@ -113,7 +113,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
     const isMember = memberEmails.has(email);
     try {
       if (role === 'viewer' && isMember) {
-        const res = await fetch(`${BACKEND_URL}/boards/unshare/${boardId}`, {
+        const res = await fetch(`${BACKEND_URL}/projects/unshare/${boardId}`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ email }),
@@ -122,7 +122,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
         if (!res.ok) throw new Error(d.error);
         updateBoardCollabs(boardId, d.collaborators);
       } else {
-        const res = await fetch(`${BACKEND_URL}/boards/share/${boardId}`, {
+        const res = await fetch(`${BACKEND_URL}/projects/share/${boardId}`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, role }),
@@ -138,7 +138,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
 
   const removeBoardCollab = async (boardId, email) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/boards/unshare/${boardId}`, {
+      const res = await fetch(`${BACKEND_URL}/projects/unshare/${boardId}`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -196,7 +196,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                 </h2>
                 <p className="mt-1 text-content-muted text-sm font-medium">
                   <span className="text-content font-bold">{workspaceName || data?.workspace?.name || 'Workspace'}</span>
-                  {' '}— click a board to manage its permissions
+                  {' '}— click a project to manage its permissions
                 </p>
               </div>
               <button
@@ -227,7 +227,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                     value={shareEmail}
                     onChange={(e) => setShareEmail(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') shareWorkspace(); }}
-                    placeholder="Invite member by email (viewer baseline on all boards)…"
+                    placeholder="Invite member by email (viewer baseline on all projects)…"
                     className="flex-1 bg-surface border border-edge-subtle rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-indigo-500 placeholder:text-content-subtle"
                   />
                   <button
@@ -277,7 +277,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
                 {boards.length === 0 ? (
                   <div className="text-center py-10 text-content-subtle border-2 border-dashed border-edge-subtle rounded-2xl text-sm">
-                    No boards in this workspace yet
+                    No projects in this workspace yet
                   </div>
                 ) : boards.map((board) => {
                   const isOpen       = expandedBoard === board.id;
@@ -326,8 +326,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                                 </p>
                                 <p className="text-[11px] text-content-subtle truncate">
                                   {data?.workspace?.ownerName
-                                    ? `${data.workspace.owner} · Board owner`
-                                    : 'Board owner'}
+                                    ? `${data.workspace.owner} · Project owner`
+                                    : 'Project owner'}
                                 </p>
                               </div>
                             </div>
@@ -348,8 +348,8 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                                   </p>
                                   <p className="text-[11px] text-content-subtle truncate">
                                     {p.name
-                                      ? `${p.email} · ${p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}`
-                                      : `${p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'} · not registered`}
+                                      ? `${p.email} · ${p.source === 'workspace' ? 'Workspace member' : 'Project collaborator'}`
+                                      : `${p.source === 'workspace' ? 'Workspace member' : 'Project collaborator'} · not registered`}
                                   </p>
                                 </div>
                               </div>
@@ -380,7 +380,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                                   <button
                                     onClick={() => removeBoardCollab(board.id, p.email)}
                                     className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                    title="Remove from board"
+                                    title="Remove from project"
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -391,7 +391,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
 
                           {participants.length === 0 && (
                             <p className="text-xs text-content-subtle py-3 text-center">
-                              No members or collaborators on this board yet
+                              No members or collaborators on this project yet
                             </p>
                           )}
                         </div>

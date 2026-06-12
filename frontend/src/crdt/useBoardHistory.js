@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
-import { getBoardTypes, LOCAL_ORIGIN } from '../Components/Board/boardConstants.js';
+import { getBoardTypes, LOCAL_ORIGIN } from '../components/board/boardConstants.js';
 
 /**
  * Per-user undo/redo for the board.

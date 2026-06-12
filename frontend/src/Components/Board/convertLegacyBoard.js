@@ -61,13 +61,16 @@ function shapeToElement(shape, pageId, createdBy) {
         props: { text, size: 22 },
       };
     case 'geo':
-      // Boxes/frames → a Kanban card; any label becomes the card title.
+      // Boxes/frames → a Task card; any label becomes the task title.
       return {
         ...base,
-        type: 'kanban',
-        w: Number.isFinite(p.w) ? Math.max(120, p.w) : 240,
-        h: Number.isFinite(p.h) ? Math.max(80, p.h) : 132,
-        props: { title: text, labels: [], images: [], assignees: [], subcards: [], due: '' },
+        type: 'task',
+        w: 200,
+        h: 40,
+        props: {
+          title: text, description: '', status: 'todo', priority: 'medium',
+          assignees: [], dueDate: '', checklist: [],
+        },
       };
     default:
       return null; // arrows, draw, lines, etc. are out of scope for Phase 2

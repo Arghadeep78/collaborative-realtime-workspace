@@ -143,6 +143,7 @@ export default function SlideCanvas({
   onUpdateProps,
   onDelete,
   onElementContextMenu,
+  onOpenTask,
   onCreate,
   peers,
   onCursor,
@@ -156,11 +157,7 @@ export default function SlideCanvas({
   connectFromId,
   onConnectClick,
   onConnectCancel,
-  // Graduation drag
   snapStep = 0,
-  graduationTargetId,
-  onDragMove,
-  onDragEnd,
   // Poll wiring
   votes,
   castPollVote,
@@ -175,6 +172,8 @@ export default function SlideCanvas({
   photoMap = {},
   // Active page (background)
   activePage,
+  // Pan-to-element request from the global task panel: { id, nonce }
+  focusRequest,
   isDark,
   zoomMult,
   setZoomMult,
@@ -306,6 +305,28 @@ export default function SlideCanvas({
   // Keep a ref so the marquee pointerup closure sees the latest elements
   const pageElementsRef = useRef(pageElements);
   pageElementsRef.current = pageElements;
+
+  // Pan-to-element: when the global task panel asks to focus a task, scroll the
+  // container so that element's centre sits in the middle of the viewport. We
+  // wait a frame so the (possibly just-switched) page's elements have laid out.
+  useEffect(() => {
+    if (!focusRequest?.id) return;
+    const raf = requestAnimationFrame(() => {
+      const el = elements[focusRequest.id];
+      const container = containerRef.current;
+      const slide = slideRef.current;
+      if (!el || !container || !slide) return;
+      const sc = scaleRef.current;
+      const sr = slide.getBoundingClientRect();
+      const cr = container.getBoundingClientRect();
+      // Element centre in screen space, then translate to scroll offset.
+      const elCenterScreenX = sr.left + (el.x + el.w / 2) * sc;
+      const elCenterScreenY = sr.top + (el.y + el.h / 2) * sc;
+      container.scrollLeft += elCenterScreenX - (cr.left + cr.width / 2);
+      container.scrollTop += elCenterScreenY - (cr.top + cr.height / 2);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focusRequest, elements]);
 
   // Convert a screen point to slide coordinates via the slide's live rect.
   const toSlide = useCallback((clientX, clientY) => {
@@ -521,13 +542,11 @@ export default function SlideCanvas({
                   onUpdateProps={onUpdateProps}
                   onDelete={onDelete}
                   onContextMenu={onElementContextMenu}
+                  onOpenTask={onOpenTask}
                   connectMode={connectMode}
                   connectSource={connectFromId === el.id}
                   onConnectClick={onConnectClick}
                   snapStep={snapStep}
-                  graduationTarget={graduationTargetId === el.id}
-                  onDragMove={onDragMove}
-                  onDragEnd={onDragEnd}
                   groupDragOffset={groupDragOffset}
                   onGroupDragPreview={onGroupDragPreview}
                   onGroupDragCommit={onGroupDragCommit}

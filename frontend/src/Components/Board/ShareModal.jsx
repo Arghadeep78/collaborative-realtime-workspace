@@ -31,8 +31,8 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
   const [owner, setOwner]   = useState({ email: board?.owner, name: board?.owner, profilePicture: '' });
   const [members, setMembers] = useState([]); // workspace members (viewer baseline)
 
-  const [isPublic, setIsPublic]       = useState(board?.isPublic || false);
-  const [publicRole, setPublicRole]   = useState(board?.publicRole || 'viewer');
+  const [isPublic, setIsPublic]       = useState(false);
+  const [publicRole, setPublicRole]   = useState('viewer');
 
   // Combined general-access value: 'restricted' | 'viewer' | 'commenter' | 'editor'
   const generalAccess = isPublic ? publicRole : 'restricted';
@@ -41,7 +41,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
     else handleUpdateGeneralAccess(true, val);
   };
 
-  const [collaborators, setCollabs]   = useState(board?.collaborators || []);
+  const [collaborators, setCollabs]   = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copying, setCopying]         = useState(false);
 
@@ -73,12 +73,14 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         if (b?.collaborators) setCollabs(b.collaborators);
       } else {
         // No workspace: pull the latest collaborators straight from the board.
-        const res = await fetch(`${BACKEND_URL}/boards/${boardId}`, {
+        const res = await fetch(`${BACKEND_URL}/projects/${boardId}`, {
           headers: { Authorization: `Bearer ${token()}` },
         });
         const b = await res.json();
         if (!res.ok) throw new Error(b.error || 'Failed to load access');
         if (Array.isArray(b.collaborators)) setCollabs(b.collaborators);
+        if (typeof b.isPublic === 'boolean') setIsPublic(b.isPublic);
+        if (b.publicRole) setPublicRole(b.publicRole);
       }
     } catch (e) {
       toast.error(e.message);
@@ -108,7 +110,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
     try {
       if (role === 'viewer' && isMember) {
         // Downgrade back to workspace baseline — just unshare the board entry.
-        const res = await fetch(`${BACKEND_URL}/boards/unshare/${boardId}`, {
+        const res = await fetch(`${BACKEND_URL}/projects/unshare/${boardId}`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ email }),
@@ -117,7 +119,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         if (!res.ok) throw new Error(d.error);
         setCollabs(d.collaborators || []);
       } else {
-        const res = await fetch(`${BACKEND_URL}/boards/share/${boardId}`, {
+        const res = await fetch(`${BACKEND_URL}/projects/share/${boardId}`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, role }),
@@ -147,7 +149,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
     if (!inviteEmail.trim()) return;
     setIsProcessing(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/boards/share/${boardId}`, {
+      const res = await fetch(`${BACKEND_URL}/projects/share/${boardId}`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
@@ -166,7 +168,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
 
   const handleRemove = async (email) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/boards/unshare/${boardId}`, {
+      const res = await fetch(`${BACKEND_URL}/projects/unshare/${boardId}`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -216,7 +218,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
       <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-130 overflow-hidden m-4">
         {/* Header */}
         <div className="px-6 py-5 border-b border-edge-subtle flex items-center justify-between bg-surface">
-          <h2 className="text-content font-semibold text-xl tracking-tight">Share "{board?.title || 'Board'}"</h2>
+          <h2 className="text-content font-semibold text-xl tracking-tight">Share "{board?.title || 'Project'}"</h2>
           <button onClick={onClose} className="p-1.5 text-content-subtle hover:text-content hover:bg-hover rounded-full transition-colors cursor-pointer">
             <X size={20} />
           </button>
@@ -268,10 +270,10 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-content truncate">{owner?.name || owner?.email}</p>
                       {owner?.name && (
-                        <p className="text-[11px] text-content-subtle truncate">{owner.email} · Board owner</p>
+                        <p className="text-[11px] text-content-subtle truncate">{owner.email} · Project owner</p>
                       )}
                       {!owner?.name && (
-                        <p className="text-[11px] text-content-subtle truncate">Board owner</p>
+                        <p className="text-[11px] text-content-subtle truncate">Project owner</p>
                       )}
                     </div>
                   </div>
@@ -289,10 +291,10 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-content truncate">{p.name || p.email}</p>
                         {p.name && (
-                          <p className="text-[11px] text-content-subtle truncate">{p.email} · {p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}</p>
+                          <p className="text-[11px] text-content-subtle truncate">{p.email} · {p.source === 'workspace' ? 'Workspace member' : 'Project collaborator'}</p>
                         )}
                         {!p.name && (
-                          <p className="text-[11px] text-content-subtle truncate">{p.source === 'workspace' ? 'Workspace member' : 'Board collaborator'}</p>
+                          <p className="text-[11px] text-content-subtle truncate">{p.source === 'workspace' ? 'Workspace member' : 'Project collaborator'}</p>
                         )}
                       </div>
                     </div>
@@ -321,7 +323,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                         <button
                           onClick={() => handleRemove(p.email)}
                           className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                          title="Remove from board"
+                          title="Remove from project"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -332,7 +334,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
 
                 {participants.length === 0 && (
                   <p className="text-center text-sm text-content-subtle py-8">
-                    No members or collaborators on this board
+                    No members or collaborators on this project
                   </p>
                 )}
               </div>

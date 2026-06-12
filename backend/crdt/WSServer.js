@@ -8,9 +8,9 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { URL } from 'url';
 import { documentManager } from './DocumentManager.js';
-import { getBoardMeta, resolveRole, invalidateBoardMeta } from '../cache/boardCache.js';
-import Whiteboard from '../models/whiteboardModel.js';
-import User from '../models/usermodel.js';
+import { getProjectMeta, resolveRole, invalidateProjectMeta } from '../cache/project.cache.js';
+import Whiteboard from '../models/whiteboard.model.js';
+import User from '../models/user.model.js';
 
 // Unique per-process id, prefixed onto every awareness frame we publish to
 // Redis so an instance can recognise and skip the echo of its own messages.
@@ -42,12 +42,12 @@ const MAX_UPDATE_BYTES = 512 * 1024;
  * @param {Uint8Array} update  - raw Yjs update bytes (already extracted)
  * @param {import('ws').WebSocket} origin
  * @param {string} userEmail
- * @param {string} boardId
+ * @param {string} projectId
  * @returns {boolean} whether the update was applied
  */
-function applyClientUpdate(ydoc, update, origin, userEmail, boardId) {
+function applyClientUpdate(ydoc, update, origin, userEmail, projectId) {
   if (update.byteLength > MAX_UPDATE_BYTES) {
-    console.warn(`[Yjs WS] Dropped oversized update (${update.byteLength}B) from ${userEmail} on ${boardId}`);
+    console.warn(`[Yjs WS] Dropped oversized update (${update.byteLength}B) from ${userEmail} on ${projectId}`);
     return false;
   }
 
@@ -57,33 +57,33 @@ function applyClientUpdate(ydoc, update, origin, userEmail, boardId) {
   } catch (err) {
     // applyUpdate can throw on corrupt struct data. Log and drop — never let a
     // single bad frame take down the WebSocket server for every other peer.
-    console.error(`[Yjs WS] applyUpdate failed for ${userEmail} on ${boardId}:`, err.message);
+    console.error(`[Yjs WS] applyUpdate failed for ${userEmail} on ${projectId}:`, err.message);
     return false;
   }
 }
 
 
 /**
- * Persist a share-link visitor as a board collaborator at the link's role.
+ * Persist a share-link visitor as a project collaborator at the link's role.
  *
  * Called fire-and-forget when a logged-in user connects with a valid `?st=`
- * token but no prior named access. Re-reads the board under a fresh query and
+ * token but no prior named access. Re-reads the project under a fresh query and
  * re-checks membership so two simultaneous joins (or a join racing a manual
  * invite) don't create a duplicate or clobber a higher role the owner just set.
  * We also respect a revocation: if the owner already removed this email, we do
  * NOT silently re-add them (resolveRole denies them anyway, and their socket
  * will be closed by the access subscriber).
  *
- * @param {string} boardId
+ * @param {string} projectId
  * @param {string} email
  * @param {'viewer'|'commenter'|'editor'} role  - role the share link grants
  */
-async function recordLinkJoiner(boardId, email, role) {
-  const board = await Whiteboard.findOne({ id: boardId });
-  if (!board) return;
-  if (board.owner === email) return;
-  if (board.collaborators.some(c => c.email === email)) return; // already named
-  if (board.revokedEmails?.includes(email)) return; // owner removed them — don't re-add
+async function recordLinkJoiner(projectId, email, role) {
+  const project = await Whiteboard.findOne({ id: projectId });
+  if (!project) return;
+  if (project.owner === email) return;
+  if (project.collaborators.some(c => c.email === email)) return; // already named
+  if (project.revokedEmails?.includes(email)) return; // owner removed them — don't re-add
 
   const user = await User.findOne({ email }).select('name profilePicture').lean();
   // Use an atomic update guarded by "no existing entry for this email" so two
@@ -91,7 +91,7 @@ async function recordLinkJoiner(boardId, email, role) {
   // leave a duplicate row. If another writer added the email between our read
   // and this update, the filter no-ops and we skip — exactly the dedupe we want.
   await Whiteboard.updateOne(
-    { id: boardId, 'collaborators.email': { $ne: email } },
+    { id: projectId, 'collaborators.email': { $ne: email } },
     { $push: { collaborators: {
       email,
       name: user?.name || email,
@@ -101,8 +101,8 @@ async function recordLinkJoiner(boardId, email, role) {
   );
   // Refresh the cached meta so the owner's Share modal and any other peers see
   // the new collaborator on their next read.
-  await invalidateBoardMeta(boardId);
-  console.log(`[Yjs WS] Recorded link-joiner ${email} as '${role}' collaborator on ${boardId}`);
+  await invalidateProjectMeta(projectId);
+  console.log(`[Yjs WS] Recorded link-joiner ${email} as '${role}' collaborator on ${projectId}`);
 }
 
 /**
@@ -120,28 +120,28 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
   const awarenessMap = new Map();
   /** @type {Map<string, (update: Uint8Array, origin: any) => void>} The `update` listener wired once per room's Y.Doc; kept so it can be detached when the room is evicted. */
   const docUpdateListeners = new Map();
-  /** @type {Map<string, ({added, updated, removed}, origin) => void>} The `change` relay wired per board's Awareness — registered ONCE per room, not once per socket, so a presence frame is fanned out a single time instead of once per connected peer (which scaled the broadcast as O(N²) in room size). Kept so it can be removed when the room's Awareness is evicted. */
+  /** @type {Map<string, ({added, updated, removed}, origin) => void>} The `change` relay wired per project's Awareness — registered ONCE per room, not once per socket, so a presence frame is fanned out a single time instead of once per connected peer (which scaled the broadcast as O(N²) in room size). Kept so it can be removed when the room's Awareness is evicted. */
   const awarenessChangeListeners = new Map();
 
-  // Build the broadcast + Redis-fanout `update` listener for a board's Y.Doc.
+  // Build the broadcast + Redis-fanout `update` listener for a project's Y.Doc.
   // Registered once per room (see below); marks the doc dirty, relays the delta
   // to local peers, and fans it out to other instances over Redis.
-  const makeUpdateListener = (boardId) => (update, origin) => {
-    documentManager.markDirty(boardId);
+  const makeUpdateListener = (projectId) => (update, origin) => {
+    documentManager.markDirty(projectId);
 
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC);
     syncProtocol.writeUpdate(encoder, update);
     const msg = encoding.toUint8Array(encoder);
 
-    documentManager.getConnections(boardId).forEach(conn => {
+    documentManager.getConnections(projectId).forEach(conn => {
       if (conn !== origin && conn.readyState === 1) conn.send(msg);
     });
 
     // Cross-instance fanout via Redis (skip if update originated from Redis)
     if (origin !== 'redis') {
       redisPub
-        .publish(`yjs:${boardId}`, Buffer.from(update).toString('base64'))
+        .publish(`yjs:${projectId}`, Buffer.from(update).toString('base64'))
         .catch(() => {});
     }
   };
@@ -164,7 +164,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
   // ─── Connection handler ───────────────────────────────────────────────
   wss.on('connection', async (ws, request) => {
-    let boardId, userEmail, userRole, shareRole = null;
+    let projectId, userEmail, userRole, shareRole = null;
 
     // Buffer messages that arrive while we're doing async auth / doc load.
     // The client's y-websocket WebsocketProvider sends SyncStep1 the instant
@@ -176,27 +176,32 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
-      // Room name is the last path segment: /yjs/<boardId>
-      boardId = url.pathname.split('/').filter(Boolean).pop();
+      // Room name is the last path segment: /yjs/<projectId>
+      projectId = url.pathname.split('/').filter(Boolean).pop();
       const token = url.searchParams.get('token');
       const shareToken = url.searchParams.get('st');
 
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!boardId || !UUID_RE.test(boardId)) {
-        ws.close(4401, 'Invalid boardId');
+      if (!projectId || !UUID_RE.test(projectId)) {
+        ws.close(4401, 'Invalid projectId');
         return;
       }
 
       // Access metadata is served from Redis (60s TTL) when warm, falling back
-      // to a lean MongoDB query. The full board (incl. yjsState) is loaded
+      // to a lean MongoDB query. The full project (incl. yjsState) is loaded
       // lazily by DocumentManager only when the Y.Doc is cold.
-      const meta = await getBoardMeta(boardId);
-      if (!meta) { ws.close(4404, 'Board not found'); return; }
+      const meta = await getProjectMeta(projectId);
+      if (!meta) { ws.close(4404, 'Project not found'); return; }
 
       userEmail = 'anonymous';
       if (token && token !== 'undefined' && token !== 'null') {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        userEmail = decoded.email;
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          userEmail = decoded.email;
+        } catch {
+          ws.close(4401, 'Invalid or expired token');
+          return;
+        }
       }
 
       // A signed share token (`?st=`) raises a link visitor's role above the
@@ -205,7 +210,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       if (shareToken && shareToken !== 'undefined' && shareToken !== 'null') {
         try {
           const decoded = jwt.verify(shareToken, process.env.JWT_SECRET);
-          if (decoded.boardId === boardId &&
+          if (decoded.boardId === projectId &&
               ['viewer', 'commenter', 'editor'].includes(decoded.shareRole)) {
             shareRole = decoded.shareRole;
           }
@@ -217,7 +222,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       if (!userRole) { ws.close(4403, 'Access denied'); return; }
 
       // A logged-in user who got in purely on a share link (named access would
-      // have been checked first) is recorded as a board collaborator at the
+      // have been checked first) is recorded as a project collaborator at the
       // link's role. This makes them visible in the owner's Share modal and
       // removable through the normal unshare path — without it, link-joiners are
       // invisible and uncontrollable. Anonymous link visitors (no token) have no
@@ -229,7 +234,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         // Fire-and-forget: persistence + cache refresh shouldn't block the
         // socket from coming up. recordLinkJoiner re-checks under a fresh read
         // to avoid racing concurrent joins.
-        recordLinkJoiner(boardId, userEmail, shareRole)
+        recordLinkJoiner(projectId, userEmail, shareRole)
           .catch(err => console.error('[Yjs WS] recordLinkJoiner failed:', err.message));
       }
     } catch (err) {
@@ -239,17 +244,17 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     }
 
     // ── Load / get Y.Doc ────────────────────────────────────────────────
-    // No board is passed: DocumentManager fetches the full doc (with yjsState)
+    // No project is passed: DocumentManager fetches the full doc (with yjsState)
     // itself, but only on a cold load — warm rooms skip the query entirely.
-    const ydoc = await documentManager.getDoc(boardId);
-    documentManager.addConnection(boardId, ws);
+    const ydoc = await documentManager.getDoc(projectId);
+    documentManager.addConnection(projectId, ws);
 
-    // A viewer may read the board (sync down) but must not mutate it. commenter
+    // A viewer may read the project (sync down) but must not mutate it. commenter
     // and editor are write-capable. Enforced per-message in the MSG_SYNC handler.
     //
     // `let`, not `const`: a live role change (owner demotes this user to viewer,
     // or revokes them entirely) must flip write access *without* a reconnect.
-    // The `board:access:*` Redis subscriber re-resolves the role and reassigns
+    // The `project:access:*` Redis subscriber re-resolves the role and reassigns
     // this variable; the MSG_SYNC handler reads it fresh on every message.
     let canWrite = userRole !== 'viewer';
 
@@ -267,46 +272,40 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       ws.userRole = role;
     };
 
-    const peerCountAfterConnect = documentManager.getConnections(boardId).size;
-    console.log(`[Yjs WS] ✓ ${userEmail} (${userRole}) connected to room ${boardId} (${peerCountAfterConnect} peer${peerCountAfterConnect !== 1 ? 's' : ''} now in room)`);
+    const peerCountAfterConnect = documentManager.getConnections(projectId).size;
+    console.log(`[Yjs WS] ✓ ${userEmail} (${userRole}) connected to room ${projectId} (${peerCountAfterConnect} peer${peerCountAfterConnect !== 1 ? 's' : ''} now in room)`);
 
     // ── Awareness ───────────────────────────────────────────────────────
-    // One shared Awareness per board (room), created on the first peer to join.
+    // One shared Awareness per project (room), created on the first peer to join.
     // The change relay below is wired here — once per room — NOT once per socket:
     // registering it per connection meant N peers added N listeners, so a single
     // cursor move fired the relay N times and re-broadcast each frame to every
     // peer N times (O(N²) presence traffic). Wiring it with the Awareness keeps
     // exactly one relay per room for the room's whole lifetime.
-    if (!awarenessMap.has(boardId)) {
+    if (!awarenessMap.has(projectId)) {
       const awareness = new awarenessProtocol.Awareness(ydoc);
-      awarenessMap.set(boardId, awareness);
+      awarenessMap.set(projectId, awareness);
 
-      // Relay any awareness change to every live peer on this board. `origin` is
+      // Relay any awareness change to every live peer on this project. `origin` is
       // whatever was passed to applyAwarenessUpdate: it's the originating socket
       // for a client's own frame (so we skip echoing it back to the sender), and
       // a non-socket sentinel ('redis-awareness', server-side removals, etc.) for
       // which there is no local sender to skip — those go to everyone.
       const onAwarenessChange = ({ added, updated, removed }, origin) => {
-        const awarenessEmails = [];
-        awareness.getStates().forEach((state) => {
-          if (state?.user?.email) awarenessEmails.push(state.user.email);
-        });
-        console.log(`[Yjs Awareness] room=${boardId} | WS peers=${documentManager.getConnections(boardId).size} | awareness states=${awareness.getStates().size} | emails=[${awarenessEmails.join(', ')}] | added=${JSON.stringify(added)} updated=${JSON.stringify(updated)} removed=${JSON.stringify(removed)}`);
-
         const changed = added.concat(updated, removed);
         const update = awarenessProtocol.encodeAwarenessUpdate(awareness, changed);
         const enc = encoding.createEncoder();
         encoding.writeVarUint(enc, MSG_AWARENESS);
         encoding.writeVarUint8Array(enc, update);
         const buf = encoding.toUint8Array(enc);
-        documentManager.getConnections(boardId).forEach(conn => {
+        documentManager.getConnections(projectId).forEach(conn => {
           if (conn !== origin && conn.readyState === 1) conn.send(buf);
         });
       };
       awareness.on('change', onAwarenessChange);
-      awarenessChangeListeners.set(boardId, onAwarenessChange);
+      awarenessChangeListeners.set(projectId, onAwarenessChange);
     }
-    const awareness = awarenessMap.get(boardId);
+    const awareness = awarenessMap.get(projectId);
 
     // Track the Yjs clientIds belonging to THIS WebSocket connection so we
     // can correctly remove only them when the socket closes (not ydoc.clientID
@@ -331,9 +330,9 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     };
 
     // ── Per-doc broadcast + Redis publish (set up once) ─────────────────
-    if (!docUpdateListeners.has(boardId)) {
-      const listener = makeUpdateListener(boardId);
-      docUpdateListeners.set(boardId, listener);
+    if (!docUpdateListeners.has(projectId)) {
+      const listener = makeUpdateListener(projectId);
+      docUpdateListeners.set(projectId, listener);
       ydoc.on('update', listener);
     }
 
@@ -383,7 +382,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
             if (syncMessageType === syncProtocol.messageYjsSyncStep1) {
               // Read request: client asks for the doc state. Always permitted —
-              // even viewers need the current board to render it.
+              // even viewers need the current project to render it.
               syncProtocol.readSyncStep1(decoder, respEncoder, doc);
             } else if (canWrite) {
               // Write paths (SyncStep2 / Update) apply the client's changes.
@@ -395,13 +394,13 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
                 // against oversized, malformed, or pure-replay payloads before
                 // they touch the shared doc.
                 const update = decoding.readVarUint8Array(decoder);
-                applyClientUpdate(doc, update, ws, userEmail, boardId);
+                applyClientUpdate(doc, update, ws, userEmail, projectId);
               }
             } else {
               // Viewer attempting a mutation — discard the update without
               // applying it. authentication ≠ authorization: a connected,
               // authenticated viewer is still not allowed to write.
-              console.warn(`[Yjs WS] Rejected write from viewer ${userEmail} on board ${boardId}`);
+              console.warn(`[Yjs WS] Rejected write from viewer ${userEmail} on project ${projectId}`);
             }
 
             if (encoding.length(respEncoder) > 1) {
@@ -429,7 +428,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
             // instance prefix lets us drop the echo of our own publish.
             redisPub
               .publish(
-                `awareness:${boardId}`,
+                `awareness:${projectId}`,
                 `${INSTANCE_ID}|${Buffer.from(awarenessBytes).toString('base64')}`
               )
               .catch(() => {});
@@ -453,10 +452,8 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
     // ── Cleanup on disconnect ───────────────────────────────────────────
     ws.on('close', () => {
-      const peersBeforeRemove = documentManager.getConnections(boardId).size;
-      console.log(`[Yjs WS] ✗ ${userEmail} disconnected from room ${boardId} (was ${peersBeforeRemove} peers → will be ${peersBeforeRemove - 1})`);
-      console.log(`[Yjs WS] Evicting clientIds=${JSON.stringify([...wsClientIds])} from awareness (current awareness size=${awareness.getStates().size})`);
-      documentManager.removeConnection(boardId, ws);
+      console.log(`[Yjs WS] ✗ ${userEmail} disconnected from room ${projectId}`);
+      documentManager.removeConnection(projectId, ws);
       // NOTE: the awareness `change` relay is now registered ONCE per room (not
       // per socket), so a single disconnect must NOT detach it — the remaining
       // peers still rely on it. It's removed only when the room is evicted, in
@@ -478,28 +475,26 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
         // rendering this user's ghost cursor after they leave.
         redisPub
           .publish(
-            `awareness:${boardId}`,
+            `awareness:${projectId}`,
             `${INSTANCE_ID}|${Buffer.from(removalUpdate).toString('base64')}`
           )
           .catch(() => {});
 
         // Directly push the removal to every remaining local peer. The
-        // board-scoped relay also fires for this removeAwarenessStates call
+        // project-scoped relay also fires for this removeAwarenessStates call
         // (origin === null, so it broadcasts to everyone), making this a
         // belt-and-suspenders guarantee; peers de-dupe by awareness clock, so a
         // duplicate removal frame is harmless. Kept explicit so the removal is
         // never dropped even if the relay's wiring changes.
-        const remaining = documentManager.getConnections(boardId);
+        const remaining = documentManager.getConnections(projectId);
         if (remaining.size > 0) {
           const enc = encoding.createEncoder();
           encoding.writeVarUint(enc, MSG_AWARENESS);
           encoding.writeVarUint8Array(enc, removalUpdate);
           const buf = encoding.toUint8Array(enc);
-          let broadcastCount = 0;
           remaining.forEach(conn => {
-            if (conn.readyState === 1) { conn.send(buf); broadcastCount++; }
+            if (conn.readyState === 1) conn.send(buf);
           });
-          console.log(`[Yjs WS] Removal broadcast sent to ${broadcastCount} remaining peer(s). Awareness size after eviction=${awareness.getStates().size}`);
         }
       }
 
@@ -517,8 +512,8 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
   crossSub.on('error', (err) => console.error('[Yjs Redis] crossSub error:', err));
   crossSub.connect().then(() => {
     crossSub.pSubscribe('yjs:*', (message, channel) => {
-      const boardId = channel.slice(4); // strip "yjs:"
-      const ydoc = documentManager.docs.get(boardId);
+      const projectId = channel.slice(4); // strip "yjs:"
+      const ydoc = documentManager.docs.get(projectId);
       if (!ydoc) return;
 
       try {
@@ -536,19 +531,19 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     // instance so they reach this instance's peers (and feed the snapshot sent
     // to future joiners), skipping the echo of our own publishes.
     crossSub.pSubscribe('awareness:*', (message, channel) => {
-      const boardId = channel.slice(10); // strip "awareness:"
+      const projectId = channel.slice(10); // strip "awareness:"
       const sep = message.indexOf('|');
       if (sep === -1) return;
       const senderInstance = message.slice(0, sep);
       if (senderInstance === INSTANCE_ID) return; // our own frame, ignore
 
-      const awareness = awarenessMap.get(boardId);
-      if (!awareness) return; // no local peers on this board
+      const awareness = awarenessMap.get(projectId);
+      if (!awareness) return; // no local peers on this project
 
       try {
         const bytes = new Uint8Array(Buffer.from(message.slice(sep + 1), 'base64'));
         // origin is a non-WebSocket sentinel; the per-connection change relay
-        // then forwards it to every local peer on this board.
+        // then forwards it to every local peer on this project.
         awarenessProtocol.applyAwarenessUpdate(awareness, bytes, 'redis-awareness');
       } catch (err) {
         console.error('[Yjs Redis] awareness apply error:', err);
@@ -556,30 +551,30 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     });
 
     // Live access-control changes. Published (on every instance) by
-    // invalidateBoardMeta whenever a board's share/role/membership changes.
+    // invalidateProjectMeta whenever a project's share/role/membership changes.
     // We re-resolve each connected peer's role against the *fresh* metadata and
     // either flip their write capability in place or, if access was revoked
     // entirely, close their socket. This is what makes a mid-session demotion
     // ("editor → viewer") or revocation take effect immediately instead of only
     // after the affected user reloads.
-    crossSub.pSubscribe('board:access:*', async (message, channel) => {
-      const boardId = channel.slice('board:access:'.length);
-      const conns = documentManager.getConnections(boardId);
-      if (conns.size === 0) return; // no local peers on this board on this instance
+    crossSub.pSubscribe('project:access:*', async (message, channel) => {
+      const projectId = channel.slice('project:access:'.length);
+      const conns = documentManager.getConnections(projectId);
+      if (conns.size === 0) return; // no local peers on this project on this instance
 
-      // invalidateBoardMeta deletes the cache key before publishing, so this
+      // invalidateProjectMeta deletes the cache key before publishing, so this
       // read pulls the just-written access state (from Mongo, then re-primes
       // the cache once for all the peers below).
-      const meta = await getBoardMeta(boardId);
+      const meta = await getProjectMeta(projectId);
 
       conns.forEach((conn) => {
         if (!conn.userEmail || typeof conn.setRole !== 'function') return;
         const newRole = resolveRole(meta, conn.userEmail, conn.shareRole);
         if (!newRole) {
-          // Access fully revoked (removed as collaborator, board unpublished,
+          // Access fully revoked (removed as collaborator, project unpublished,
           // workspace membership dropped). Close with a policy code; the client
           // treats 4403 as "kicked" and routes away rather than reconnecting.
-          console.log(`[Yjs WS] Access revoked for ${conn.userEmail} on ${boardId} — closing socket`);
+          console.log(`[Yjs WS] Access revoked for ${conn.userEmail} on ${projectId} — closing socket`);
           if (conn.readyState === 1) conn.close(4403, 'Access revoked');
           return;
         }
@@ -593,7 +588,7 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
           encoding.writeVarString(enc, newRole);
           conn.send(encoding.toUint8Array(enc));
         }
-        console.log(`[Yjs WS] Role for ${conn.userEmail} on ${boardId} re-resolved to '${newRole}' (live)`);
+        console.log(`[Yjs WS] Role for ${conn.userEmail} on ${projectId} re-resolved to '${newRole}' (live)`);
       });
     });
   }).catch((err) => {
@@ -604,13 +599,13 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
   // peer gone + GC delay elapsed), so dropping the relay here is safe — there
   // are no peers left for it to serve. Detach the change listener from the
   // Awareness before discarding both so neither lingers past the room's life.
-  documentManager.onDocEvicted = (boardId) => {
-    docUpdateListeners.delete(boardId);
-    const awareness = awarenessMap.get(boardId);
-    const changeListener = awarenessChangeListeners.get(boardId);
+  documentManager.onDocEvicted = (projectId) => {
+    docUpdateListeners.delete(projectId);
+    const awareness = awarenessMap.get(projectId);
+    const changeListener = awarenessChangeListeners.get(projectId);
     if (awareness && changeListener) awareness.off('change', changeListener);
-    awarenessChangeListeners.delete(boardId);
-    awarenessMap.delete(boardId);
+    awarenessChangeListeners.delete(projectId);
+    awarenessMap.delete(projectId);
   };
 
   return wss;

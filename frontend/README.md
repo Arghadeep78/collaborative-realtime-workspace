@@ -44,7 +44,8 @@ frontend/src/
 │   ├── PresenceLayer.jsx     # Remote cursors + laser pointer overlay
 │   └── elements/             # StickyNote, KanbanCard, PollBlock, TextBox, ConnectorLayer, ShapeBlock, MediaBlock, IframeWindow
 ├── Components/AuthPages/     # Login, Register
-├── Components/Dashboard/     # Board + workspace list
+├── Components/Dashboard/     # Board + workspace list (page shell + components/ for cards, modals, dropdown)
+├── Components/common/        # Avatar, shared SVG icon set
 └── Components/Profile/       # User profile
 ```
 

@@ -31,19 +31,19 @@ export function startPersistenceScheduler(redisOpts) {
     log(`Tick — ${dirtyIds.length} dirty doc(s) found → [${dirtyIds.join(', ')}]`);
 
     let enqueued = 0;
-    for (const boardId of dirtyIds) {
+    for (const projectId of dirtyIds) {
       try {
-        await queue.add('persist', { boardId }, {
-          // De-duplicate: if a job for this board is already waiting, skip
-          jobId: `persist-${boardId}`,
+        await queue.add('persist', { projectId }, {
+          // De-duplicate: if a job for this project is already waiting, skip
+          jobId: `persist-${projectId}`,
           removeOnComplete: true,
           removeOnFail: 50,
         });
         // Only clear after the job is durably enqueued — prevents loss on crash
-        documentManager.clearDirty(boardId);
+        documentManager.clearDirty(projectId);
         enqueued++;
       } catch (err) {
-        lerr(`Failed to enqueue job for boardId: ${boardId} — left dirty for retry:`, err.message);
+        lerr(`Failed to enqueue job for projectId: ${projectId} — left dirty for retry:`, err.message);
       }
     }
 

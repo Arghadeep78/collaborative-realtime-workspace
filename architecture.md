@@ -344,7 +344,7 @@ Y.Doc
 | Collection | Key fields |
 |---|---|
 | `whiteboards` | `id`, `title`, `owner`, `collaborators`, `yjsState` (Buffer), `isPublic`, `publicRole` |
-| `users` | `email`, `name`, `passwordHash`, `profilePic` |
+| `users` | `email`, `name`, `passwordHash`, `profilePicture` |
 | `workspaces` | `name`, `owner`, `members` |
 
 ---
@@ -436,7 +436,12 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
         ├── crdt/
         │   ├── useYjsBoard.js
         │   └── useBoardHistory.js
+        ├── utils/
+        │   └── timeAgo.js               # Relative-time formatter
         └── Components/
+            ├── common/
+            │   ├── Avatar.jsx
+            │   └── icons.jsx            # Shared inline SVG icon set
             ├── Board/
             │   ├── BoardRoom.jsx
             │   ├── useBoardSync.js
@@ -447,5 +452,8 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
             │   └── elements/
             ├── AuthPages/
             ├── Dashboard/
+            │   ├── dashboard.jsx        # Page shell + data/actions
+            │   ├── dashboardConstants.js
+            │   └── components/          # BoardCard, modals, dropdown, RoleBadge
             └── Profile/
 ```

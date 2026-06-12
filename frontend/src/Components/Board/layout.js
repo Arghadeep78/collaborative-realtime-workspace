@@ -43,7 +43,7 @@ export function arrangeGrid(els) {
  */
 export function arrangeColumns(els) {
   if (els.length === 0) return [];
-  const order = ['sticky', 'kanban', 'text', 'poll', 'iframe'];
+  const order = ['sticky', 'task', 'text', 'poll', 'iframe'];
   const groups = {};
   els.forEach((e) => {
     (groups[e.type] ||= []).push(e);

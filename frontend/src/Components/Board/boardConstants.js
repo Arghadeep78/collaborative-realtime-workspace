@@ -18,14 +18,14 @@ import {
 // A slide is a discrete, fixed-size page (presentation-style 16:9). The canvas
 // scales this rectangle to fit the viewport; all element coordinates are in
 // these "slide units", independent of zoom.
-export const SLIDE_W = 1600;
-export const SLIDE_H = 900;
+export const SLIDE_W = 3600;
+export const SLIDE_H = SLIDE_W * 9 / 16;
 
 // High-visibility laser-pointer red for live teammate cursors.
 export const PRESENCE_RED = '#FF4A4A';
 
 // A stable-ish per-session colour for this user's avatar / name tag.
-// Palette source of truth is colorMap.js (shared with KanbanCard avatars).
+// Palette source of truth is colorMap.js (shared with task-card avatars).
 export const myColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
 // Pastel options for sticky notes — source of truth is colorMap.js.
@@ -36,7 +36,7 @@ export const STICKY_COLORS = _STICKY_COLORS;
 export const TOOLS = [
   { id: 'pointer',   key: '1', label: 'Pointer' },
   { id: 'sticky',    key: '2', label: 'Sticky Note' },
-  { id: 'kanban',    key: '3', label: 'Kanban Card' },
+  { id: 'task',      key: '3', label: 'Task Card' },
   { id: 'text',      key: '4', label: 'Text Box' },
   { id: 'connector', key: '5', label: 'Connector' },
   { id: 'poll',      key: '6', label: 'Poll Block' },
@@ -62,7 +62,13 @@ export const GRID_STEP = 20;
 // types) so the backend's history compaction stays happy.
 export const ELEMENT_DEFAULTS = {
   sticky: { w: 260, h: 260, props: { text: '', color: STICKY_COLORS[0] } },
-  kanban: { w: 380, h: 340, props: { title: '', labels: [], images: [], assignees: [], subcards: [], due: '' } },
+  task: {
+    w: 160, h: 56,
+    props: {
+      title: '', description: '', status: 'todo', priority: 'medium',
+      assignees: [], dueDate: '', checklist: [],
+    },
+  },
   text: { w: 380, h: 80, props: { text: '', size: 34 } },
   poll: {
     w: 380,
@@ -99,7 +105,7 @@ export const ELEMENT_DEFAULTS = {
 
 // Tools that drop a fresh element where the user clicks empty canvas. Connector
 // and laser are excluded — they don't spawn persistent elements.
-export const SPAWN_TOOLS = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape', 'media'];
+export const SPAWN_TOOLS = ['sticky', 'task', 'text', 'poll', 'iframe', 'shape', 'media'];
 
 export const MIN_W = 80;
 export const MIN_H = 48;
@@ -107,8 +113,10 @@ export const MIN_FONT = 8;
 
 // Per-element-type resize floors. Elements below these sizes become unreadable.
 export const ELEMENT_MIN_DIMS = {
-  poll:   { minW: 260, minH: 220 },
-  kanban: { minW: 220, minH: 200 },
+  poll: { minW: 260, minH: 220 },
+  // Task card size is defined once on ELEMENT_DEFAULTS.task (w/h); the resize
+  // floor reuses it so there's a single source of truth.
+  task: { minW: ELEMENT_DEFAULTS.task.w, minH: ELEMENT_DEFAULTS.task.h },
 };
 
 // How often live drag/resize positions are flushed to Yjs during a continuous
@@ -129,6 +137,7 @@ export const makeId = (prefix = 'el') =>
 // compaction preserves nested Yjs types (see DocumentManager._compactState).
 export const getBoardTypes = (ydoc) => ({
   yPages: ydoc.getArray('pages'),
+  ySections: ydoc.getArray('sections'),
   yElements: ydoc.getMap('elements'),
   ySystem: ydoc.getMap('system'),
   yVotes: ydoc.getMap('votes'),
@@ -136,8 +145,8 @@ export const getBoardTypes = (ydoc) => ({
 });
 
 // Element types that support threaded comments (toolbar tools 2,3,4,6,7,8 —
-// sticky, kanban, text, poll, iframe, shape). Connectors, media, laser excluded.
-export const COMMENTABLE_TYPES = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape'];
+// sticky, task, text, poll, iframe, shape). Connectors, media, laser excluded.
+export const COMMENTABLE_TYPES = ['sticky', 'task', 'text', 'poll', 'iframe', 'shape'];
 
 // Re-exported so call sites don't each import yjs just for an origin tag.
 // export const Yjs = Y;

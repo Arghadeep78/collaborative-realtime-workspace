@@ -19,6 +19,7 @@ const LOCAL = LOCAL_ORIGIN;
  */
 export function useBoardSync(ydoc) {
   const [pages, setPages] = useState([]);
+  const [sections, setSections] = useState([]);
   const [elements, setElements] = useState({});
   const [votes, setVotes] = useState({});
   const [comments, setComments] = useState({});
@@ -27,28 +28,36 @@ export function useBoardSync(ydoc) {
 
   useEffect(() => {
     if (!ydoc) return;
-    const { yPages, yElements, yVotes, yComments } = getBoardTypes(ydoc);
+    const { yPages, ySections, yElements, yVotes, yComments } = getBoardTypes(ydoc);
 
     const syncPages = () => {
       const arr = yPages.toArray().map((p) => ({ ...p }));
       arr.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       setPages(arr);
     };
+    const syncSections = () => {
+      const arr = ySections.toArray().map((s) => ({ ...s }));
+      arr.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      setSections(arr);
+    };
     const syncElements = () => setElements(yElements.toJSON());
     const syncVotes = () => setVotes(yVotes.toJSON());
     const syncComments = () => setComments(yComments.toJSON());
 
     syncPages();
+    syncSections();
     syncElements();
     syncVotes();
     syncComments();
     yPages.observe(syncPages);
+    ySections.observe(syncSections);
     yElements.observe(syncElements);
     yVotes.observeDeep(syncVotes); // Use observeDeep so nested Map changes trigger re-sync!
     yComments.observeDeep(syncComments); // nested per-element Map → observeDeep
 
     return () => {
       yPages.unobserve(syncPages);
+      ySections.unobserve(syncSections);
       yElements.unobserve(syncElements);
       yVotes.unobserveDeep(syncVotes);
       yComments.unobserveDeep(syncComments);
@@ -249,7 +258,7 @@ export function useBoardSync(ydoc) {
 
   // ── Page mutations ─────────────────────────────────────────────────────────
 
-  const addPage = useCallback((title) => {
+  const addPage = useCallback((title, sectionId) => {
     const doc = ydocRef.current;
     if (!doc) return null;
     const yPages = doc.getArray('pages');
@@ -257,10 +266,9 @@ export function useBoardSync(ydoc) {
     const order = yPages.length
       ? Math.max(...yPages.toArray().map((p) => p.order ?? 0)) + 1
       : 0;
-    doc.transact(
-      () => yPages.push([{ id, title: title || `Slide ${yPages.length + 1}`, order }]),
-      LOCAL,
-    );
+    const record = { id, title: title || `Subsection ${yPages.length + 1}`, order };
+    if (sectionId) record.sectionId = sectionId;
+    doc.transact(() => yPages.push([record]), LOCAL);
     return id;
   }, []);
 
@@ -349,8 +357,59 @@ export function useBoardSync(ydoc) {
     }, LOCAL);
   }, []);
 
+  // ── Section mutations ──────────────────────────────────────────────────────
+
+  const addSection = useCallback((title) => {
+    const doc = ydocRef.current;
+    if (!doc) return null;
+    const ySections = doc.getArray('sections');
+    const id = makeId('sec');
+    const order = ySections.length
+      ? Math.max(...ySections.toArray().map((s) => s.order ?? 0)) + 1
+      : 0;
+    doc.transact(() => ySections.push([{ id, title: title || 'New Section', order }]), LOCAL);
+    return id;
+  }, []);
+
+  const renameSection = useCallback((id, title) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const ySections = doc.getArray('sections');
+    const idx = ySections.toArray().findIndex((s) => s.id === id);
+    if (idx === -1) return;
+    doc.transact(() => {
+      const prev = ySections.get(idx);
+      ySections.delete(idx, 1);
+      ySections.insert(idx, [{ ...prev, title }]);
+    }, LOCAL);
+  }, []);
+
+  const deleteSection = useCallback((id) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const ySections = doc.getArray('sections');
+    const idx = ySections.toArray().findIndex((s) => s.id === id);
+    if (idx === -1) return;
+    doc.transact(() => {
+      ySections.delete(idx, 1);
+      // Unassign pages that belonged to this section (move them to General).
+      // Patch each affected page individually — replacing the whole array in one
+      // shot is a destructive CRDT operation that can silently clobber concurrent
+      // page additions from other peers.
+      const yPages = doc.getArray('pages');
+      const arr = yPages.toArray();
+      arr.forEach((p, i) => {
+        if (p.sectionId === id) {
+          const { sectionId: _removed, ...rest } = p;
+          yPages.delete(i, 1);
+          yPages.insert(i, [rest]);
+        }
+      });
+    }, LOCAL);
+  }, []);
+
   /**
-   * Ensure the board has at least one slide. Runs inside a transaction and
+   * Ensure the board has at least one page. Runs inside a transaction and
    * re-checks length so concurrent clients don't each seed a page. Returns the
    * id of the first page if it created one, else null.
    */
@@ -361,13 +420,14 @@ export function useBoardSync(ydoc) {
     if (yPages.length > 0) return null;
     const id = makeId('page');
     doc.transact(() => {
-      if (yPages.length === 0) yPages.push([{ id, title: 'Slide 1', order: 0 }]);
+      if (yPages.length === 0) yPages.push([{ id, title: 'Subsection 1', order: 0 }]);
     }, LOCAL);
     return id;
   }, []);
 
   return {
     pages,
+    sections,
     elements,
     votes,
     comments,
@@ -390,5 +450,8 @@ export function useBoardSync(ydoc) {
     deletePage,
     movePage,
     ensureFirstPage,
+    addSection,
+    renameSection,
+    deleteSection,
   };
 }

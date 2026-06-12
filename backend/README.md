@@ -20,7 +20,8 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 - **Health & readiness probes** — `GET /health` (MongoDB + Redis) and `GET /ready` (+ BullMQ workers running, persist-queue backpressure via `getWaitingCount`, and active-board count). `/ready` reports `not-ready` when the flush backlog exceeds the threshold so an orchestrator stops adding load until it drains.
 - **Async board publishing** — BullMQ queue + worker generate a read-only public snapshot off the request path.
 - **Graceful shutdown** — `SIGTERM`/`SIGINT`/`SIGUSR2` drain workers, close queues, and quit Redis clients before process exit.
-- **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens. A custom-uploaded profile picture is never overwritten by a subsequent Google sign-in.
+- **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens. Each email is tied to exactly **one** method: an email already registered with a password can't later sign in with Google (and vice-versa). A custom-uploaded profile picture is never overwritten by a subsequent Google sign-in.
+- **Password reset** — `POST /users/forgot-password` emails a single-use link (SHA-256-hashed token, 15-min expiry, enumeration-safe generic response); `POST /users/reset-password/:token` verifies and sets the new password. Google-only accounts have no password, so they're excluded. Requires `EMAIL_USER`/`EMAIL_PASS` (Nodemailer/Gmail) and `FRONTEND_URL`.
 
 ---
 
@@ -100,11 +101,17 @@ GOOGLE_CLIENT_ID=your-google-oauth-client-id
 # Gemini (AI brainstorming)
 GOOGLE_API_KEY=your-gemini-api-key
 
-# Allowed frontend origin(s) for CORS (comma-separated)
+# Email (Nodemailer/Gmail) — board invites & password-reset links.
+# EMAIL_PASS must be a Gmail App Password (requires 2FA).
+EMAIL_USER=your-gmail-address@gmail.com
+EMAIL_PASS=your-gmail-app-password
+
+# Allowed frontend origin(s) for CORS (comma-separated). Also used to build
+# the password-reset link sent by email.
 FRONTEND_URL=http://localhost:5173
 ```
 
-> See [`.env.example`](.env.example) for the full list, including Cloudinary (media uploads) and SMTP (share-invite email).
+> See [`.env.example`](.env.example) for the full list, including Cloudinary (media uploads) and SMTP (board-invite & password-reset email).
 
 ### 3. Run
 

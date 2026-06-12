@@ -3,12 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { Toaster } from 'react-hot-toast';
 
-import Register from './Components/AuthPages/Register.jsx';
-import Login from './Components/AuthPages/Login.jsx';
-import Dashboard from './Components/Dashboard/dashboard.jsx';
+import Register from './pages/auth/Register.jsx';
+import Login from './pages/auth/Login.jsx';
+import ForgotPassword from './pages/auth/ForgotPassword.jsx';
+import ResetPassword from './pages/auth/ResetPassword.jsx';
+import Dashboard from './pages/dashboard/Dashboard.jsx';
 import { BACKEND_URL } from './constants/apiConfig.js';
-import Profile from './Components/Profile/Profile.jsx';
-import BoardRoom from './Components/Board/BoardRoom.jsx';
+import Profile from './pages/profile/Profile.jsx';
+import BoardRoom from './pages/board/BoardRoom.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import { primePhotoCache } from './hooks/usePhotoResolver.js';
 
@@ -137,6 +139,8 @@ function App() {
         {/* Auth page route */}
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register/></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><ForgotPassword/></PublicRoute>} />
+        <Route path="/reset-password/:token" element={<PublicRoute><ResetPassword/></PublicRoute>} />
 
         {/* Protected dashboard route */}
         <Route

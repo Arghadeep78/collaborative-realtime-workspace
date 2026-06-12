@@ -3,7 +3,7 @@ function Glyph({ type }) {
   const c = { className: 'w-5 h-5', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
   if (type === 'pointer') return <svg {...c}><path d="M3 3l7.5 18 2.3-7.2L20 11.5 3 3z" /></svg>;
   if (type === 'sticky')  return <svg {...c}><path d="M4 4h16v11l-5 5H4z" /><path d="M20 15h-5v5" /></svg>;
-  if (type === 'kanban')  return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 9h10M7 13h6" /></svg>;
+  if (type === 'task')    return <svg {...c}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></svg>;
   if (type === 'text')    return <svg {...c}><path d="M4 6V4h16v2M9 20h6M12 4v16" /></svg>;
   if (type === 'connector') return <svg {...c}><circle cx="5" cy="6" r="2" /><circle cx="19" cy="18" r="2" /><path d="M7 7l10 10" /></svg>;
   if (type === 'poll')    return <svg {...c}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>;
@@ -15,7 +15,7 @@ function Glyph({ type }) {
 const ITEMS = [
   { type: 'pointer',   label: 'Pointer',   color: '#3b82f6' }, // blue-500
   { type: 'sticky',    label: 'Sticky',    color: '#eab308' }, // yellow-500
-  { type: 'kanban',    label: 'Card',      color: '#2563eb' }, // blue-600
+  { type: 'task',      label: 'Task',      color: '#2563eb' }, // blue-600
   { type: 'text',      label: 'Text',      color: '#7c3aed' }, // violet-600
   { type: 'connector', label: 'Connect',   color: '#059669' }, // emerald-600
   { type: 'poll',      label: 'Poll',      color: '#0284c7' }, // sky-600

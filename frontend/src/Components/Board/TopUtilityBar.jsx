@@ -25,7 +25,7 @@ function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) 
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        title="Board background"
+        title="Project background"
         className={`relative overflow-hidden inline-flex items-center justify-center w-9 h-9 rounded-xl border transition-colors duration-200
           ${open
             ? 'border-lime-400/60 bg-lime-100 text-lime-800 shadow-sm dark:border-lime-500/40 dark:bg-lime-950/30 dark:text-lime-200'
@@ -157,8 +157,8 @@ function ToolGlyph({ id }) {
       return <svg {...common}><path d="M3 3l7.5 18 2.3-7.2L20 11.5 3 3z" /></svg>;
     case 'sticky':
       return <svg {...common}><path d="M4 4h16v11l-5 5H4z" /><path d="M20 15h-5v5" /></svg>;
-    case 'kanban':
-      return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 9h10M7 13h6" /></svg>;
+    case 'task':
+      return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l2.5 2.5L16 9" /></svg>;
     case 'text':
       return <svg {...common}><path d="M4 6V4h16v2M9 20h6M12 4v16" /></svg>;
     case 'connector':
@@ -357,12 +357,17 @@ export default function TopUtilityBar({
   onSignOut,
   canShare,
   onShare,
+  onToggleTasks,
+  tasksOpen,
   isDark,
   toggleTheme,
   activePage,
   onUpdateBackground,
   onPresent,
 }) {
+  // Renaming the project is owner-only; editors/commenters/viewers cannot.
+  const isOwner = role === 'owner';
+
   const toolbar = (
     <ToolbarCore
       activeTool={activeTool}
@@ -389,7 +394,7 @@ export default function TopUtilityBar({
         </button>
         <div className="hidden sm:flex items-center gap-2">
           <span className={UI.logo}>Collab</span>
-          <span className={UI.lite}>Board</span>
+          <span className={UI.lite}>Project</span>
         </div>
         <div className="h-5 w-px bg-edge" />
         {isEditingTitle ? (
@@ -402,11 +407,15 @@ export default function TopUtilityBar({
             className={`${UI.input} text-sm w-28 sm:w-40 lg:w-48 max-w-48 py-1 min-w-0`}
           />
         ) : (
+          // Only the project owner can rename it. Non-owners (editors included)
+          // see the title as a plain, non-interactive label.
           <button
-            onClick={() => editable && setEditTitle(true)}
-            className="text-content font-medium text-sm hover:bg-hover px-2 py-1 rounded-lg transition max-w-28 sm:max-w-44 lg:max-w-56 min-w-0 truncate block"
+            onClick={() => isOwner && setEditTitle(true)}
+            disabled={!isOwner}
+            title={isOwner ? 'Rename project' : undefined}
+            className={`text-content font-medium text-sm px-2 py-1 rounded-lg transition max-w-28 sm:max-w-44 lg:max-w-56 min-w-0 truncate block ${isOwner ? 'hover:bg-hover cursor-pointer' : 'cursor-default'}`}
           >
-            {board?.title || 'Untitled Board'}
+            {board?.title || 'Untitled Project'}
           </button>
         )}
         {role === 'viewer' && <span className={UI.chip}>View Only</span>}
@@ -438,6 +447,7 @@ export default function TopUtilityBar({
             )}
           </button>
         </div>
+
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
@@ -485,11 +495,26 @@ export default function TopUtilityBar({
         </button>
 
         {canShare && (
-          <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share board">
+          <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share project">
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
           </button>
         )}
       </div>
+
+      {/* ── Right: Tasks ───────────────────────────────────────────── */}
+      <button
+        onClick={onToggleTasks}
+        title="Tasks"
+        className={`px-3 py-1.5 flex items-center gap-2 rounded-xl transition border shadow-sm font-medium text-sm ml-auto lg:ml-0 ${tasksOpen
+          ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/50'
+          : 'text-content hover:bg-hover border-edge bg-surface'}`}
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 6h11M9 12h11M9 18h11" />
+          <path d="M4 6l1 1 1.5-1.5M4 12l1 1 1.5-1.5M4 18l1 1 1.5-1.5" />
+        </svg>
+        Tasks
+      </button>
 
       {/* ── Toolbar row 2: shown below lg breakpoint ────────────────── */}
       <div className="flex lg:hidden w-full items-center justify-center pb-0.5">

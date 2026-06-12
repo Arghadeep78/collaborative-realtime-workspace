@@ -43,7 +43,7 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 - **Live presence:** real-time teammate cursors with name tags and a laser pointer, broadcast via Yjs Awareness.
 - **Comments & voting** on elements for async decision-making.
 - **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing. Non-owners can leave a board or workspace; owners delete instead.
-- **Secure auth** with email/password and Google OAuth 2.0 (JWT access/refresh).
+- **Secure auth** with email/password and Google OAuth 2.0 (JWT access/refresh). Each email uses one method only, and password reset is via a single-use, enumeration-safe email link.
 
 ---
 

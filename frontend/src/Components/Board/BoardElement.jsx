@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useElementDrag } from './useElementDrag.js';
 import { useElementResize } from './useElementResize.js';
 import StickyNote from './elements/StickyNote.jsx';
-import KanbanCard from './elements/KanbanCard.jsx';
+import TaskCard from './elements/TaskCard.jsx';
 import TextBox from './elements/TextBox.jsx';
 import PollBlock from './elements/PollBlock.jsx';
 import IframeWindow from './elements/IframeWindow.jsx';
@@ -12,7 +12,7 @@ import { SLIDE_W, SLIDE_H, clamp, MIN_FONT, ELEMENT_MIN_DIMS, COMMENTABLE_TYPES 
 
 const RENDERERS = {
   sticky: StickyNote,
-  kanban: KanbanCard,
+  task: TaskCard,
   text: TextBox,
   poll: PollBlock,
   iframe: IframeWindow,
@@ -49,15 +49,12 @@ export default function BoardElement({
   onUpdateProps,
   onDelete,
   onContextMenu,
+  onOpenTask,
   // Connector link-mode
   connectMode,
   connectSource,
   onConnectClick,
-  // Graduation drag (stickies → kanban)
   snapStep = 0,
-  graduationTarget,
-  onDragMove,
-  onDragEnd,
   // Poll-specific wiring
   votes,
   castPollVote,
@@ -81,6 +78,8 @@ export default function BoardElement({
 
   const [live, setLive] = useState(null); // { x?, y?, w?, h?, props? } gesture override
   const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
+  const taskDownRef = useRef(null); // {x,y} pointer-down for task click-vs-drag detection
+  const isTask = element.type === 'task';
   const resizeOriginRef = useRef(null); // captures font size at resize start
   const isGroupAnchor = useRef(false);   // true when this element is driving the group drag
   const dragOriginRef = useRef(null);    // {x,y} of this element at drag start
@@ -97,7 +96,6 @@ export default function BoardElement({
       const cx = clampX(x);
       const cy = clampY(y);
       setLive((p) => ({ ...p, x: cx, y: cy }));
-      onDragMove?.(element.id, cx, cy);
       if (isGroupAnchor.current && dragOriginRef.current) {
         onGroupDragPreview?.(
           element.id,
@@ -127,7 +125,6 @@ export default function BoardElement({
       }
       dragOriginRef.current = null;
       isGroupAnchor.current = false;
-      onDragEnd?.(element.id, cx, cy);
     },
   });
 
@@ -212,6 +209,9 @@ export default function BoardElement({
       return;
     }
 
+    // Track the down point so a click (no drag) on a task opens its modal.
+    if (isTask) taskDownRef.current = { x: e.clientX, y: e.clientY };
+
     // Shift+click: toggle this element in/out of the selection
     if (e.shiftKey && editable) {
       onToggleSelect?.(element.id);
@@ -247,12 +247,12 @@ export default function BoardElement({
       style={{
         left: geom.x,
         top: geom.y,
-        width: geom.w,
-        height: geom.h,
+        width: element.type === 'task' ? Math.max(160, geom.w) : geom.w,
+        height: element.type === 'task' ? Math.max(56, geom.h) : geom.h,
         zIndex: element.z ?? 1,
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
         pointerEvents: (
-          (!editable && !(element.type === 'poll' && canVote) && !commentable) ||
+          (!editable && !(element.type === 'poll' && canVote) && !commentable && !isTask) ||
           (activeTool && activeTool !== 'pointer' && !connectMode && !editing)
         ) ? 'none' : 'auto',
       }}
@@ -268,8 +268,19 @@ export default function BoardElement({
         if (editable) onSelect(element.id);
         onContextMenu?.(element.id, e.clientX, e.clientY);
       }}
+      onClick={(e) => {
+        // Non-editors clicking a task (viewers/commenters) - do nothing on single click.
+        if (isTask && !editable && !connectMode) {
+          e.stopPropagation();
+        }
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation();
+        if (isTask) {
+          // Double-click opens the task modal for everyone.
+          if (!connectMode) onOpenTask?.(element.id);
+          return;
+        }
         if (editable && !connectMode) onStartEdit(element.id);
       }}
     >
@@ -292,17 +303,6 @@ export default function BoardElement({
             }`}
         />
       )}
-      {/* Graduation drop-zone: this card is the active drop target for a sticky */}
-      {graduationTarget && (
-        <div className="absolute -inset-1 rounded-xl pointer-events-none ring-2 ring-emerald-500 ring-offset-2 ring-offset-transparent bg-emerald-500/10" />
-      )}
-      {/* Hint shown on a sticky as it's dragged over a drop target */}
-      {dragging && element.type === 'sticky' && (
-        <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-semibold whitespace-nowrap shadow pointer-events-none opacity-90">
-          Drop on a card to graduate →
-        </div>
-      )}
-
       <Renderer
         element={{ ...element, ...geom, props: live?.props ? { ...element.props, ...live.props } : element.props }}
         editable={editable}
@@ -384,7 +384,7 @@ export default function BoardElement({
               };
               startResize(e, element);
             }}
-            className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-sm bg-white border-2 border-blue-500 cursor-nwse-resize shadow"
+            className={`absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-sm bg-white border-2 border-blue-500 cursor-nwse-resize shadow ${isTask ? 'hidden' : ''}`}
             title="Resize"
           />
         </>

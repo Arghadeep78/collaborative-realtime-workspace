@@ -48,6 +48,17 @@ export function primePhotoCache(entries) {
   if (changed) notify();
 }
 
+// Explicitly set (or clear, with '') one email's photo and notify subscribers.
+// Unlike primePhotoCache this overwrites with empty values too, so it can be
+// used to invalidate a stale picture (e.g. the user just changed their own).
+export function setPhoto(email, url) {
+  if (!email) return;
+  const next = url || '';
+  if (cache.get(email) === next) return;
+  cache.set(email, next);
+  notify();
+}
+
 // Resolve photos for a list of emails. Returns { [email]: url } for the ones known so far.
 export function useUserPhotos(emails) {
   const [, force] = useState(0);

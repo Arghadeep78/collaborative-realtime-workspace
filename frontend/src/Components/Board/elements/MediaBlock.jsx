@@ -59,11 +59,11 @@ function UploadZone({ onFile, uploading }) {
   );
 }
 
-function MediaDisplay({ url, mediaType, caption, editable, onCaption, onReplace, onShare }) {
+function MediaDisplay({ url, mediaType, caption, editable, selected, onCaption, onReplace, onShare }) {
   return (
     <div className="flex flex-col h-full w-full gap-0 overflow-hidden rounded-2xl relative border border-edge bg-surface shadow-sm">
       <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
-        {onShare && (
+        {selected && onShare && (
           <button
             onClick={(e) => { e.stopPropagation(); onShare(); }}
             title="Share"
@@ -72,7 +72,7 @@ function MediaDisplay({ url, mediaType, caption, editable, onCaption, onReplace,
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           </button>
         )}
-        {onReplace && (
+        {selected && onReplace && (
           <button
             onClick={(e) => { e.stopPropagation(); onReplace(); }}
             title="Remove media"
@@ -133,7 +133,7 @@ function MediaDisplay({ url, mediaType, caption, editable, onCaption, onReplace,
   );
 }
 
-export default function MediaBlock({ element, editable, onEditProps }) {
+export default function MediaBlock({ element, editable, selected, onEditProps }) {
   const { url = '', mediaType = 'image', caption = '' } = element.props || {};
   const [uploading, setUploading] = useState(false);
 
@@ -165,7 +165,7 @@ export default function MediaBlock({ element, editable, onEditProps }) {
 
   return (
     <div className="w-full h-full">
-      <MediaDisplay url={url} mediaType={mediaType} caption={caption} editable={editable} onCaption={handleCaption} onReplace={editable ? handleReplace : undefined} onShare={async () => { try { await navigator.clipboard.writeText(url); alert('Media link copied to clipboard'); } catch { alert('Could not copy link'); } }} />
+      <MediaDisplay url={url} mediaType={mediaType} caption={caption} editable={editable} selected={selected} onCaption={handleCaption} onReplace={editable ? handleReplace : undefined} onShare={async () => { try { await navigator.clipboard.writeText(url); alert('Media link copied to clipboard'); } catch { alert('Could not copy link'); } }} />
     </div>
   );
 }
