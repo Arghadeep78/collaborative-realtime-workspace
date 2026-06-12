@@ -118,12 +118,14 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
 
   /** @type {Map<string, awarenessProtocol.Awareness>} */
   const awarenessMap = new Map();
-  /** @type {Map<string, (update: Uint8Array, origin: any) => void>} The `update` listener wired per doc, kept so it can be moved when the doc instance is swapped (async compaction). */
+  /** @type {Map<string, (update: Uint8Array, origin: any) => void>} The `update` listener wired once per room's Y.Doc; kept so it can be detached when the room is evicted. */
   const docUpdateListeners = new Map();
+  /** @type {Map<string, ({added, updated, removed}, origin) => void>} The `change` relay wired per board's Awareness — registered ONCE per room, not once per socket, so a presence frame is fanned out a single time instead of once per connected peer (which scaled the broadcast as O(N²) in room size). Kept so it can be removed when the room's Awareness is evicted. */
+  const awarenessChangeListeners = new Map();
 
-  // Build (and register) the broadcast + Redis-fanout `update` listener for a
-  // board's Y.Doc. Extracted so it can be re-attached to a freshly compacted
-  // doc instance when DocumentManager swaps one in.
+  // Build the broadcast + Redis-fanout `update` listener for a board's Y.Doc.
+  // Registered once per room (see below); marks the doc dirty, relays the delta
+  // to local peers, and fans it out to other instances over Redis.
   const makeUpdateListener = (boardId) => (update, origin) => {
     documentManager.markDirty(boardId);
 
@@ -269,8 +271,40 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     console.log(`[Yjs WS] ✓ ${userEmail} (${userRole}) connected to room ${boardId} (${peerCountAfterConnect} peer${peerCountAfterConnect !== 1 ? 's' : ''} now in room)`);
 
     // ── Awareness ───────────────────────────────────────────────────────
+    // One shared Awareness per board (room), created on the first peer to join.
+    // The change relay below is wired here — once per room — NOT once per socket:
+    // registering it per connection meant N peers added N listeners, so a single
+    // cursor move fired the relay N times and re-broadcast each frame to every
+    // peer N times (O(N²) presence traffic). Wiring it with the Awareness keeps
+    // exactly one relay per room for the room's whole lifetime.
     if (!awarenessMap.has(boardId)) {
-      awarenessMap.set(boardId, new awarenessProtocol.Awareness(ydoc));
+      const awareness = new awarenessProtocol.Awareness(ydoc);
+      awarenessMap.set(boardId, awareness);
+
+      // Relay any awareness change to every live peer on this board. `origin` is
+      // whatever was passed to applyAwarenessUpdate: it's the originating socket
+      // for a client's own frame (so we skip echoing it back to the sender), and
+      // a non-socket sentinel ('redis-awareness', server-side removals, etc.) for
+      // which there is no local sender to skip — those go to everyone.
+      const onAwarenessChange = ({ added, updated, removed }, origin) => {
+        const awarenessEmails = [];
+        awareness.getStates().forEach((state) => {
+          if (state?.user?.email) awarenessEmails.push(state.user.email);
+        });
+        console.log(`[Yjs Awareness] room=${boardId} | WS peers=${documentManager.getConnections(boardId).size} | awareness states=${awareness.getStates().size} | emails=[${awarenessEmails.join(', ')}] | added=${JSON.stringify(added)} updated=${JSON.stringify(updated)} removed=${JSON.stringify(removed)}`);
+
+        const changed = added.concat(updated, removed);
+        const update = awarenessProtocol.encodeAwarenessUpdate(awareness, changed);
+        const enc = encoding.createEncoder();
+        encoding.writeVarUint(enc, MSG_AWARENESS);
+        encoding.writeVarUint8Array(enc, update);
+        const buf = encoding.toUint8Array(enc);
+        documentManager.getConnections(boardId).forEach(conn => {
+          if (conn !== origin && conn.readyState === 1) conn.send(buf);
+        });
+      };
+      awareness.on('change', onAwarenessChange);
+      awarenessChangeListeners.set(boardId, onAwarenessChange);
     }
     const awareness = awarenessMap.get(boardId);
 
@@ -326,26 +360,6 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       ws.send(encoding.toUint8Array(awEncoder));
     }
 
-    // ── Awareness-change relay ──────────────────────────────────────────
-    const onAwarenessChange = ({ added, updated, removed }) => {
-      const awarenessEmails = [];
-      awareness.getStates().forEach((state) => {
-        if (state?.user?.email) awarenessEmails.push(state.user.email);
-      });
-      console.log(`[Yjs Awareness] room=${boardId} | WS peers=${documentManager.getConnections(boardId).size} | awareness states=${awareness.getStates().size} | emails=[${awarenessEmails.join(', ')}] | added=${JSON.stringify(added)} updated=${JSON.stringify(updated)} removed=${JSON.stringify(removed)}`);
-
-      const changed = added.concat(updated, removed);
-      const update = awarenessProtocol.encodeAwarenessUpdate(awareness, changed);
-      const enc = encoding.createEncoder();
-      encoding.writeVarUint(enc, MSG_AWARENESS);
-      encoding.writeVarUint8Array(enc, update);
-      const buf = encoding.toUint8Array(enc);
-      documentManager.getConnections(boardId).forEach(conn => {
-        if (conn !== ws && conn.readyState === 1) conn.send(buf);
-      });
-    };
-    awareness.on('change', onAwarenessChange);
-
     // ── Incoming messages ───────────────────────────────────────────────
     const handleMessage = (data) => {
       try {
@@ -362,10 +376,10 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
             const respEncoder = encoding.createEncoder();
             encoding.writeVarUint(respEncoder, MSG_SYNC);
 
-            // Resolve the doc fresh each message: async compaction can swap the
-            // Y.Doc instance out from under this connection, so the captured
-            // `ydoc` may be stale. The map always holds the live instance.
-            const doc = documentManager.docs.get(boardId) || ydoc;
+            // The Y.Doc instance is stable for the life of the room — compaction
+            // now happens only on teardown (after the last peer leaves), never
+            // mid-session, so `ydoc` captured at connect is always the live doc.
+            const doc = ydoc;
 
             if (syncMessageType === syncProtocol.messageYjsSyncStep1) {
               // Read request: client asks for the doc state. Always permitted —
@@ -443,7 +457,10 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
       console.log(`[Yjs WS] ✗ ${userEmail} disconnected from room ${boardId} (was ${peersBeforeRemove} peers → will be ${peersBeforeRemove - 1})`);
       console.log(`[Yjs WS] Evicting clientIds=${JSON.stringify([...wsClientIds])} from awareness (current awareness size=${awareness.getStates().size})`);
       documentManager.removeConnection(boardId, ws);
-      awareness.off('change', onAwarenessChange);
+      // NOTE: the awareness `change` relay is now registered ONCE per room (not
+      // per socket), so a single disconnect must NOT detach it — the remaining
+      // peers still rely on it. It's removed only when the room is evicted, in
+      // onDocEvicted below.
 
       // Remove only the clientIds that belonged to THIS connection.
       // Previously this incorrectly used ydoc.clientID (server's shared doc)
@@ -466,11 +483,12 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
           )
           .catch(() => {});
 
-        // Directly push the removal to every remaining local peer.
-        // The onAwarenessChange relay uses `conn !== ws` to skip the sender,
-        // but for a server-initiated removal there is no sender — so the last
-        // remaining peer (whose listener excludes itself) would never receive
-        // the update.  Broadcasting here guarantees all peers see the removal.
+        // Directly push the removal to every remaining local peer. The
+        // board-scoped relay also fires for this removeAwarenessStates call
+        // (origin === null, so it broadcasts to everyone), making this a
+        // belt-and-suspenders guarantee; peers de-dupe by awareness clock, so a
+        // duplicate removal frame is harmless. Kept explicit so the removal is
+        // never dropped even if the relay's wiring changes.
         const remaining = documentManager.getConnections(boardId);
         if (remaining.size > 0) {
           const enc = encoding.createEncoder();
@@ -582,31 +600,17 @@ export function setupYjsWSServer(httpServer, redisPub, redisSub) {
     console.error('[Yjs Redis] crossSub connect failed:', err);
   });
 
-  // Eviction housekeeping
+  // Eviction housekeeping. Fires only when the room is actually torn down (last
+  // peer gone + GC delay elapsed), so dropping the relay here is safe — there
+  // are no peers left for it to serve. Detach the change listener from the
+  // Awareness before discarding both so neither lingers past the room's life.
   documentManager.onDocEvicted = (boardId) => {
     docUpdateListeners.delete(boardId);
+    const awareness = awarenessMap.get(boardId);
+    const changeListener = awarenessChangeListeners.get(boardId);
+    if (awareness && changeListener) awareness.off('change', changeListener);
+    awarenessChangeListeners.delete(boardId);
     awarenessMap.delete(boardId);
-  };
-
-  // Doc-swap rewiring (async compaction replaces the Y.Doc instance).
-  // The map already points at `newDoc` by the time this fires; we just move
-  // the `update` listener to it and bring every attached peer up to the
-  // compacted state with a fresh SyncStep2.
-  documentManager.onDocSwapped = (boardId, oldDoc, newDoc) => {
-    const listener = docUpdateListeners.get(boardId);
-    if (listener) {
-      oldDoc.off('update', listener);
-      newDoc.on('update', listener);
-    }
-
-    const enc = encoding.createEncoder();
-    encoding.writeVarUint(enc, MSG_SYNC);
-    syncProtocol.writeSyncStep2(enc, newDoc);
-    const buf = encoding.toUint8Array(enc);
-    documentManager.getConnections(boardId).forEach(conn => {
-      if (conn.readyState === 1) conn.send(buf);
-    });
-    console.log(`[Yjs WS] Doc swapped after compaction for ${boardId}; re-synced ${documentManager.getConnections(boardId).size} peer(s)`);
   };
 
   return wss;

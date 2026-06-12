@@ -100,11 +100,15 @@ export const addBoardToWorkspace = async (req, res) => {
     const isMember = ws.owner === req.email || ws.members.some(m => m.email === req.email);
     if (!isMember) return res.status(403).json({ error: 'You are not a member of this workspace' });
 
-    // Verify the board exists and requester has access
-    const board = await Whiteboard.findOne({ id: boardId }).select('id owner collaborators').lean();
+    // Verify the board exists and the requester owns it. Only the owner may file
+    // a board into a workspace — adding it detaches the board from any other
+    // workspace below, so a mere collaborator must not be able to pull someone
+    // else's board out of its owner's workspace.
+    const board = await Whiteboard.findOne({ id: boardId }).select('id owner').lean();
     if (!board) return res.status(404).json({ error: 'Board not found' });
-    const hasAccess = board.owner === req.email || board.collaborators.some(c => c.email === req.email);
-    if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this board' });
+    if (board.owner !== req.email) {
+      return res.status(403).json({ error: 'Only the board owner can add it to a workspace' });
+    }
 
     // Enforce one-workspace-per-board: remove from any other workspace first
     await Workspace.updateMany(
@@ -149,7 +153,13 @@ export const removeBoardFromWorkspace = async (req, res) => {
 export const getOrCreateDefaultWorkspace = async (req, res) => {
   try {
     const email = req.email;
-    let ws = await Workspace.findOne({ owner: email }).sort({ createdAt: 1 }).lean();
+    // "Default" = the user's oldest workspace, counting memberships like the rest
+    // of the app (listWorkspaces/getAllUserBoards). Prefer one they own, then fall
+    // back to one they're a member of, and only auto-create when they have none —
+    // otherwise a member-only user gets a redundant empty workspace.
+    let ws =
+      (await Workspace.findOne({ owner: email }).sort({ createdAt: 1 }).lean()) ||
+      (await Workspace.findOne({ 'members.email': email }).sort({ createdAt: 1 }).lean());
     if (!ws) {
       const name = req.body?.defaultName || `My Workspace`;
       const created = new Workspace({ name, owner: email, members: [] });
@@ -183,6 +193,17 @@ export const shareWorkspace = async (req, res) => {
       ws.members.push({ email, name: name || '' });
     }
     await ws.save();
+
+    // Re-sharing with someone previously removed must lift the revocation we
+    // recorded on this workspace's boards (removeWorkspaceMember/leaveWorkspace
+    // set revokedEmails) — otherwise resolveRole, which checks revokedEmails
+    // before the member viewer baseline, would keep them locked out.
+    if (ws.boardIds.length) {
+      await Whiteboard.updateMany(
+        { id: { $in: ws.boardIds }, revokedEmails: email },
+        { $pull: { revokedEmails: email } }
+      );
+    }
     // Membership feeds the board-access cache (viewer baseline) — drop stale entries.
     await Promise.all((ws.boardIds || []).map(id => invalidateBoardMeta(id)));
     return res.status(200).json(wsView(ws, req.email));
@@ -206,9 +227,15 @@ export const removeWorkspaceMember = async (req, res) => {
     await ws.save();
 
     if (ws.boardIds.length) {
-      const boards = await Whiteboard.find({ id: { $in: ws.boardIds }, 'collaborators.email': email });
+      // Strip the removed member's per-board roles AND record the revocation on
+      // every board, so an outstanding share link / public access can't let them
+      // back in. Boards they don't own and aren't (no longer) the owner of.
+      const boards = await Whiteboard.find({ id: { $in: ws.boardIds }, owner: { $ne: email } });
       await Promise.all(boards.map(b => {
         b.collaborators = b.collaborators.filter(c => c.email !== email);
+        if (!b.revokedEmails?.includes(email)) {
+          b.revokedEmails = [...(b.revokedEmails || []), email];
+        }
         return b.save();
       }));
       // Invalidate every board's cache — the viewer baseline (workspaceMembers) changed.
@@ -237,9 +264,14 @@ export const leaveWorkspace = async (req, res) => {
     await ws.save();
 
     if (ws.boardIds.length) {
-      const boards = await Whiteboard.find({ id: { $in: ws.boardIds }, 'collaborators.email': email });
+      // Drop the leaver's per-board roles AND record the revocation, so a still
+      // valid share link / public access can't silently let them back in.
+      const boards = await Whiteboard.find({ id: { $in: ws.boardIds }, owner: { $ne: email } });
       await Promise.all(boards.map(b => {
         b.collaborators = b.collaborators.filter(c => c.email !== email);
+        if (!b.revokedEmails?.includes(email)) {
+          b.revokedEmails = [...(b.revokedEmails || []), email];
+        }
         return b.save();
       }));
       await Promise.all(ws.boardIds.map(id => invalidateBoardMeta(id)));

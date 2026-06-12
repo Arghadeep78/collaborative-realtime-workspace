@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { themeColors } from './theme/colorMap.js';
 
 // Layer glyphs — the highlighted rectangle shows where the target lands.
 function LayerGlyph({ mode }) {
   const c = { className: 'w-4 h-4', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
-  const hi = '#3b82f6';
+  const hi = themeColors.uiAccent.light;
   if (mode === 'front')
     return <svg {...c}><rect x="4" y="4" width="11" height="11" rx="1.5" stroke={hi} /><rect x="9" y="9" width="11" height="11" rx="1.5" /></svg>;
   if (mode === 'forward')

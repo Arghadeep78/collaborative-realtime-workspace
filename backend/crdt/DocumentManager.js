@@ -27,23 +27,18 @@ class DocumentManager {
     this.dirtyDocs = new Set();
     /** @type {Map<string, NodeJS.Timeout>} */
     this.gcTimers = new Map();
-    /** @type {Set<string>} - Boards with a compaction pass in flight (guards against double-compaction on concurrent cold loads) */
-    this.compacting = new Set();
-    /** @type {Map<string, Promise<void>>} - Serialises concurrent flushes per board so an older snapshot can't overwrite a newer one */
-    this.flushChain = new Map();
     /** @type {((boardId: string) => void) | null} - Called when a doc is evicted from memory */
     this.onDocEvicted = null;
-    /** @type {((boardId: string, oldDoc: Y.Doc, newDoc: Y.Doc) => void) | null} - Called when a doc instance is swapped (e.g. after async compaction) so WSServer can rewire its `update` listener */
-    this.onDocSwapped = null;
     this.GC_DELAY_MS = 5 * 60 * 1000;
 
     // Compaction thresholds. Yjs docs grow monotonically: every erased shape
     // leaves a tombstone, and the 50ms-throttled record writes during a drag
     // leave a long per-key history chain. encodeStateAsUpdate serialises all of
     // it, so yjsState keeps growing even when the shape count is constant.
-    // On cold load we rebuild a fresh doc from the current logical values to
-    // drop that history — but only when it's big enough to matter and the
-    // rebuild actually saves space, to avoid churning small/healthy docs.
+    // We compact when the last peer leaves a room (see _flushIfDirty), rebuilding
+    // the state from the doc's current logical values to drop that history —
+    // but only when it's big enough to matter and the rebuild actually saves
+    // space, to avoid churning small/healthy docs.
     this.COMPACT_MIN_BYTES = 64 * 1024;
     this.COMPACT_SAVE_RATIO = 0.8;
   }
@@ -83,77 +78,40 @@ class DocumentManager {
       Y.applyUpdate(ydoc, new Uint8Array(board.yjsState.buffer));
     }
 
-    // Defer compaction off the cold-load path. Rebuilding a fresh doc
-    // (encode → deep-clone → re-encode) for a large board can block the event
-    // loop for 50–200ms; doing it here would make the first client wait — and
-    // queue every other board's WS traffic behind it. Instead we hand back the
-    // un-compacted doc immediately so the sync handshake can start, and run
-    // compaction after the current turn via setImmediate (see _scheduleCompaction).
-    this._scheduleCompaction(boardId);
     return ydoc;
   }
 
   /**
-   * Run history compaction asynchronously, after the cold-load path has
-   * returned and the first client's sync handshake is underway.
+   * Produce a compacted snapshot of the doc's current state, discarding
+   * accumulated CRDT history (tombstones, GC structs, per-key write chains) by
+   * replaying the live logical values into a throwaway fresh doc and encoding
+   * that. Returns the slimmer bytes, or `null` when compaction isn't worth it
+   * (doc too small, or the rebuild doesn't save enough space) — the caller then
+   * persists the un-compacted state instead.
    *
-   * Why async: rebuilding a fresh doc (encode → deep-clone → re-encode) for a
-   * large board blocks the Node event loop for 50–200ms. Doing it on the cold
-   * load path makes the first client wait and queues every other board's WS
-   * traffic behind it. Running it in a later `setImmediate` turn lets the sync
-   * handshake go out first ("serve then optimize").
-   *
-   * The rebuilt doc is a *different* Y.Doc instance, so swapping it in requires
-   * rewiring every holder of the old reference. The `onDocSwapped` callback
-   * lets WSServer move its `update` listener and re-sync peers; the live
-   * read/write paths there resolve the doc fresh from `docs` on each message,
-   * so they pick up the new instance automatically. The `compacting` flag
-   * keeps two concurrent cold loads from scheduling the pass twice.
-   *
-   * @param {string} boardId
-   */
-  _scheduleCompaction(boardId) {
-    if (this.compacting.has(boardId)) return; // a pass is already pending
-    this.compacting.add(boardId);
-
-    setImmediate(() => {
-      this.compacting.delete(boardId);
-      const ydoc = this.docs.get(boardId);
-      if (!ydoc) return; // evicted before we got here
-
-      const compacted = this._compact(boardId, ydoc);
-      if (compacted === ydoc) return; // not worth it / failed — left as-is
-
-      // Atomic swap: update the map first so any message arriving after this
-      // point resolves the new doc, then let WSServer rewire its listener and
-      // push the compacted state to attached peers, then destroy the old doc.
-      this.docs.set(boardId, compacted);
-      if (this.onDocSwapped) this.onDocSwapped(boardId, ydoc, compacted);
-      ydoc.destroy();
-    });
-  }
-
-  /**
-   * Rebuild a fresh Y.Doc from the current logical values of every top-level
-   * shared type, discarding accumulated CRDT history (tombstones, GC structs,
-   * per-key write chains). Returns the original doc unchanged when it's too
-   * small to bother with or when the rebuild wouldn't save enough space.
+   * Called only when a room goes empty (see _flushIfDirty), so:
+   *   - it never runs on the cold-load handshake path (no client is waiting);
+   *   - no live socket holds the doc reference, so there's nothing to swap or
+   *     rewire — we just encode a snapshot and let the original doc be GC'd.
    *
    * Nested Yjs types are reconstructed (not flattened to plain JSON): the
-   * `votes` map holds a Y.Map per poll so concurrent voters merge, and
-   * flattening it to a plain object would break the client's vote mutations
-   * after a cold load. `clone` recurses to preserve that structure.
+   * `votes`/`comments` maps hold a Y.Map per poll/element so concurrent
+   * mutations merge, and flattening them to plain objects would break the
+   * client's vote/comment mutations after a cold load. `clone` recurses to
+   * preserve that structure, so the reloaded doc looks identical to the live one.
    *
-   * @param {string} boardId @param {Y.Doc} ydoc @returns {Y.Doc}
+   * @param {string} boardId
+   * @param {Y.Doc} ydoc
+   * @returns {Uint8Array | null} compacted state bytes, or null to skip
    */
-  _compact(boardId, ydoc) {
+  _compactState(boardId, ydoc) {
     let originalSize;
     try {
       originalSize = Y.encodeStateAsUpdate(ydoc).byteLength;
     } catch {
-      return ydoc;
+      return null;
     }
-    if (originalSize < this.COMPACT_MIN_BYTES) return ydoc;
+    if (originalSize < this.COMPACT_MIN_BYTES) return null;
 
     // Deep-clone a value, rebuilding nested Yjs types as fresh (detached)
     // instances so they re-integrate into the compacted doc with their
@@ -190,23 +148,19 @@ class DocumentManager {
           }
         });
       });
+
+      const compacted = Y.encodeStateAsUpdate(fresh);
+      if (compacted.byteLength >= originalSize * this.COMPACT_SAVE_RATIO) {
+        return null; // not worth it — persist the un-compacted state instead
+      }
+      log(`compacted ${boardId}: ${originalSize}B → ${compacted.byteLength}B`);
+      return compacted;
     } catch (err) {
-      console.error(`[DocumentManager] compaction failed for ${boardId}:`, err);
+      lerr(`compaction failed for ${boardId}:`, err.message);
+      return null;
+    } finally {
       fresh.destroy();
-      return ydoc;
     }
-
-    const compactedSize = Y.encodeStateAsUpdate(fresh).byteLength;
-    if (compactedSize >= originalSize * this.COMPACT_SAVE_RATIO) {
-      fresh.destroy(); // not worth the swap
-      return ydoc;
-    }
-
-    // Persist the slimmer state so MongoDB shrinks too — otherwise we'd
-    // recompact this same bloat on every cold load.
-    this.markDirty(boardId);
-    console.log(`[DocumentManager] compacted ${boardId}: ${originalSize}B → ${compactedSize}B`);
-    return fresh;
   }
 
   /** @param {string} boardId @param {WebSocket} ws */
@@ -225,51 +179,54 @@ class DocumentManager {
       conns.delete(ws);
       if (conns.size === 0) {
         this.connections.delete(boardId);
-        // Immediately write dirty state to MongoDB when the last peer leaves.
-        // This closes the 30s write-behind window: without it, a quick reload
-        // or server restart would serve a stale cold-load from MongoDB and lose
-        // any edits made since the last scheduler tick.
-        this._flushIfDirty(boardId);
+        // Compact + write dirty state to MongoDB when the last peer leaves.
+        // Fire-and-forget: _flushIfDirty clears the dirty flag synchronously, so
+        // the GC timer below (which only evicts once dirty is clear) can't race
+        // the in-flight write; the doc stays in memory until the 5-min timer.
+        this._flushIfDirty(boardId).catch(() => {});
         this._scheduleGC(boardId);
       }
     }
   }
 
   /**
-   * Write the current Y.Doc state directly to MongoDB if dirty.
-   * Called when the last connection leaves a room — avoids the 30s lag of the
-   * scheduler and ensures edits survive a server restart or quick reload.
+   * Compact (if worthwhile) and write the Y.Doc state to MongoDB if dirty.
+   * Called when the last connection leaves a room, so:
+   *   - it closes the 30s write-behind window — without it a quick reload or
+   *     server restart would serve a stale cold-load and lose edits since the
+   *     last scheduler tick;
+   *   - it's the natural moment to compact: the room is empty, so the rebuild
+   *     never blocks a client's handshake, and the slim state is what we persist
+   *     so the next cold load is both small and cheap to replay.
+   *
+   * This is the only writer here that touches MongoDB directly; the periodic
+   * scheduler enqueues BullMQ jobs instead. A room only goes empty once per
+   * lifetime, so there's no concurrent flush for the same board to serialise
+   * against — we clear the dirty flag up front and re-mark it on failure so the
+   * next scheduler tick retries.
    *
    * @param {string} boardId
    */
-  _flushIfDirty(boardId) {
+  async _flushIfDirty(boardId) {
     if (!this.dirtyDocs.has(boardId)) return;
-    // Capture the latest state NOW (before clearing dirty), then chain onto any
-    // in-flight write so the newer snapshot always wins. Without chaining,
-    // two rapid flushes can race: the first (stale) snapshot could resolve after
-    // the second (fresh) one and overwrite it in MongoDB.
-    const state = this.encodeState(boardId);
-    if (!state) return;
+    const ydoc = this.docs.get(boardId);
+    if (!ydoc) return;
+
+    // Compact while the room is empty; fall back to the raw state when the doc
+    // is too small to bother or the rebuild wouldn't save enough space.
+    const state = this._compactState(boardId, ydoc) || Y.encodeStateAsUpdate(ydoc);
     this.clearDirty(boardId);
 
-    const prev = this.flushChain.get(boardId) ?? Promise.resolve();
-    const next = prev.then(() =>
-      Whiteboard.updateOne(
+    try {
+      await Whiteboard.updateOne(
         { id: boardId },
         { $set: { yjsState: Buffer.from(state) } },
-      ).then(() => {
-        log(`Flushed boardId: ${boardId} (${state.byteLength}B) on room-empty`);
-      }).catch((err) => {
-        this.markDirty(boardId);
-        lerr(`Flush failed for boardId: ${boardId} — re-marked dirty:`, err.message);
-      })
-    );
-    // Keep the chain alive only while a write is pending; clean up to avoid a
-    // memory leak on boards that are flushed many times over a long session.
-    this.flushChain.set(boardId, next);
-    next.finally(() => {
-      if (this.flushChain.get(boardId) === next) this.flushChain.delete(boardId);
-    });
+      );
+      log(`Flushed boardId: ${boardId} (${state.byteLength}B) on room-empty`);
+    } catch (err) {
+      this.markDirty(boardId);
+      lerr(`Flush failed for boardId: ${boardId} — re-marked dirty:`, err.message);
+    }
   }
 
   /** @param {string} boardId @returns {Set<WebSocket>} */

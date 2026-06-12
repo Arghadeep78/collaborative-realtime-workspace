@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { BarChart2, CheckCircle2, ClipboardList, Plus, Trash2, Users, X } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
-import { POLL_BG_COLORS } from '../theme/colorMap.js';
+import { POLL_BG_COLORS, AVATAR_FALLBACK } from '../theme/colorMap.js';
 import Avatar from '../../common/Avatar.jsx';
 import { primePhotoCache } from '../../../hooks/usePhotoResolver.js';
 
@@ -285,7 +285,7 @@ export default function PollBlock({
 
   const castVote = (optionId) => {
     if (editing || !canVote) return;
-    const user = { email: myEmail, name: myName, color: userData.color || '#94a3b8', photoURL: myPhotoURL };
+    const user = { email: myEmail, name: myName, color: userData.color || AVATAR_FALLBACK, photoURL: myPhotoURL };
     if (props.multiChoice) {
       if (myVotesMulti.has(optionId)) removePollVote(pollId, `${myEmail}:${optionId}`);
       else castPollVote(pollId, optionId, user, true);

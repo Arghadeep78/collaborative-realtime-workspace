@@ -3,6 +3,7 @@ import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { Globe, Lock, Copy, X, Crown, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from '../common/Avatar.jsx';
+import { AVATAR_OWNER, AVATAR_MEMBER } from './theme/colorMap.js';
 
 const ROLES = ['editor', 'commenter', 'viewer'];
 const roleLabel = (r) => r.charAt(0).toUpperCase() + r.slice(1);
@@ -263,7 +264,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                 {/* Owner row */}
                 <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
                   <div className="flex items-center gap-3 min-w-0">
-                    <Avatar email={owner?.email} name={owner?.name} src={owner?.profilePicture} size={36} shapeClass="rounded-xl" color="#f59e0b" borderClass="border-transparent" />
+                    <Avatar email={owner?.email} name={owner?.name} src={owner?.profilePicture} size={36} shapeClass="rounded-xl" color={AVATAR_OWNER} borderClass="border-transparent" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-content truncate">{owner?.name || owner?.email}</p>
                       {owner?.name && (
@@ -284,7 +285,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                 {participants.map((p) => (
                   <div key={p.email} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-surface border border-edge-subtle hover:border-indigo-500/20 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Avatar email={p.email} name={p.name} src={p.profilePicture} size={36} shapeClass="rounded-xl" color="#475569" borderClass="border-transparent" />
+                      <Avatar email={p.email} name={p.name} src={p.profilePicture} size={36} shapeClass="rounded-xl" color={AVATAR_MEMBER} borderClass="border-transparent" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-content truncate">{p.name || p.email}</p>
                         {p.name && (

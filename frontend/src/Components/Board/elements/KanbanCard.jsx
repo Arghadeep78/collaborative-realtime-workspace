@@ -4,29 +4,18 @@ import { makeId } from '../boardConstants.js';
 import { uploadImage } from '../uploadImage.js';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { LIST_COLORS, AVATAR_COLORS } from '../theme/colorMap.js';
 import {
   X, Check, Plus, Calendar, Image as ImageIcon, Tag,
   AlignLeft, Paperclip, CheckSquare, Clock, MoreHorizontal, ArrowRightLeft, Sparkles, MessageCircle, ChevronDown, MapPin, Circle
 } from 'lucide-react';
-
-// Trello-like list background colors mapping (light mode pastels → dark mode muted tones)
-const LIST_COLORS = {
-  '#4bce97': '#d3f1df', // pastel green
-  '#f5cd47': '#fdf4c8', // pastel yellow
-  '#fea362': '#fdedd8', // pastel orange
-  '#f87168': '#ffdce0', // pastel red
-  '#9f8fef': '#e8dffe', // pastel purple
-  '#579dff': '#cce0ff', // pastel blue
-};
-
 
 const LABEL_COLORS = Object.keys(LIST_COLORS);
 
 // Pastel bg → label color (for inline color picker swatches)
 const BG_TO_LABEL = Object.fromEntries(Object.entries(LIST_COLORS).map(([k, v]) => [v, k]));
 const PICKER_COLORS = [null, ...Object.values(LIST_COLORS)];
-const AV_COLORS = ['#0b69ff', '#0a9d62', '#f5821f', '#7c4dff', '#e0457b', '#0bb4c4'];
-const avatarColor = (s = '') => AV_COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
+const avatarColor = (s = '') => AVATAR_COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 const initialOf = (s = '') => (s.trim()[0] || '?').toUpperCase();
 const stop = (e) => e.stopPropagation();
 
@@ -69,6 +58,7 @@ function dueMeta(due) {
 
 // ── Card Detail Modal ──────────────────────────────────────────────────────
 function CardModal({ card, listTitle, onClose, onUpdate, members }) {
+  const { isDark } = useTheme();
   const [desc, setDesc] = useState(card.description || '');
   const [uploading, setUploading] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -107,7 +97,10 @@ function CardModal({ card, listTitle, onClose, onUpdate, members }) {
 
         {/* Modal Header */}
         <div className="p-6 pb-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-[#d3f1df] dark:bg-[#d3f1df]/10 text-teal-800 dark:text-teal-400 rounded w-max text-[18px] font-semibold mb-6">
+          <div
+            className="flex items-center gap-1.5 px-2 py-1 rounded w-max text-[18px] font-semibold mb-6"
+            style={{ backgroundColor: getThemeColor('kanbanChipBg', isDark), color: getThemeColor('kanbanChipText', isDark) }}
+          >
             <span>{listTitle}</span>
             <ChevronDown className="w-4 h-4" />
           </div>

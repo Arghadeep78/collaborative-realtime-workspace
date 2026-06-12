@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AVATAR_MEMBER } from './theme/colorMap.js';
 
 // Initials for an avatar chip from a display name / email.
 function initials(name) {
@@ -126,7 +127,7 @@ export default function CommentsDialog({
                 <div key={c.id} className="flex gap-2.5 group">
                   <div
                     className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                    style={{ backgroundColor: c.color || '#64748b' }}
+                    style={{ backgroundColor: c.color || AVATAR_MEMBER }}
                     title={c.author}
                   >
                     {initials(c.author)}

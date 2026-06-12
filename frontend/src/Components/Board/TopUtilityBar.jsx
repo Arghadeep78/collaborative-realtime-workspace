@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { UI, TOOLS } from './boardConstants.js';
 import { getThemeColor } from './theme/themeUtils';
+import { BOARD_BG_COLORS as BG_COLORS, AVATAR_FALLBACK } from './theme/colorMap.js';
 import Avatar from '../common/Avatar.jsx';
 
 const BG_PATTERNS = [
@@ -8,12 +9,6 @@ const BG_PATTERNS = [
   { id: 'grid', label: 'Grid', preview: 'linear-gradient(to right,rgba(15,23,42,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to right,rgba(255,255,255,0.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
   { id: 'lines', label: 'Lines', preview: 'linear-gradient(to bottom,rgba(15,23,42,0.12) 1px,transparent 1px)', darkPreview: 'linear-gradient(to bottom,rgba(255,255,255,0.12) 1px,transparent 1px)', size: '12px 12px' },
   { id: 'none', label: 'Clean', preview: 'none', darkPreview: 'none', size: 'auto' },
-];
-
-// Neutrals light→dark, then hues arranged by spectrum, rainbow last
-const BG_COLORS = [
-  '#ffffff', '#f8fafc', '#e2e8f0', '#94a3b8', '#475569', '#1e293b', '#0f172a',
-  '#dbeafe', '#bbf7d0', '#fef08a', '#fed7aa', '#fecaca', '#e9d5ff', '#fbcfe8',
 ];
 
 function BackgroundPicker({ activePage, onUpdateBackground, editable, isDark }) {

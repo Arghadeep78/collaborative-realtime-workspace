@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { SLIDE_W, SLIDE_H, SPAWN_TOOLS, clamp } from './boardConstants.js';
+import { SLIDE_W, SLIDE_H, SPAWN_TOOLS, clamp, PRESENCE_RED } from './boardConstants.js';
 import BoardElement from './BoardElement.jsx';
 import ConnectorLayer from './ConnectorLayer.jsx';
 import PresenceLayer from './PresenceLayer.jsx';
@@ -451,7 +451,7 @@ export default function SlideCanvas({
             width: 10, height: 10,
             left: laserClient.x - 5,
             top: laserClient.y - 5,
-            background: '#FF4A4A',
+            background: PRESENCE_RED,
             boxShadow: '0 0 0 3px rgba(255,74,74,0.35), 0 0 10px 4px rgba(255,74,74,0.55)',
             zIndex: 2147483000,
           }}

@@ -1,14 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
-import { UI, SLIDE_W, SLIDE_H, STICKY_COLORS } from './boardConstants.js';
-
+import { UI, SLIDE_W, SLIDE_H } from './boardConstants.js';
 // Flat fill used to telegraph each element type in the miniature preview.
-const SWATCH = {
-  sticky: STICKY_COLORS[0],
-  kanban: '#ffffff',
-  text: 'transparent',
-  poll: '#c7d2fe',
-  iframe: '#cbd5e1',
-};
+import { SIDEBAR_SWATCH as SWATCH } from './theme/colorMap.js';
 
 import BoardElement from './BoardElement.jsx';
 import { useTheme } from '../../contexts/ThemeContext.jsx';

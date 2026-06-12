@@ -7,7 +7,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import * as Y from 'yjs';
-import { STICKY_COLORS as _STICKY_COLORS } from './theme/colorMap.js';
+import {
+  STICKY_COLORS as _STICKY_COLORS,
+  AVATAR_COLORS,
+  FILL_COLORS,
+  STROKE_OPTIONS,
+  DEFAULT_TEXT_COLOR,
+} from './theme/colorMap.js';
 
 // A slide is a discrete, fixed-size page (presentation-style 16:9). The canvas
 // scales this rectangle to fit the viewport; all element coordinates are in
@@ -19,8 +25,8 @@ export const SLIDE_H = 900;
 export const PRESENCE_RED = '#FF4A4A';
 
 // A stable-ish per-session colour for this user's avatar / name tag.
-const PALETTE = ['#e0457b', '#0b69ff', '#0a9d62', '#f5821f', '#7c4dff', '#0bb4c4'];
-export const myColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+// Palette source of truth is colorMap.js (shared with KanbanCard avatars).
+export const myColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
 // Pastel options for sticky notes — source of truth is colorMap.js.
 export const STICKY_COLORS = _STICKY_COLORS;
@@ -77,13 +83,13 @@ export const ELEMENT_DEFAULTS = {
     w: 220, h: 180,
     props: {
       shapeType: 'rect',
-      fill: '#a5b4fc',
-      stroke: '#6366f1',
+      fill: FILL_COLORS[0],          // '#a5b4fc'
+      stroke: STROKE_OPTIONS[1].v,   // '#6366f1' (index 0 is transparent)
       strokeWidth: 3,
       opacity: 1,
       text: '',
       fontSize: 28,
-      textColor: '#1e293b',
+      textColor: DEFAULT_TEXT_COLOR, // '#1e293b'
       textAlign: 'center',
       bold: false,
       italic: false,
@@ -120,7 +126,7 @@ export const makeId = (prefix = 'el') =>
 // `comments` mirrors the `votes` shape: a Y.Map keyed by elementId, each value
 // a nested Y.Map keyed by commentId → comment record. The nested-Map structure
 // lets concurrent commenters merge cleanly, and the backend's history
-// compaction already preserves nested Yjs types (see DocumentManager._compact).
+// compaction preserves nested Yjs types (see DocumentManager._compactState).
 export const getBoardTypes = (ydoc) => ({
   yPages: ydoc.getArray('pages'),
   yElements: ydoc.getMap('elements'),
@@ -134,7 +140,7 @@ export const getBoardTypes = (ydoc) => ({
 export const COMMENTABLE_TYPES = ['sticky', 'kanban', 'text', 'poll', 'iframe', 'shape'];
 
 // Re-exported so call sites don't each import yjs just for an origin tag.
-export const Yjs = Y;
+// export const Yjs = Y;
 
 // Transaction origin tag for this client's own edits. The per-user UndoManager
 // tracks only this origin, so each browser can undo solely the work it authored

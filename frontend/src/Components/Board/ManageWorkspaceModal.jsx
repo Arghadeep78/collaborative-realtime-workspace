@@ -3,6 +3,7 @@ import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { X, Trash2, Users, ChevronRight, ChevronDown, Crown, Eye, MessageSquare, Pencil, UserMinus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Avatar from '../common/Avatar.jsx';
+import { AVATAR_OWNER, AVATAR_MEMBER } from './theme/colorMap.js';
 
 const ROLES = ['owner', 'editor', 'commenter', 'viewer'];
 
@@ -170,7 +171,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
       src={profilePicture}
       size={36}
       shapeClass="rounded-xl"
-      color={tone === 'indigo' ? '#8b5cf6' : '#475569'}
+      color={tone === 'indigo' ? '#8b5cf6' : AVATAR_MEMBER}
       borderClass="border-transparent"
     />
   );
@@ -243,7 +244,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                   <div className="flex flex-wrap gap-2 mt-3">
                     {/* Owner pill */}
                     <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1">
-                      <Avatar email={data?.workspace?.owner} name={data?.workspace?.ownerName || data?.workspace?.owner} size={20} color="#d97706" borderClass="border-transparent" />
+                      <Avatar email={data?.workspace?.owner} name={data?.workspace?.ownerName || data?.workspace?.owner} size={20} color={AVATAR_OWNER} borderClass="border-transparent" />
                       <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
                         {data?.workspace?.ownerName || data?.workspace?.owner}
                       </span>
@@ -254,7 +255,7 @@ export default function ManageWorkspaceModal({ workspaceId, workspaceName, focus
                     </div>
                     {members.map((m) => (
                       <div key={m.email} className="group flex items-center gap-1.5 bg-surface border border-edge-subtle rounded-full pl-1.5 pr-2 py-1 hover:border-red-400/50 transition-colors">
-                        <Avatar email={m.email} name={m.name || m.email} size={20} color="#64748b" borderClass="border-transparent" />
+                        <Avatar email={m.email} name={m.name || m.email} size={20} color={AVATAR_MEMBER} borderClass="border-transparent" />
                         <span className="text-xs font-medium text-content">
                           {m.name || m.email}
                           {m.name && <span className="text-content-subtle font-normal ml-1">({m.email})</span>}

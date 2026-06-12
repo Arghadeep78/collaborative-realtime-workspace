@@ -43,12 +43,13 @@ function resolveRole(board, email, workspace, shareRole = null) {
   if (email && board.owner === email) return 'owner';
   const collab = email && board.collaborators?.find(c => c.email === email);
   if (collab) return collab.role;
+  // Explicitly removed by the owner: deny even the workspace-member viewer
+  // baseline, a still-valid share token, or public access. Named access above
+  // wins, so re-inviting (which clears revokedEmails) restores access.
+  if (email && board.revokedEmails?.includes(email)) return null;
   const isWsMember = email && workspace &&
     (workspace.owner === email || workspace.members?.some(m => m.email === email));
   if (isWsMember) return 'viewer';
-  // Explicitly removed by the owner: deny even a still-valid share token. Named
-  // access above wins, so re-inviting (which clears revokedEmails) restores access.
-  if (email && board.revokedEmails?.includes(email)) return null;
   if (shareRole) return shareRole;
   if (board.isPublic) return board.publicRole || 'viewer';
   return null;

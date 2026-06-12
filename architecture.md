@@ -137,18 +137,21 @@ Manages the in-memory lifecycle of all active `Y.Doc` instances.
 **Cold load (`_loadDoc`):**
 1. Fetches board from MongoDB (lean query).
 2. Applies stored `yjsState` buffer to a fresh `Y.Doc` via `Y.applyUpdate`.
-3. Registers an `update` listener that marks the doc dirty on every change.
-4. Schedules compaction asynchronously (`_scheduleCompaction`) and returns the un-compacted doc immediately — the first client's sync handshake is never blocked on a compaction pass.
+3. Returns the doc. The `update` listener (mark-dirty + broadcast + Redis fanout) is registered once per room by WSServer on the first connection.
 
-**History compaction (`_compact`):**
+**History compaction (`_compactState`, run on room teardown):**
 - Computes `Y.encodeStateAsUpdate(ydoc)` to measure current size.
-- Skips if < 64 KB (`COMPACT_MIN_BYTES`).
-- Deep-clones all top-level shared types into a fresh `Y.Doc` inside a transaction:
+- Skips (returns `null`) if < 64 KB (`COMPACT_MIN_BYTES`).
+- Deep-clones all top-level shared types into a throwaway fresh `Y.Doc` inside a transaction:
   - Plain JSON values (elements, pages) are set directly.
-  - Nested Y.Maps (votes, comments) are recursively reconstructed as new `Y.Map` instances.
-- If compacted size ≤ 80% of original (`COMPACT_SAVE_RATIO`), swaps the doc, persists the compacted state, and returns it. Otherwise returns the original unchanged.
-- **Runs asynchronously, off the cold-load path** (`_scheduleCompaction` → `setImmediate`). Rebuilding a large doc (encode → deep-clone → re-encode) can block the event loop for 50–200 ms; doing it during `_loadDoc` would make the first client wait and queue every other board's WebSocket traffic behind it. The "serve then optimize" ordering hands back the un-compacted doc first, then compacts in a later turn. A per-`boardId` `compacting` flag prevents two concurrent cold loads from double-compacting.
-- **Doc swap is rewired live, not assumed invisible.** Because compaction now runs after clients may have connected, the rebuilt `Y.Doc` is a new instance. The swap is made atomic: the `docs` map is updated first (so any in-flight message resolves the new doc — the WSServer read/write paths look the doc up fresh per message), then an `onDocSwapped` callback moves the `update` listener onto the new doc and pushes a fresh `SyncStep2` to all attached peers, then the old doc is destroyed.
+  - Nested Y.Maps (votes, comments) are recursively reconstructed as new `Y.Map` instances, so CRDT merge semantics survive a reload.
+- Encodes the fresh doc. If compacted size ≤ 80% of original (`COMPACT_SAVE_RATIO`), returns the slim bytes; otherwise returns `null` and the caller persists the un-compacted state. The throwaway doc is always destroyed.
+- **Representative savings:** a synthetic board bloated with a long per-key write history (repeated updates to the same elements) compacted from **68 KB → 5 KB (~93%)** in testing. Real-world ratios depend on edit patterns — a doc whose size is mostly live content rather than history compacts little (and is correctly skipped by the 20%-savings gate); a doc dominated by drag/redo history compacts heavily.
+- **Runs only on room teardown**, from `_flushIfDirty` when the last peer leaves — never mid-session, never on the cold-load handshake. This is deliberate:
+  - The rebuild (encode → deep-clone → re-encode) can block the event loop for 50–200 ms on a large doc. At teardown the room is empty, so no client's sync handshake waits on it.
+  - We're already encoding the doc to flush it at teardown, so compaction piggybacks on a write that has to happen anyway, and the *slim* snapshot is what lands in MongoDB — so the next cold load reads small bytes and replays cheaply.
+  - Because no socket holds the doc reference at this point, there is **no live doc to swap and nothing to rewire** — the doc is encoded to a snapshot and then GC'd normally. (The earlier design compacted on cold load and swapped the live `Y.Doc` instance under active connections, which forced an `onDocSwapped` listener-rewire and a per-message fresh-doc lookup; teardown compaction removes all of that.)
+- **Tradeoff:** a room that never goes idle never re-compacts while hot; its tombstone growth is compacted the next time it goes empty and is reloaded. Given the 5-minute idle eviction, that happens often in practice, and the cost of *not* compacting a hot room is only larger in-memory/MongoDB state, never incorrectness.
 
 **Dirty tracking:**
 - `ydoc.on('update')` → `markDirty(boardId)`

@@ -3,6 +3,7 @@ import { STICKY_COLORS } from '../boardConstants.js';
 import { TextFormatToolbar } from './SharedUI.jsx';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { DEFAULT_TEXT_COLOR } from '../theme/colorMap.js';
 
 export default function StickyNote({ element, editable, editing, selected, onEditProps, getScale }) {
   const rootRef = useRef(null);
@@ -12,7 +13,7 @@ export default function StickyNote({ element, editable, editing, selected, onEdi
   const displayColor = getThemeColor(color, isDark);
   const bold = !!props.bold;
   const italic = !!props.italic;
-  const textColor = props.textColor || '#1e293b';
+  const textColor = props.textColor || DEFAULT_TEXT_COLOR;
   const displayTextColor = getThemeColor(textColor, isDark);
   const autoSize = Math.max(20, Math.min(46, Math.round(element.w / 9)));
   const fontSize = props.fontSize || autoSize;

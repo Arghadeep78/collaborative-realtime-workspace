@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { FloatBar, Sep, Swatch, Popover, TextFormatToolbar } from './SharedUI';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
-import { FILL_COLORS, STROKE_OPTIONS } from '../theme/colorMap.js';
+import { FILL_COLORS, STROKE_OPTIONS, DEFAULT_TEXT_COLOR } from '../theme/colorMap.js';
 
 // ── Shape geometry helpers ─────────────────────────────────────────────────
 
@@ -101,9 +101,9 @@ export default function ShapeBlock({ element, editable, editing, selected, onEdi
   const { props, w, h } = element;
   const { isDark } = useTheme();
   const shapeType = props.shapeType || 'rect';
-  const rawFill = props.fill ?? '#a5b4fc';
-  const rawStroke = props.stroke ?? '#6366f1';
-  const rawTextColor = props.textColor || '#1e293b';
+  const rawFill = props.fill ?? FILL_COLORS[0];
+  const rawStroke = props.stroke ?? STROKE_OPTIONS[1].v;
+  const rawTextColor = props.textColor || DEFAULT_TEXT_COLOR;
   
   const fill = getThemeColor(rawFill, isDark);
   const stroke = getThemeColor(rawStroke, isDark);

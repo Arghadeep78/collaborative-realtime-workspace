@@ -64,12 +64,13 @@ export function useBoardSync(ydoc) {
     doc.transact(() => {
       let yPoll = yVotes.get(pollId);
       if (!(yPoll instanceof Y.Map)) {
-        // Server-side history compaction flattens nested Y.Maps to plain
-        // objects on cold load. Rehydrate into a Y.Map, carrying any existing
-        // votes across, so a vote after compaction doesn't wipe the others.
-        const prev = yPoll && typeof yPoll === 'object' ? yPoll : null;
+        // First vote on this poll — create its nested Y.Map. (Server-side
+        // compaction preserves nested Y.Maps, so an existing poll is always a
+        // Y.Map here; this branch only fires when no one has voted yet.)
+        // NOTE: a pre-a55fdba flattening compaction could in theory have left a
+        // plain-object poll in old persisted data — that's accepted as not worth
+        // handling; such legacy boards are out of scope.
         yPoll = new Y.Map();
-        if (prev) Object.entries(prev).forEach(([k, v]) => yPoll.set(k, v));
         yVotes.set(pollId, yPoll);
       }
       const key = multiKey ? `${user.email}:${optionId}` : user.email;
@@ -82,22 +83,16 @@ export function useBoardSync(ydoc) {
     if (!doc) return;
     const yVotes = doc.getMap('votes');
     doc.transact(() => {
-      let yPoll = yVotes.get(pollId);
-      if (yPoll instanceof Y.Map) {
-        yPoll.delete(email);
-      } else if (yPoll && typeof yPoll === 'object' && email in yPoll) {
-        // Compaction-flattened poll: rebuild a Y.Map without the removed vote.
-        const next = new Y.Map();
-        Object.entries(yPoll).forEach(([k, v]) => { if (k !== email) next.set(k, v); });
-        yVotes.set(pollId, next);
-      }
+      const yPoll = yVotes.get(pollId);
+      if (yPoll instanceof Y.Map) yPoll.delete(email);
     }, LOCAL);
   }, []);
 
   // ── Comments ────────────────────────────────────────────────────────────────
   // Same nested-Y.Map shape as votes: comments → { [elementId]: Y.Map<commentId,
-  // record> }. observeDeep above re-syncs on any nested change, and the backend
-  // compaction preserves the nested Y.Maps so threads survive a cold load.
+  // record> }. observeDeep above re-syncs on any nested change. Backend
+  // compaction (on room teardown) rebuilds these nested Y.Maps rather than
+  // flattening them, so threads survive a cold load with their structure intact.
 
   /** Add a comment to an element. `user` is { name, email, color? }. */
   const addComment = useCallback((elementId, text, user) => {
@@ -109,11 +104,10 @@ export function useBoardSync(ydoc) {
     doc.transact(() => {
       let thread = yComments.get(elementId);
       if (!(thread instanceof Y.Map)) {
-        // Rehydrate a compaction-flattened thread into a Y.Map, carrying
-        // existing comments across so a new comment doesn't drop the others.
-        const prev = thread && typeof thread === 'object' ? thread : null;
+        // First comment on this element — create its nested thread Y.Map.
+        // (Compaction preserves nested Y.Maps, so an element with existing
+        // comments always has a Y.Map here.)
         thread = new Y.Map();
-        if (prev) Object.entries(prev).forEach(([k, v]) => thread.set(k, v));
         yComments.set(elementId, thread);
       }
       thread.set(commentId, {
@@ -138,12 +132,6 @@ export function useBoardSync(ydoc) {
       if (thread instanceof Y.Map) {
         thread.delete(commentId);
         if (thread.size === 0) yComments.delete(elementId);
-      } else if (thread && typeof thread === 'object' && commentId in thread) {
-        // Compaction-flattened thread: rebuild without the removed comment.
-        const next = new Y.Map();
-        Object.entries(thread).forEach(([k, v]) => { if (k !== commentId) next.set(k, v); });
-        if (next.size === 0) yComments.delete(elementId);
-        else yComments.set(elementId, next);
       }
     }, LOCAL);
   }, []);

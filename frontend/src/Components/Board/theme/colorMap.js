@@ -11,6 +11,16 @@ export const themeColors = {
   kanbanCardBg: { light: '#ffffff', dark: '#22272b' },
   // Kanban empty-list background (previously hardcoded #f1f2f4)
   kanbanEmptyBg: { light: '#f1f2f4', dark: '#22272b' },
+  // Kanban modal list-title chip (previously hardcoded #d3f1df / teal-800/400)
+  kanbanChipBg:   { light: '#d3f1df', dark: '#1a3d28' },
+  kanbanChipText: { light: '#115e59', dark: '#2dd4bf' },
+
+  // Connector arrow + selected-edge accent (was inline #94a3b8 / #475569 / #2563eb)
+  connectorArrow:    { light: '#475569', dark: '#94a3b8' },
+  connectorSelected: { light: '#2563eb', dark: '#60a5fa' },
+
+  // Primary UI accent (selection rings, layer-glyph highlight — was #3b82f6)
+  uiAccent: { light: '#3b82f6', dark: '#60a5fa' },
 
   // ── Sticky note backgrounds (STICKY_COLORS — 7 colors) ────────────────────
   '#fdf4c8': { light: '#fdf4c8', dark: '#5c5218' }, // yellow
@@ -101,8 +111,59 @@ export const TEXT_COLORS = [
   '#f59e0b', '#ec4899', '#3b82f6', '#9ca3af', '#ea580c',
 ];
 
+// Default text color when an element has no saved `textColor`. Must be a member
+// of TEXT_COLORS so the format-toolbar swatch highlights as selected by default.
+// It is itself a key in `themeColors` above, so getThemeColor() maps it to its
+// dark variant (#f1f5f9) automatically.
+export const DEFAULT_TEXT_COLOR = TEXT_COLORS[0]; // '#1e293b'
+
 // 7 poll block background options (null = default surface, no bg color)
 export const POLL_BG_COLORS = [
   null,
   '#bbf7d0', '#fef08a', '#fed7aa', '#fecaca', '#e9d5ff', '#bfdbfe',
 ];
+
+// Kanban list / label colors. Keys are the saved "label color"; values are the
+// light-mode pastel background. The light→dark resolution for each pastel lives
+// in `themeColors` above — this map is only the label→pastel association so the
+// swatch picker and list rendering share one definition.
+export const LIST_COLORS = {
+  '#4bce97': '#d3f1df', // pastel green
+  '#f5cd47': '#fdf4c8', // pastel yellow
+  '#fea362': '#fdedd8', // pastel orange
+  '#f87168': '#ffdce0', // pastel red
+  '#9f8fef': '#e8dffe', // pastel purple
+  '#579dff': '#cce0ff', // pastel blue
+};
+
+// Per-session avatar / presence palette (shared by boardConstants.myColor and
+// KanbanCard's deterministic avatar colors).
+export const AVATAR_COLORS = [
+  '#e0457b', '#0b69ff', '#0a9d62', '#f5821f', '#7c4dff', '#0bb4c4',
+];
+
+// Fallback avatar fills for users with no assigned color. These are flat data
+// values (not light/dark-resolved): the Avatar component renders them as-is.
+//   - FALLBACK: generic "no color" (poll voters, board presence)
+//   - MEMBER:   a participant/member row in share & workspace lists
+//   - OWNER:    the workspace/board owner, on the amber-tinted owner row
+export const AVATAR_FALLBACK = '#94a3b8';
+export const AVATAR_MEMBER   = '#64748b';
+export const AVATAR_OWNER    = '#f59e0b';
+
+// Slide/board background swatches offered in the TopUtilityBar picker. Each is
+// a key in `themeColors` above, so getThemeColor() resolves its dark variant.
+// Neutrals light→dark, then hues by spectrum.
+export const BOARD_BG_COLORS = [
+  '#ffffff', '#f8fafc', '#e2e8f0', '#94a3b8', '#475569', '#1e293b', '#0f172a',
+  '#dbeafe', '#bbf7d0', '#fef08a', '#fed7aa', '#fecaca', '#e9d5ff', '#fbcfe8',
+];
+
+// Flat fills that telegraph each element type in the sidebar slide preview.
+export const SIDEBAR_SWATCH = {
+  sticky: STICKY_COLORS[0],
+  kanban: '#ffffff',
+  text: 'transparent',
+  poll: '#c7d2fe',
+  iframe: '#cbd5e1',
+};

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { TextFormatToolbar } from './SharedUI';
 import { useTheme } from '../../../contexts/ThemeContext.jsx';
 import { getThemeColor } from '../theme/themeUtils.js';
+import { DEFAULT_TEXT_COLOR } from '../theme/colorMap.js';
 
 export default function TextBox({ element, editable, editing, selected, onEditProps, getScale }) {
   const { props } = element;
@@ -9,7 +10,7 @@ export default function TextBox({ element, editable, editing, selected, onEditPr
   const fontSize = props.fontSize || props.size || 34;
   const bold = !!props.bold;
   const italic = !!props.italic;
-  const rawTextColor = props.textColor || '#1e293b';
+  const rawTextColor = props.textColor || DEFAULT_TEXT_COLOR;
   const textColor = getThemeColor(rawTextColor, isDark);
   const textAlign = props.textAlign || 'left';
   const taRef = useRef(null);

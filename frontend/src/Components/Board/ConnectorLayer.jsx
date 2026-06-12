@@ -1,6 +1,7 @@
 import { SLIDE_W, SLIDE_H } from './boardConstants.js';
 import { routeConnector } from './connectorRouting.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
+import { getThemeColor } from './theme/themeUtils.js';
 
 // Point where the ray from a rect's centre in direction (dx,dy) crosses its
 // border — used only for the dashed rubber-band while linking.
@@ -34,8 +35,8 @@ export default function ConnectorLayer({
   scale,
 }) {
   const { isDark } = useTheme();
-  const ARROW = isDark ? '#94a3b8' : '#475569';
-  const SELECTED = '#2563eb';
+  const ARROW = getThemeColor('connectorArrow', isDark);
+  const SELECTED = getThemeColor('connectorSelected', isDark);
   const inv = 1 / (scale || 1);
 
   // Resolve drawable edges (skip dangling connectors whose endpoints vanished).
