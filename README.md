@@ -1,9 +1,9 @@
 # Collaborative Realtime Workspace
 
-<img width="1470" height="837" alt="image" src="https://github.com/user-attachments/assets/be998997-e3ae-4890-bf98-06a189b26b25" />
+<img width="1470" height="837" alt="Collaborative Realtime Workspace screenshot" src="screenshot.png" />
 
 
-A full-stack, real-time collaborative workspace where teams ideate and organize on a shared, multi-page canvas — sticky notes, Kanban cards, connectors, polls, embeds, and more. State syncs conflict-free across clients with **Yjs CRDTs**, and the backend is built to run horizontally behind a load balancer: Redis-backed pub/sub, write-behind persistence, distributed rate limiting, health probes, and resilient external calls.
+A full-stack, real-time collaborative workspace where teams ideate and organize on a shared, multi-section canvas — sticky notes, task cards, connectors, polls, embeds, and more. State syncs conflict-free across clients with **Yjs CRDTs**, and the backend is built to run horizontally behind a load balancer: Redis-backed pub/sub, write-behind persistence, distributed rate limiting, health probes, and resilient external calls.
 
 The canvas UI is **custom-built** (React + SVG, no canvas library), so the workspace is fully owned end-to-end — from the CRDT wire protocol on the server to every element on the screen.
 
@@ -38,8 +38,8 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 
 ## Features (Product)
 
-- **Multi-page canvas** of fixed 16:9 slides with freeform / grid / column layout modes.
-- **Rich elements:** sticky notes, Kanban cards (labels, assignees, subcards, due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
+- **Multi-section canvas** of fixed 16:9 sections with freeform / grid / column layout modes, with support for subsections nested within sections.
+- **Rich elements:** sticky notes, task cards (with a dedicated task modal for title, description, assignees, labels, and due dates), text boxes, connectors, poll blocks, iframe embeds, shapes, and media.
 - **Live presence:** real-time teammate cursors with name tags and a laser pointer, broadcast via Yjs Awareness.
 - **Comments & voting** on elements for async decision-making.
 - **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing. Non-owners can leave a board or workspace; owners delete instead.

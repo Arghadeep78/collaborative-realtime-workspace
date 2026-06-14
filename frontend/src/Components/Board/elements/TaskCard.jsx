@@ -58,7 +58,7 @@ export default function TaskCard({ element, members = [] }) {
               const z = ri + 1;
               return (
                 <div key={a} className="-ml-1.5 first:ml-0 relative flex shrink-0 items-center justify-center" style={{ zIndex: z }}>
-                  <MemberAvatar label={m?.name || a} src={m?.profilePicture} size={16} ring={RING} />
+                  <MemberAvatar label={m?.name || a} email={a} size={16} ring={RING} />
                 </div>
               );
             })}

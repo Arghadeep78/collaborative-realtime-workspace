@@ -2,7 +2,7 @@ import userModel from "../models/user.model.js";
 import Whiteboard from "../models/whiteboard.model.js";
 import { OAuth2Client } from "google-auth-library";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
-import { signToken, verifyToken } from "../utils/jwt.js";
+import { verifyToken } from "../utils/jwt.js";
 
 // Generic reply shared by both forgot-password outcomes (found / not found) so
 // the endpoint never reveals whether an email is registered.
@@ -19,13 +19,28 @@ const fetchProjectsForUser = async (email) => {
   }).select('-yjsState').sort({ updatedAt: -1 }).lean();
 };
 
+/**
+ * Backfill this user's profilePicture into any collaborator entries that were
+ * recorded before they had an account (e.g. invited by email before signup, or
+ * joined via a share link as a guest). Fire-and-forget — never blocks the response.
+ */
+const backfillCollaboratorPhoto = (email, profilePicture) => {
+  if (!email || !profilePicture) return;
+  Whiteboard.updateMany(
+    { 'collaborators.email': email, 'collaborators.profilePicture': { $in: [null, ''] } },
+    { $set: { 'collaborators.$[el].profilePicture': profilePicture } },
+    { arrayFilters: [{ 'el.email': email, 'el.profilePicture': { $in: [null, ''] } }] }
+  ).catch((err) => console.error('backfillCollaboratorPhoto error:', err));
+};
+
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     const user = await userModel.register(name, email, password, role);
-    const token = signToken(user.email);
+    const token = user.generateAccessToken();
 
     const projects = await fetchProjectsForUser(user.email);
+    backfillCollaboratorPhoto(user.email, user.profilePicture);
 
     res.status(201).json({
       message: "User registered successfully",
@@ -47,9 +62,10 @@ const loginUser = async (req, res) => {
     const { email, password } = req.body;
     const user = await userModel.login(email, password);
 
-    const token = signToken(user.email);
+    const token = user.generateAccessToken();
 
     const projects = await fetchProjectsForUser(user.email);
+    backfillCollaboratorPhoto(user.email, user.profilePicture);
 
     res.status(200).json({
       message: "User logged in successfully",
@@ -88,10 +104,11 @@ const googleLogin = async (req, res) => {
     const user = await userModel.googleAuth(googleId, name, email, picture);
 
     // Generate JWT token
-    const token = signToken(user.email);
+    const token = user.generateAccessToken();
 
     // Fetch user's projects
     const projects = await fetchProjectsForUser(user.email);
+    backfillCollaboratorPhoto(user.email, user.profilePicture);
 
     res.status(200).json({
       message: "User logged in successfully",
@@ -142,7 +159,7 @@ const renewToken = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const newtoken = signToken(user.email);
+    const newtoken = user.generateAccessToken();
     res.status(200).json({
       message: "Token renewed successfully",
       token: newtoken,

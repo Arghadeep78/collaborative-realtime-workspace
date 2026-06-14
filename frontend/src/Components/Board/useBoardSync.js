@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import { getBoardTypes, makeId, LOCAL_ORIGIN, myColor } from './boardConstants.js';
+import { GENERAL_SECTION } from './taskConstants.js';
 
 // Transaction origin tag for local edits. Shared with the per-user UndoManager
 // so it can track only the transactions this client authored.
@@ -51,14 +52,14 @@ export function useBoardSync(ydoc) {
     syncComments();
     yPages.observe(syncPages);
     ySections.observe(syncSections);
-    yElements.observe(syncElements);
+    yElements.observeDeep(syncElements); // elements are nested Y.Maps now
     yVotes.observeDeep(syncVotes); // Use observeDeep so nested Map changes trigger re-sync!
     yComments.observeDeep(syncComments); // nested per-element Map → observeDeep
 
     return () => {
       yPages.unobserve(syncPages);
       ySections.unobserve(syncSections);
-      yElements.unobserve(syncElements);
+      yElements.unobserveDeep(syncElements);
       yVotes.unobserveDeep(syncVotes);
       yComments.unobserveDeep(syncComments);
     };
@@ -146,6 +147,47 @@ export function useBoardSync(ydoc) {
   }, []);
 
   // ── Element mutations ──────────────────────────────────────────────────────
+  //
+  // Each element is stored as a nested Y.Map (top-level keys: type, pageId, x, y,
+  // w, h, z, props, …) whose `props` value is itself a Y.Map. Storing fields as
+  // individual map keys — rather than one plain object per element — means a
+  // concurrent change to *different* fields (e.g. one client sets `assignees`
+  // while another sets `status`) merges per-key instead of clobbering the whole
+  // element (last-write-wins on the blob). Same nested-Y.Map shape as votes /
+  // comments. `toJSON()` in syncElements deep-serialises these back to plain
+  // objects, so every reader still sees plain element objects.
+
+  // Write a plain record into the elements map as a nested Y.Map. A nested
+  // Y.Map must be *integrated into the document before its children are
+  // populated* — populating a detached nested Y.Map and then attaching it drops
+  // the children. So we attach the element map first, then fill it, creating and
+  // attaching the inner `props` map before setting prop keys on it. Must run
+  // inside a transaction. Returns the integrated element Y.Map.
+  const writeElementMap = (yElements, id, record) => {
+    const m = new Y.Map();
+    yElements.set(id, m); // integrate first
+    Object.entries(record).forEach(([k, v]) => {
+      if (k === 'props') {
+        const pm = new Y.Map();
+        m.set('props', pm); // attach before populating
+        Object.entries(v || {}).forEach(([pk, pv]) => pm.set(pk, pv));
+      } else {
+        m.set(k, v);
+      }
+    });
+    if (!(m.get('props') instanceof Y.Map)) m.set('props', new Y.Map());
+    return m;
+  };
+
+  // Return the element's Y.Map, upgrading a legacy plain-object element (from
+  // boards saved before this change) to a Y.Map in place on first write. Must be
+  // called inside a transaction. Returns null if the element doesn't exist.
+  const ensureElementMap = (yElements, id) => {
+    const cur = yElements.get(id);
+    if (cur instanceof Y.Map) return cur;
+    if (cur == null) return null;
+    return writeElementMap(yElements, id, cur); // re-attaches as Y.Map in place
+  };
 
   /** Create an element. Caller supplies type/pageId/geometry/props/createdBy. */
   const addElement = useCallback((el) => {
@@ -153,7 +195,7 @@ export function useBoardSync(ydoc) {
     if (!doc) return null;
     const id = el.id || makeId(el.type || 'el');
     const record = { z: 1, props: {}, ...el, id };
-    doc.transact(() => doc.getMap('elements').set(id, record), LOCAL);
+    doc.transact(() => writeElementMap(doc.getMap('elements'), id, record), LOCAL);
     return id;
   }, []);
 
@@ -168,33 +210,38 @@ export function useBoardSync(ydoc) {
     const yElements = doc.getMap('elements');
     doc.transact(() => {
       updates.forEach(({ id, ...patch }) => {
-        const prev = yElements.get(id);
-        if (prev) yElements.set(id, { ...prev, ...patch });
+        const m = ensureElementMap(yElements, id);
+        if (!m) return;
+        Object.entries(patch).forEach(([k, v]) => m.set(k, v));
       });
     }, LOCAL);
   }, []);
 
-  /** Shallow-merge a patch into an existing element (whole value replaced). */
+  /** Merge a patch into an element's top-level fields (per-key, not whole-blob). */
   const updateElement = useCallback((id, patch) => {
     const doc = ydocRef.current;
     if (!doc) return;
     const yElements = doc.getMap('elements');
-    const prev = yElements.get(id);
-    if (!prev) return;
-    doc.transact(() => yElements.set(id, { ...prev, ...patch }), LOCAL);
+    doc.transact(() => {
+      const m = ensureElementMap(yElements, id);
+      if (!m) return;
+      Object.entries(patch).forEach(([k, v]) => m.set(k, v));
+    }, LOCAL);
   }, []);
 
-  /** Merge into an element's `props` sub-object specifically. */
+  /** Merge a patch into an element's `props` — per-key, so a concurrent change
+   *  to a different prop (e.g. assignees vs status) doesn't clobber it. */
   const updateElementProps = useCallback((id, propsPatch) => {
     const doc = ydocRef.current;
     if (!doc) return;
     const yElements = doc.getMap('elements');
-    const prev = yElements.get(id);
-    if (!prev) return;
-    doc.transact(
-      () => yElements.set(id, { ...prev, props: { ...prev.props, ...propsPatch } }),
-      LOCAL,
-    );
+    doc.transact(() => {
+      const m = ensureElementMap(yElements, id);
+      if (!m) return;
+      let props = m.get('props');
+      if (!(props instanceof Y.Map)) { props = new Y.Map(); m.set('props', props); }
+      Object.entries(propsPatch).forEach(([k, v]) => props.set(k, v));
+    }, LOCAL);
   }, []);
 
   const removeElement = useCallback((id) => {
@@ -219,11 +266,15 @@ export function useBoardSync(ydoc) {
     const yElements = doc.getMap('elements');
     const target = yElements.get(id);
     if (!target) return;
+    // Read a field from an element value that may be a Y.Map (new) or a legacy
+    // plain object (boards saved before the per-field migration).
+    const field = (v, k) => (v instanceof Y.Map ? v.get(k) : v?.[k]);
+    const targetPage = field(target, 'pageId');
 
     const siblings = [];
     yElements.forEach((v, key) => {
-      if (v.pageId === target.pageId && v.type !== 'connector') {
-        siblings.push({ key, z: v.z ?? 0 });
+      if (field(v, 'pageId') === targetPage && field(v, 'type') !== 'connector') {
+        siblings.push({ key, z: field(v, 'z') ?? 0 });
       }
     });
     // Deterministic tiebreak on id so every client normalizes identically.
@@ -245,8 +296,8 @@ export function useBoardSync(ydoc) {
     doc.transact(() => {
       siblings.forEach((s, i) => {
         const z = i + 1;
-        const prev = yElements.get(s.key);
-        if (prev && (prev.z ?? 0) !== z) yElements.set(s.key, { ...prev, z });
+        const m = ensureElementMap(yElements, s.key);
+        if (m && (m.get('z') ?? 0) !== z) m.set('z', z);
       });
     }, LOCAL);
   }, []);
@@ -266,7 +317,7 @@ export function useBoardSync(ydoc) {
     const order = yPages.length
       ? Math.max(...yPages.toArray().map((p) => p.order ?? 0)) + 1
       : 0;
-    const record = { id, title: title || `Subsection ${yPages.length + 1}`, order };
+    const record = { id, title: title || 'Untitled', order };
     if (sectionId) record.sectionId = sectionId;
     doc.transact(() => yPages.push([record]), LOCAL);
     return id;
@@ -332,11 +383,38 @@ export function useBoardSync(ydoc) {
     const actualDragIdx = arr.findIndex((p) => p.id === draggedId);
     if (actualDragIdx !== -1) {
       const item = arr[actualDragIdx];
+      // Adopt the target's section so dropping a subsection onto a page in another
+      // section reparents it (cross-section move), not just reorders.
+      const targetSectionId = sorted[targetIdx].sectionId;
       doc.transact(() => {
         yPages.delete(actualDragIdx, 1);
-        yPages.insert(actualDragIdx, [{ ...item, order: newOrder }]);
+        yPages.insert(actualDragIdx, [{ ...item, order: newOrder, sectionId: targetSectionId }]);
       }, LOCAL);
     }
+  }, []);
+
+  /**
+   * Move a subsection into a section (by id), or out to "no section" when
+   * sectionId is undefined. Used when dropping onto an empty section's body.
+   * Places it last within the target section's order range.
+   */
+  const movePageToSection = useCallback((pageId, sectionId) => {
+    const doc = ydocRef.current;
+    if (!doc) return;
+    const yPages = doc.getArray('pages');
+    const arr = yPages.toArray();
+    const idx = arr.findIndex((p) => p.id === pageId);
+    if (idx === -1) return;
+    const item = arr[idx];
+    if (item.sectionId === sectionId) return;
+    const inTarget = arr.filter((p) => p.sectionId === sectionId && p.id !== pageId);
+    const maxOrder = inTarget.length
+      ? Math.max(...inTarget.map((p) => p.order ?? 0))
+      : 0;
+    doc.transact(() => {
+      yPages.delete(idx, 1);
+      yPages.insert(idx, [{ ...item, sectionId, order: maxOrder + 1 }]);
+    }, LOCAL);
   }, []);
 
   const deletePage = useCallback((id) => {
@@ -351,7 +429,8 @@ export function useBoardSync(ydoc) {
       const yElements = doc.getMap('elements');
       const orphans = [];
       yElements.forEach((v, key) => {
-        if (v.pageId === id) orphans.push(key);
+        const pageId = v instanceof Y.Map ? v.get('pageId') : v?.pageId;
+        if (pageId === id) orphans.push(key);
       });
       orphans.forEach((key) => yElements.delete(key));
     }, LOCAL);
@@ -367,7 +446,7 @@ export function useBoardSync(ydoc) {
     const order = ySections.length
       ? Math.max(...ySections.toArray().map((s) => s.order ?? 0)) + 1
       : 0;
-    doc.transact(() => ySections.push([{ id, title: title || 'New Section', order }]), LOCAL);
+    doc.transact(() => ySections.push([{ id, title: title || 'Untitled', order }]), LOCAL);
     return id;
   }, []);
 
@@ -409,9 +488,11 @@ export function useBoardSync(ydoc) {
   }, []);
 
   /**
-   * Ensure the board has at least one page. Runs inside a transaction and
-   * re-checks length so concurrent clients don't each seed a page. Returns the
-   * id of the first page if it created one, else null.
+   * Ensure the board has a real "General" section and at least one page inside it.
+   * "General" is a normal stored section (id `__general__`, order -1 so it sorts
+   * first) — renamable and deletable like any other, not a virtual catch-all.
+   * Runs inside a transaction and re-checks length so concurrent clients don't
+   * each seed. Returns the id of the first page if it created one, else null.
    */
   const ensureFirstPage = useCallback(() => {
     const doc = ydocRef.current;
@@ -420,7 +501,13 @@ export function useBoardSync(ydoc) {
     if (yPages.length > 0) return null;
     const id = makeId('page');
     doc.transact(() => {
-      if (yPages.length === 0) yPages.push([{ id, title: 'Subsection 1', order: 0 }]);
+      if (yPages.length > 0) return;
+      const ySections = doc.getArray('sections');
+      const hasGeneral = ySections.toArray().some((s) => s.id === GENERAL_SECTION.id);
+      if (!hasGeneral) {
+        ySections.push([{ id: GENERAL_SECTION.id, title: GENERAL_SECTION.title, order: -1 }]);
+      }
+      yPages.push([{ id, title: 'Untitled', order: 0, sectionId: GENERAL_SECTION.id }]);
     }, LOCAL);
     return id;
   }, []);
@@ -449,6 +536,7 @@ export function useBoardSync(ydoc) {
     renamePage,
     deletePage,
     movePage,
+    movePageToSection,
     ensureFirstPage,
     addSection,
     renameSection,

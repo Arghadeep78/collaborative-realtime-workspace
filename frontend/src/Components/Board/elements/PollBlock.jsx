@@ -187,7 +187,6 @@ export default function PollBlock({
   canVote = true,
   getScale,
   peers = [],
-  photoMap = {},
 }) {
   const { props } = element;
   const { isDark } = useTheme();
@@ -219,14 +218,15 @@ export default function PollBlock({
   const myName     = userData.name     || 'Anonymous';
   const myPhotoURL = userData.profilePic || userData.profilePicture || userData.photoURL || null;
 
-  // Seed the shared photo cache with pictures we already trust; everything else
-  // resolves by email through <Avatar/>. Backend stays authoritative.
+  // Seed the shared photo cache with pictures we already trust (own user + live
+  // peers from awareness); everything else resolves by email through <Avatar/>.
+  // Backend stays authoritative.
   useEffect(() => {
-    const seed = { ...photoMap };
+    const seed = {};
     if (myEmail && myPhotoURL) seed[myEmail] = myPhotoURL;
     peers.forEach(p => { if (p.email && p.profilePic) seed[p.email] = p.profilePic; });
     primePhotoCache(seed);
-  }, [peers, photoMap, myEmail, myPhotoURL]);
+  }, [peers, myEmail, myPhotoURL]);
 
   const [voterPopup, setVoterPopup] = useState(null);
   const containerRef = useRef(null);

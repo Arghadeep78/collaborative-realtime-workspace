@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import validator from "validator";
+import { signToken } from "../utils/jwt.js";
 
 // How long a password-reset link stays valid.
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -73,6 +74,24 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Hash password before saving if it was modified
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password") || !this.password) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Instance method to compare a plain password against the stored hash
+userSchema.methods.comparePassword = async function (plainPassword) {
+  return bcrypt.compare(plainPassword, this.password);
+};
+
+// Instance method to generate a signed JWT access token for this user
+userSchema.methods.generateAccessToken = function () {
+  return signToken(this.email);
+};
+
 // STATIC METHOD: register a new user
 userSchema.statics.register = async function (name, email, password, role) {
   try {
@@ -99,13 +118,10 @@ userSchema.statics.register = async function (name, email, password, role) {
       );
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     const newUser = await new this({
       name,
       email,
-      password: hashedPassword,
+      password,
       role,
       authProvider: "local",
     }).save();
@@ -142,14 +158,12 @@ userSchema.statics.updatenewPassword = async function (
     }
 
     // Check old password
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    const isMatch = await user.comparePassword(oldPassword);
     if (!isMatch) {
       throw new Error("Old password is incorrect.");
     }
 
-    // Hash the new password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    user.password = newPassword;
 
     return await user.save();
   } catch (error) {
@@ -202,8 +216,7 @@ userSchema.statics.resetPassword = async function (rawToken, newPassword) {
     throw new Error("Password reset link is invalid or has expired.");
   }
 
-  const salt = await bcrypt.genSalt(10);
-  user.password = await bcrypt.hash(newPassword, salt);
+  user.password = newPassword;
 
   // Single-use: burn the token so the same link can't be replayed.
   user.resetPasswordToken = null;
@@ -279,8 +292,7 @@ userSchema.statics.login = async function (email, password) {
       );
     }
 
-    // Compare the password with the stored hashed password
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       throw new Error("Invalid email or password.");
     }

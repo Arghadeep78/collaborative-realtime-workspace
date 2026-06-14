@@ -1,7 +1,6 @@
 import express from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
 import Whiteboard from '../models/whiteboard.model.js';
-import { getPublishQueue } from '../jobs/publish.queue.js';
 import { invalidateProjectMeta } from '../cache/project.cache.js';
 
 const router = express.Router();
@@ -11,19 +10,17 @@ router.post('/:projectId', authMiddleware, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { role = 'viewer' } = req.body || {};
-    const project = await Whiteboard.findOne({ id: projectId }).lean();
+    const project = await Whiteboard.findOne({ id: projectId });
     if (!project) return res.status(404).json({ error: 'Project not found' });
     if (project.owner !== req.email) return res.status(403).json({ error: 'Only the owner can publish' });
 
-    const queue = getPublishQueue();
-    await queue.add('publish', { projectId, role }, {
-      jobId: `publish-${projectId}`,
-      removeOnComplete: true,
-      removeOnFail: 10,
-    });
+    project.isPublic = true;
+    project.publicRole = role;
+    await project.save();
+    await invalidateProjectMeta(projectId);
 
-    return res.status(202).json({
-      message: 'Project is being published',
+    return res.status(200).json({
+      message: 'Project is now public',
       // Client-facing share URL targets the frontend route (still /board/:id).
       shareUrl: `/board/${projectId}`,
     });

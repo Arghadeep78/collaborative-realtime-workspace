@@ -42,7 +42,7 @@ function TaskRow({ task, location, members, onClick }) {
             <span className="shrink-0 flex items-center -space-x-1 ml-auto">
               {assignees.slice(0, 3).map((a) => {
                 const m = memberOf(a);
-                return <MemberAvatar key={a} label={m?.name || a} src={m?.profilePicture} size={18} />;
+                return <MemberAvatar key={a} label={m?.name || a} email={a} size={18} />;
               })}
             </span>
           )}
@@ -116,11 +116,15 @@ export default function TaskPanel({
 
   // Group Section → Page, preserving sections then pages order.
   const groups = useMemo(() => {
-    const orderedSections = [GENERAL_SECTION, ...sections];
+    // "General" is a real stored section now, so it's already in `sections`. Only
+    // synthesize a leading General bucket when no real one exists, to still group
+    // orphan pages (sectionId missing/invalid).
+    const hasRealGeneral = sections.some((s) => s.id === GENERAL_SECTION.id);
+    const orderedSections = hasRealGeneral ? sections : [GENERAL_SECTION, ...sections];
     const out = [];
     orderedSections.forEach((sec) => {
       const secPages = pages.filter((p) =>
-        sec.id === GENERAL_SECTION.id ? !p.sectionId : p.sectionId === sec.id);
+        sec.id === GENERAL_SECTION.id ? (p.sectionId === GENERAL_SECTION.id || !p.sectionId) : p.sectionId === sec.id);
       secPages.forEach((page) => {
         const rows = filtered.filter(({ task }) => task.pageId === page.id);
         if (rows.length) {
@@ -227,7 +231,7 @@ export default function TaskPanel({
                     title={m.name || m.email}
                     className={`flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full border transition ${selected ? 'bg-blue-500/15 border-blue-400/60 text-blue-700 dark:text-blue-300' : 'bg-muted border-edge text-content-muted hover:bg-hover'}`}
                   >
-                    <MemberAvatar label={m.name || m.email} src={m.profilePicture} size={20} ring={selected ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-surface' : ''} />
+                    <MemberAvatar label={m.name || m.email} email={m.email} size={20} ring={selected ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-surface' : ''} />
                     <span className="text-[11px] font-semibold max-w-27.5 truncate">{m.name || m.email}</span>
                   </button>
                 );

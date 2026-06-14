@@ -3,6 +3,7 @@ import Whiteboard from '../models/whiteboard.model.js';
 import { invalidateProjectMeta } from '../cache/project.cache.js';
 import { wsView } from '../utils/workspace.view.js';
 import { lookupUserProfiles } from '../utils/user-profiles.js';
+import { isWorkspaceMember } from '../utils/role.js';
 
 // ── createWorkspace ───────────────────────────────────────────────────────────
 export const createWorkspace = async (req, res) => {
@@ -98,7 +99,7 @@ export const addProjectToWorkspace = async (req, res) => {
     const ws = await Workspace.findOne({ id: req.params.id });
     if (!ws) return res.status(404).json({ error: 'Workspace not found' });
 
-    const isMember = ws.owner === req.email || ws.members.some(m => m.email === req.email);
+    const isMember = isWorkspaceMember(ws, req.email);
     if (!isMember) return res.status(403).json({ error: 'You are not a member of this workspace' });
 
     // Verify the project exists and the requester owns it. Only the owner may file
@@ -136,8 +137,7 @@ export const removeProjectFromWorkspace = async (req, res) => {
     const ws = await Workspace.findOne({ id: req.params.id });
     if (!ws) return res.status(404).json({ error: 'Workspace not found' });
 
-    const isMember = ws.owner === req.email || ws.members.some(m => m.email === req.email);
-    if (!isMember) return res.status(403).json({ error: 'You are not a member of this workspace' });
+    if (ws.owner !== req.email) return res.status(403).json({ error: 'Only the workspace owner can remove projects' });
 
     ws.boardIds = ws.boardIds.filter(b => b !== req.params.projectId);
     await ws.save();

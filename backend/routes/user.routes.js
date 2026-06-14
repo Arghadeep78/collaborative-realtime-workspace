@@ -12,7 +12,7 @@ import {
 } from "../controllers/user.controller.js";
 import express from "express";
 import authMiddleware from "../middleware/auth.middleware.js";
-import { imageUpload, mediaUpload, upload } from "../middleware/image-upload.middleware.js";
+import { imageUpload, mediaUpload, upload } from "../middleware/cloudinary.middleware.js";
 const router = express.Router();
 
 router.post("/register", registerUser);

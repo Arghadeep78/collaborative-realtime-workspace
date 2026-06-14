@@ -32,7 +32,7 @@ export const TASK_PRIORITIES = [
 
 export const TASK_PRIORITY_MAP = Object.fromEntries(TASK_PRIORITIES.map((p) => [p.id, p]));
 
-export const GENERAL_SECTION = { id: '__general__', title: 'General' };
+export const GENERAL_SECTION = { id: '__general__', title: 'Untitled' };
 
 /**
  * Resolve a task's page + section breadcrumb from the board's pages/sections.

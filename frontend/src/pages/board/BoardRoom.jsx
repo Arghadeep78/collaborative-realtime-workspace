@@ -11,6 +11,7 @@ import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
 import { ELEMENT_DEFAULTS, GRID_STEP, SLIDE_W, SLIDE_H, clamp, myColor, boardShellClass } from '../../components/board/boardConstants.js';
 import { resolveTaskLocation } from '../../components/board/taskConstants.js';
+import { primePhotoCache } from '../../hooks/usePhotoResolver.js';
 
 import Sidebar from '../../components/board/Sidebar.jsx';
 import TopUtilityBar, { ToolbarCore } from '../../components/board/TopUtilityBar.jsx';
@@ -92,6 +93,7 @@ export default function BoardRoom() {
     renamePage,
     deletePage,
     movePage,
+    movePageToSection,
     ensureFirstPage,
     addSection,
     renameSection,
@@ -181,7 +183,6 @@ export default function BoardRoom() {
 
   // ── Presence ─────────────────────────────────────────────────────────────
   const [peers, setPeers] = useState([]);
-  const [photoMap, setPhotoMap] = useState({}); // email → profilePicture URL
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
@@ -206,34 +207,30 @@ export default function BoardRoom() {
     if (!board?.id) return;
     const token = localStorage.getItem('token');
 
+    // `members` carries only identity ({email, name}) for assignee labels/pickers.
+    // Photos are NOT stored here — every avatar resolves the picture itself from
+    // the shared email-keyed cache (usePhotoResolver), the single source of truth.
+    // Any photos these responses happen to include are fed into that cache via
+    // primePhotoCache so the resolver doesn't have to re-fetch them.
     const buildFromBoardOnly = () => {
-      // No workspace: owner + explicit board collaborators, then bulk-fetch photos.
+      // No workspace: owner + explicit board collaborators. Synchronous — no fetch
+      // needed because names already live on board.collaborators.
       const map = new Map();
-      const add = (email, name, profilePicture = '') => {
+      const add = (email, name) => {
         if (!email || map.has(email)) return;
-        map.set(email, { email, name: name || email, profilePicture });
+        map.set(email, { email, name: name || email });
       };
       add(board.owner, board.owner === userData.email ? userData.name : board.owner);
-      (board.collaborators || []).forEach((c) => add(c.email, c.name, c.profilePicture || ''));
-
-      const emails = [...map.keys()].filter(Boolean);
-      if (!emails.length) { setMembers([]); return; }
-
-      fetch(`${BACKEND_URL}/users/profiles?emails=${emails.join(',')}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-        .then((r) => r.ok ? r.json() : [])
-        .then((profiles) => {
-          profiles.forEach((p) => {
-            const m = map.get(p.email);
-            if (m) m.profilePicture = p.profilePicture || '';
-          });
-          setMembers([...map.values()]);
-        })
-        .catch(() => setMembers([...map.values()]));
+      (board.collaborators || []).forEach((c) => {
+        add(c.email, c.name);
+        if (c.profilePicture) primePhotoCache({ [c.email]: c.profilePicture });
+      });
+      setMembers([...map.values()]);
     };
 
     if (board.workspace?.id) {
+      // Workspace boards still need this fetch to *enumerate* members (they aren't
+      // on board.collaborators) and resolve their display names.
       fetch(`${BACKEND_URL}/workspaces/${board.workspace.id}/manage`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -241,19 +238,20 @@ export default function BoardRoom() {
         .then((d) => {
           if (!d) { buildFromBoardOnly(); return; }
           const ws = d.workspace || {};
-          // Merge: workspace owner + members (viewer baseline) + board collaborators.
           const map = new Map();
-          const add = (email, name, profilePicture = '') => {
-            if (!email || map.has(email)) return;
-            map.set(email, { email, name: name || email, profilePicture });
+          const seed = {};
+          const add = (email, name, profilePicture) => {
+            if (!email) return;
+            if (profilePicture) seed[email] = profilePicture;
+            if (map.has(email)) return;
+            map.set(email, { email, name: name || email });
           };
           add(ws.owner, ws.ownerName || '', ws.ownerProfilePicture || '');
           (ws.members || []).forEach((m) => add(m.email, m.name, m.profilePicture || ''));
-          // Board collaborators may have richer profile pics already; prefer existing entry.
           const b = (d.projects || []).find((x) => x.id === boardId);
-          (b?.collaborators || board.collaborators || []).forEach((c) => {
-            if (!map.has(c.email)) add(c.email, c.name, c.profilePicture || '');
-          });
+          (b?.collaborators || board.collaborators || []).forEach((c) =>
+            add(c.email, c.name, c.profilePicture || ''));
+          primePhotoCache(seed);
           setMembers([...map.values()]);
         })
         .catch(() => buildFromBoardOnly());
@@ -406,31 +404,9 @@ export default function BoardRoom() {
     return () => provider.awareness.off('change', update);
   }, [provider, userData.name, userData.email, userData.profilePic, userData.profilePicture]);
 
-  // ── Photo map: resolve profile pictures for all voters ────────────────────
-  // Collect every unique voter email from the Yjs votes map, diff against what
-  // we already have, and fetch only the missing ones from the backend.
-  useEffect(() => {
-    const allEmails = new Set();
-    Object.values(votes).forEach(pollVotes => {
-      Object.keys(pollVotes).forEach(email => allEmails.add(email));
-    });
-    const missing = [...allEmails].filter(e => !(e in photoMap));
-    if (!missing.length) return;
-    const token = localStorage.getItem('token');
-    fetch(`${BACKEND_URL}/users/profiles?emails=${missing.join(',')}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(r => r.ok ? r.json() : [])
-      .then(profiles => {
-        if (!profiles.length) return;
-        setPhotoMap(prev => {
-          const next = { ...prev };
-          profiles.forEach(p => { next[p.email] = p.profilePicture || ''; });
-          return next;
-        });
-      })
-      .catch(() => {});
-  }, [votes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Poll voter avatars resolve their own pictures from the shared photo cache
+  // (usePhotoResolver) via <Avatar email=…/>, so there's no voter-photo fetch or
+  // photoMap to maintain here anymore.
 
   // Drop our cursor when the tab is hidden so stale pointers don't linger.
   useEffect(() => {
@@ -879,6 +855,7 @@ export default function BoardRoom() {
           onSignOut={handleSignOut}
           canShare={canShare}
           onShare={() => setShowShare(true)}
+          onViewMembers={() => setShowShare(true)}
           onToggleTasks={() => setIsTaskPanelOpen((o) => !o)}
           tasksOpen={isTaskPanelOpen}
           isDark={isDark}
@@ -927,6 +904,7 @@ export default function BoardRoom() {
             onRenamePage={renamePage}
             onDeletePage={deletePage}
             onMovePage={movePage}
+            onMovePageToSection={movePageToSection}
             onAddSection={() => addSection()}
             onRenameSection={renameSection}
             onDeleteSection={deleteSection}
@@ -980,7 +958,6 @@ export default function BoardRoom() {
             onOpenComments={setCommentsForId}
             boardId={boardId}
             members={members}
-            photoMap={photoMap}
             activePage={activePage}
             isDark={isDark}
             zoomMult={zoomMult}
@@ -1050,6 +1027,7 @@ export default function BoardRoom() {
           board={board}
           workspace={board?.workspace}
           onClose={() => setShowShare(false)}
+          readOnly={!canShare}
         />
       )}
 

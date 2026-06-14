@@ -31,7 +31,7 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 - **Realtime:** Yjs (`y-protocols`, `y-websocket`, `lib0`), `ws` (native WebSocket), Redis pub/sub
 - **Database:** MongoDB + Mongoose
 - **Queues:** BullMQ + ioredis
-- **AI:** Google Gemini API (`@google/generative-ai`)
+- **AI:** ~~Google Gemini API~~ (removed)
 - **Auth:** bcryptjs, jsonwebtoken, google-auth-library
 - **Media:** Cloudinary, multer
 - **Email:** nodemailer
@@ -48,24 +48,26 @@ backend/
 │   ├── persistenceScheduler.js  # 30-second heartbeat that enqueues BullMQ persist jobs
 │   └── persistenceWorker.js     # BullMQ consumer: encodes Y.Doc → writes to MongoDB
 ├── jobs/
-│   ├── publishQueue.js          # BullMQ queue factory for board publishing
-│   └── publishWorker.js         # Async board snapshot worker
+│   ├── publish.queue.js         # BullMQ queue factory for project publishing
+│   └── publish.worker.js        # Async project snapshot worker
 ├── cache/
-│   └── boardCache.js            # Redis board:meta:* cache + resolveRole helper
+│   └── project.cache.js         # Redis board:meta:* cache + resolveRole helper
 ├── middleware/
-│   ├── AuthenticationMiddleware.js  # JWT + Google OAuth verification
-│   └── rateLimiters.js          # Redis-backed 3-tier rate limiters
+│   ├── auth.middleware.js        # JWT + Google OAuth verification
+│   ├── cloudinary.middleware.js  # Multer + Cloudinary upload handler
+│   └── rate-limiters.middleware.js  # Redis-backed rate limiters
 ├── utils/
-│   └── resilience.js            # withTimeout, retry (exponential backoff), CircuitBreaker
-├── Routes/
-│   ├── healthRoutes.js          # GET /health and GET /ready probe endpoints
-│   ├── boardRoutes.js
-│   ├── userRoute.js
-│   ├── aiRoutes.js
-│   ├── publishRoute.js
-│   └── workspaceRoutes.js
-├── Controllers/                 # Express route handlers
-├── models/                      # Mongoose schemas (User, Whiteboard, Workspace)
+│   ├── jwt.js                   # JWT sign/verify helpers
+│   ├── role.js                  # resolveRole helper
+│   └── mailer.js                # Nodemailer: board invites & password-reset links
+├── routes/
+│   ├── health.routes.js         # GET /health and GET /ready probe endpoints
+│   ├── project.routes.js
+│   ├── user.routes.js
+│   ├── publish.routes.js
+│   └── workspace.routes.js
+├── controllers/                 # Express route handlers
+├── models/                      # Mongoose schemas (user.model.js, whiteboard.model.js, workspace.model.js)
 └── index.js                     # Server bootstrap: HTTP + Yjs WS + workers + graceful shutdown
 ```
 

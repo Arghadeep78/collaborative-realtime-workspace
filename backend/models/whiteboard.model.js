@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
+import { resolveRole as _resolveRole } from '../utils/role.js';
 
 const whiteboardSchema = new mongoose.Schema({
   id:    { type: String, default: uuidv4, required: true, unique: true, index: true },
@@ -58,19 +59,10 @@ whiteboardSchema.index({ owner: 1, updatedAt: -1 });
 // Named access always wins, so opening a viewer link never downgrades a real
 // editor; the share-link role only ever *raises* access for a link visitor.
 whiteboardSchema.statics.resolveRole = function (board, email, workspace, shareRole = null) {
-  if (email && board.owner === email) return 'owner';
-  const collab = email && board.collaborators?.find(c => c.email === email);
-  if (collab) return collab.role;
-  // Explicitly removed by the owner: deny even the workspace-member viewer
-  // baseline, a still-valid share token, or public access. Named access above
-  // wins, so re-inviting (which clears revokedEmails) restores access.
-  if (email && board.revokedEmails?.includes(email)) return null;
-  const isWsMember = email && workspace &&
-    (workspace.owner === email || workspace.members?.some(m => m.email === email));
-  if (isWsMember) return 'viewer';
-  if (shareRole) return shareRole;
-  if (board.isPublic) return board.publicRole || 'viewer';
-  return null;
+  const workspaceMembers = workspace
+    ? [workspace.owner, ...(workspace.members || []).map(m => m.email)]
+    : [];
+  return _resolveRole({ ...board, workspaceMembers }, email, shareRole);
 };
 
 // Mint a signed 7-day share token granting the given role to anyone who

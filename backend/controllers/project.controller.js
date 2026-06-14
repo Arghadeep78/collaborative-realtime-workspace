@@ -4,6 +4,7 @@ import User from '../models/user.model.js';
 import { invalidateProjectMeta } from '../cache/project.cache.js';
 import { sendProjectInviteEmail } from '../utils/mailer.js';
 import { softDecodeEmail } from '../utils/jwt.js';
+import { isWorkspaceMember } from '../utils/role.js';
 
 function emailFromAuthHeader(req) {
   return softDecodeEmail(req.header('Authorization')?.replace('Bearer ', ''));
@@ -101,8 +102,7 @@ export const getProjectById = async (req, res) => {
     // a public link (isPublic). Workspace members already appear through the
     // membership query; only strangers who land via a link need recording.
     const grantedRole = shareRole || (project.isPublic ? project.publicRole : null);
-    const isWsMember = email && workspace &&
-      (workspace.owner === email || workspace.members?.some(m => m.email === email));
+    const isWsMember = isWorkspaceMember(workspace, email);
     if (email && grantedRole && myRole && project.owner !== email && !isWsMember) {
       const alreadyIn = project.collaborators?.some(c => c.email === email);
       if (!alreadyIn) {
@@ -303,12 +303,22 @@ export const leaveProject = async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
     if (project.owner === email) return res.status(400).json({ error: 'Owners cannot leave a project; delete it instead.' });
 
-    const before = project.collaborators.length;
-    project.collaborators = project.collaborators.filter(c => c.email !== email);
-    if (project.collaborators.length === before) return res.status(400).json({ error: 'You are not a collaborator on this project.' });
+    const isCollaborator = project.collaborators.some(c => c.email === email);
+
+    // workspaceMembers is not stored on the project — check the actual workspace
+    const workspace = await Workspace.findOne({ boardIds: project.id }).select('owner members').lean();
+    const isMemberOfWorkspace = isWorkspaceMember(workspace, email);
+
+    if (!isCollaborator && !isMemberOfWorkspace) return res.status(400).json({ error: 'You do not have access to this project.' });
+
+    if (isCollaborator) project.collaborators = project.collaborators.filter(c => c.email !== email);
+    // Workspace members need to be revoked explicitly so the workspace baseline no longer grants access
+    if (isMemberOfWorkspace && !(project.revokedEmails || []).includes(email)) {
+      project.revokedEmails = [...(project.revokedEmails || []), email];
+    }
 
     await project.save();
-    invalidateProjectMeta(project.id);
+    await invalidateProjectMeta(project.id);
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('leaveProject error:', err);

@@ -357,6 +357,7 @@ export default function TopUtilityBar({
   onSignOut,
   canShare,
   onShare,
+  onViewMembers,
   onToggleTasks,
   tasksOpen,
   isDark,
@@ -494,9 +495,15 @@ export default function TopUtilityBar({
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
         </button>
 
-        {canShare && (
+        {canShare ? (
           <button onClick={onShare} className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-sm" title="Share project">
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+          </button>
+        ) : (
+          // Non-owners can't manage access — show a members button that opens the
+          // view-only "People with access" list instead of the share controls.
+          <button onClick={onViewMembers} className="w-8 h-8 rounded-full flex items-center justify-center bg-surface border border-edge-strong text-content-muted hover:bg-hover hover:text-content transition-colors shadow-sm" title="People with access">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-3-3" /></svg>
           </button>
         )}
       </div>

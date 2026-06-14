@@ -299,17 +299,19 @@ Bridges Yjs shared types to React state via observers. All mutations write insid
 
 **Compaction rehydration:** After server-side compaction, nested Y.Maps (`votes`, `comments`) are stored as plain objects in the encoded state. On the first mutation after a cold load, the code checks `instanceof Y.Map`; if false, it reconstructs a fresh Y.Map from the plain object before writing, so CRDT merge semantics are restored for subsequent concurrent edits.
 
+**Concurrent-edit loss fix:** Mutation helpers now read the current element value from `yElements` inside the `doc.transact` call (at write time), not from a stale React state snapshot. This prevents one client's concurrent write from silently overwriting another's with an outdated base value.
+
 **Key mutation helpers:**
 
 - Elements: `addElement`, `updateElement`, `updateElementProps`, `bulkUpdate`, `removeElement`
 - Layer ordering: `applyLayerOrder` — normalized integer z-values with deterministic elementId tiebreak for concurrent reorders
-- Pages: `addPage`, `updatePage`, `renamePage`, `deletePage`, `movePage` (fractional ordering), `ensureFirstPage`
+- Sections: `addPage`, `updatePage`, `renamePage`, `deletePage`, `movePage` (fractional ordering), `ensureFirstPage`
 - Votes: `castPollVote`, `removePollVote`
 - Comments: `addComment`, `removeComment`
 
 ### 5.3 Board Layout (`Components/Board/BoardRoom.jsx`)
 
-Three-pane layout: page sidebar + top utility bar + SVG canvas. Resolves role-based UI permissions:
+Three-pane layout: section sidebar + top utility bar + SVG canvas. Resolves role-based UI permissions:
 
 | Permission | Condition |
 |---|---|
@@ -320,7 +322,13 @@ Three-pane layout: page sidebar + top utility bar + SVG canvas. Resolves role-ba
 
 ### 5.4 Presence (`Components/Board/PresenceLayer.jsx`)
 
-Renders remote peer cursors and laser pointers as an SVG overlay. Peer data comes from `provider.awareness.getStates()`. Cursors are counter-scaled by the current zoom level so the icon size is constant on screen regardless of zoom. Only peers on the active slide are shown.
+Renders remote peer cursors and laser pointers as an SVG overlay. Peer data comes from `provider.awareness.getStates()`. Cursors are counter-scaled by the current zoom level so the icon size is constant on screen regardless of zoom. Only peers on the active section are shown.
+
+### 5.5 Task Management (`Components/Board/TaskPanel.jsx` + `TaskModal.jsx`)
+
+**TaskPanel** — a slide-out panel that lists all task card elements on the active section. Opens from the toolbar; reads `yElements` filtered by `type === 'task'` and `pageId === activeSectionId`.
+
+**TaskModal** — a full-featured task detail modal that opens when a task card is clicked on the canvas. Manages title, description, assignees (with avatar lookup), labels, and due date. Writes are committed to `yElements` via `doc.transact` inside the modal, keeping the task card in sync for all peers in real time.
 
 ---
 
@@ -330,14 +338,15 @@ Renders remote peer cursors and laser pointers as an SVG overlay. Peer data come
 
 ```
 Y.Doc
-├── yPages     (Y.Array)  — [{ id, title, order }, ...]
+├── yPages     (Y.Array)  — [{ id, title, order, subsections?: [...] }, ...]
 ├── yElements  (Y.Map)    — { elementId: { id, type, pageId, x, y, w, h, z, props, createdBy } }
+│                            type='task' elements also carry: { title, description, assignees, labels, dueDate }
 ├── yVotes     (Y.Map)    — { pollId: Y.Map { email: { optionId, name, ... } } }
 ├── yComments  (Y.Map)    — { elementId: Y.Map { commentId: { id, text, author, createdAt } } }
 └── ySystem    (Y.Map)    — { title, ... }
 ```
 
-`yElements` values are plain JSON objects (whole-value replace on mutation), which keeps compaction simple. `yVotes` and `yComments` use nested Y.Maps so concurrent votes/comments on the same poll/element merge without collision at the CRDT level.
+`yPages` entries represent **sections**; each section may have nested subsections stored in its `subsections` array. `yElements` values are plain JSON objects (whole-value replace on mutation), which keeps compaction simple. Task cards (`type === 'task'`) store all their metadata (title, description, assignees, labels, dueDate) as plain JSON fields on the element — they do not use nested Y.Maps, so the TaskModal does a full element replace on save. `yVotes` and `yComments` use nested Y.Maps so concurrent votes/comments on the same poll/element merge without collision at the CRDT level.
 
 ### 6.2 MongoDB Collections
 
@@ -418,17 +427,20 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
 │   │   ├── persistenceScheduler.js  # 30s dirty-doc flush heartbeat
 │   │   └── persistenceWorker.js     # BullMQ → MongoDB persistence
 │   ├── jobs/
-│   │   ├── publishQueue.js
-│   │   └── publishWorker.js
+│   │   ├── publish.queue.js
+│   │   └── publish.worker.js
 │   ├── cache/
-│   │   └── boardCache.js
+│   │   └── project.cache.js
 │   ├── middleware/
-│   │   ├── AuthenticationMiddleware.js
-│   │   └── rateLimiters.js
+│   │   ├── auth.middleware.js
+│   │   ├── cloudinary.middleware.js
+│   │   └── rate-limiters.middleware.js
 │   ├── utils/
-│   │   └── resilience.js
-│   ├── Routes/
-│   ├── Controllers/
+│   │   ├── jwt.js
+│   │   ├── role.js
+│   │   └── mailer.js
+│   ├── routes/
+│   ├── controllers/
 │   ├── models/
 │   └── index.js
 └── frontend/
@@ -447,13 +459,15 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
             │   ├── useBoardSync.js
             │   ├── SlideCanvas.jsx
             │   ├── PresenceLayer.jsx
-            │   ├── Sidebar.jsx
+            │   ├── Sidebar.jsx           # Section list + subsection support
             │   ├── TopUtilityBar.jsx
-            │   └── elements/
+            │   ├── TaskPanel.jsx         # Slide-out task list for active section
+            │   ├── TaskModal.jsx         # Full task detail modal
+            │   └── elements/             # StickyNote, TaskCard, PollBlock, …
             ├── AuthPages/
             ├── Dashboard/
-            │   ├── dashboard.jsx        # Page shell + data/actions
+            │   ├── dashboard.jsx         # Page shell + data/actions
             │   ├── dashboardConstants.js
-            │   └── components/          # BoardCard, modals, dropdown, RoleBadge
+            │   └── components/           # BoardCard, modals, dropdown, RoleBadge
             └── Profile/
 ```

@@ -68,7 +68,6 @@ export default function BoardElement({
   members,
   activeTool,
   peers = [],
-  photoMap = {},
 }) {
   const selected = selectedIds?.has(element.id) ?? false;
   const isMultiSelected = selected && (selectedIds?.size ?? 0) > 1;
@@ -78,7 +77,6 @@ export default function BoardElement({
 
   const [live, setLive] = useState(null); // { x?, y?, w?, h?, props? } gesture override
   const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
-  const taskDownRef = useRef(null); // {x,y} pointer-down for task click-vs-drag detection
   const isTask = element.type === 'task';
   const resizeOriginRef = useRef(null); // captures font size at resize start
   const isGroupAnchor = useRef(false);   // true when this element is driving the group drag
@@ -182,6 +180,40 @@ export default function BoardElement({
     }
   }, [dragging, resizing]);
 
+  // ── Remote-move smoothing ───────────────────────────────────────────────────
+  // A peer dragging this element only syncs ~20 positions/sec (FLUSH_MS), and
+  // each lands as an instant jump → jitter for viewers. When the synced geometry
+  // changes while *we* aren't manipulating it, briefly enable a CSS transition so
+  // the element glides to the new spot instead of teleporting. Our own drag/resize
+  // renders from local `live` state and must stay instant, so it's gated off then.
+  const [smooth, setSmooth] = useState(false);
+  const prevGeomRef = useRef(null);
+  const smoothTimerRef = useRef(null);
+  const selfGestureUntilRef = useRef(0); // suppress smoothing right after our own gesture
+  useEffect(() => {
+    // Mark a short window after our own drag/resize so the final synced commit
+    // (which can land a tick after `dragging`/`live` clear) isn't animated as if
+    // it were a remote move — our own drop must feel instant.
+    if (dragging || resizing) selfGestureUntilRef.current = performance.now() + 150;
+  }, [dragging, resizing]);
+  useEffect(() => {
+    const g = { x: element.x, y: element.y, w: element.w, h: element.h };
+    const prev = prevGeomRef.current;
+    prevGeomRef.current = g;
+    if (!prev) return;                 // first observation — nothing to animate from
+    if (dragging || resizing || live) return; // our own gesture — keep instant
+    if (performance.now() < selfGestureUntilRef.current) return; // just released
+    const moved = prev.x !== g.x || prev.y !== g.y || prev.w !== g.w || prev.h !== g.h;
+    if (!moved) return;
+    setSmooth(true);
+    clearTimeout(smoothTimerRef.current);
+    // Hold the transition a touch longer than one sync interval so consecutive
+    // remote samples chain into continuous motion; then drop it so a later layout
+    // change or our own grab isn't animated.
+    smoothTimerRef.current = setTimeout(() => setSmooth(false), 120);
+  }, [element.x, element.y, element.w, element.h, dragging, resizing, live]);
+  useEffect(() => () => clearTimeout(smoothTimerRef.current), []);
+
   // Non-anchor group members show their offset via shifted left/top.
   const groupShiftX = (isMultiSelected && !dragging && groupDragOffset) ? groupDragOffset.dx : 0;
   const groupShiftY = (isMultiSelected && !dragging && groupDragOffset) ? groupDragOffset.dy : 0;
@@ -208,9 +240,6 @@ export default function BoardElement({
       onConnectClick(element.id);
       return;
     }
-
-    // Track the down point so a click (no drag) on a task opens its modal.
-    if (isTask) taskDownRef.current = { x: e.clientX, y: e.clientY };
 
     // Shift+click: toggle this element in/out of the selection
     if (e.shiftKey && editable) {
@@ -250,6 +279,8 @@ export default function BoardElement({
         width: element.type === 'task' ? Math.max(160, geom.w) : geom.w,
         height: element.type === 'task' ? Math.max(56, geom.h) : geom.h,
         zIndex: element.z ?? 1,
+        // Glide to remote-synced positions; off during our own gesture (instant).
+        transition: smooth ? 'left 120ms linear, top 120ms linear, width 120ms linear, height 120ms linear' : 'none',
         cursor: connectMode ? 'crosshair' : editing ? 'text' : 'move',
         pointerEvents: (
           (!editable && !(element.type === 'poll' && canVote) && !commentable && !isTask) ||
@@ -318,7 +349,6 @@ export default function BoardElement({
         members={members}
         getScale={getScale}
         peers={peers}
-        photoMap={photoMap}
       />
       {/* Comment indicator — shown when the element has at least one comment.
           Clicking it opens the thread (works for viewers/commenters too, since

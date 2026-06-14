@@ -20,5 +20,7 @@ dist-ssr/
 .vscode/
 .idea/
 
+loadtest/
+
 *.md
 !README.md

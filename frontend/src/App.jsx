@@ -87,20 +87,46 @@ function App() {
 
         if (timeUntilRenewal <= 0) { logout(); return; }
 
+        // Retry renewal after a short delay on transient failures (e.g. backend
+        // restarting / offline) instead of logging the user out immediately.
+        const retryRenewal = (token) => {
+          clearTimeout(renewalTimerRef.current);
+          renewalTimerRef.current = setTimeout(() => scheduleTokenRenewal(token), 15000);
+        };
+
         clearTimeout(renewalTimerRef.current);
         renewalTimerRef.current = setTimeout(async () => {
+          const currentToken = localStorage.getItem('token');
+          let response;
           try {
-            const currentToken = localStorage.getItem('token');
-            const response = await fetch(`${BACKEND_URL}/users/renew-token`, {
+            response = await fetch(`${BACKEND_URL}/users/renew-token`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentToken}`,
               },
             });
+          } catch (error) {
+            // Network error (backend down / restarting) — don't log out, retry.
+            console.warn('Token renewal request failed, will retry:', error);
+            retryRenewal(currentToken);
+            return;
+          }
 
-            if (!response.ok) throw new Error('Token renewal failed');
+          // Only an explicit auth rejection means the session is truly invalid.
+          if (response.status === 401 || response.status === 403) {
+            logout();
+            return;
+          }
 
+          if (!response.ok) {
+            // Server error (5xx etc.) — treat as transient and retry.
+            console.warn('Token renewal returned', response.status, '— will retry');
+            retryRenewal(currentToken);
+            return;
+          }
+
+          try {
             const data = await response.json();
             if (data.token) {
               localStorage.setItem('token', data.token);
@@ -109,8 +135,8 @@ function App() {
               throw new Error('No token in renewal response');
             }
           } catch (error) {
-            console.error('Error renewing token:', error);
-            logout();
+            console.warn('Token renewal response invalid, will retry:', error);
+            retryRenewal(currentToken);
           }
         }, timeUntilRenewal);
       } catch (err) {

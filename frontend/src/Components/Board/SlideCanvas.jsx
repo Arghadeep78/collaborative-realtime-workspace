@@ -169,7 +169,6 @@ export default function SlideCanvas({
   boardId,
   // Kanban assignee options
   members,
-  photoMap = {},
   // Active page (background)
   activePage,
   // Pan-to-element request from the global task panel: { id, nonce }
@@ -562,7 +561,6 @@ export default function SlideCanvas({
                   members={members}
                   activeTool={activeTool}
                   peers={peers}
-                  photoMap={photoMap}
                 />
               ))}
 

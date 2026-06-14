@@ -32,7 +32,6 @@ function ViewTab({ element, members, currentEmail, onUpdate }) {
   const pct = checklist.length ? Math.round((doneCount / checklist.length) * 100) : 0;
   const due = dueMeta(props.dueDate);
   const labelFor = (email) => members.find((m) => m.email === email)?.name || email;
-  const photoFor = (email) => members.find((m) => m.email === email)?.profilePicture || '';
   const isAssignee = !!currentEmail && assignees.includes(currentEmail);
   const currentStatus = props.status || 'todo';
 
@@ -45,6 +44,18 @@ function ViewTab({ element, members, currentEmail, onUpdate }) {
     <div className="px-6 pb-5 flex gap-6">
       {/* ── Left: main content ─────────────────────────────── */}
       <div className="flex-1 min-w-0 flex flex-col gap-4">
+        {/* Assignees — horizontal chips above title */}
+        {assignees.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {assignees.map((a) => (
+              <div key={a} className="flex items-center gap-1.5 bg-muted rounded-full px-2 py-0.5">
+                <MemberAvatar label={labelFor(a)} email={a} size={18} />
+                <span className="text-[12px] font-medium text-content">{labelFor(a)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Title */}
         <h1 className="text-[24px] font-bold text-content leading-snug wrap-break-word">
           {props.title || <span className="text-content-subtle italic font-normal">Untitled task</span>}
@@ -131,38 +142,17 @@ function ViewTab({ element, members, currentEmail, onUpdate }) {
         <div className="flex flex-col gap-1.5">
           <SectionLabel>Details</SectionLabel>
           <div className="flex flex-col gap-1.5 mt-1">
-            <span className={`self-start flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${priority.chip}`}>
-              <Flag className="w-3 h-3" /> {priority.label}
+            <span className={`self-start flex items-center gap-1.5 px-2.5 py-1 rounded text-[13px] font-bold ${priority.chip}`}>
+              <Flag className="w-3.5 h-3.5" /> {priority.label}
             </span>
             {due && (
-              <span className={`self-start flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${due.badgeCls}`}>
-                <Clock className="w-3 h-3" /> {due.label}
+              <span className={`self-start flex items-center gap-1.5 px-2.5 py-1 rounded text-[13px] font-bold ${due.badgeCls}`}>
+                <Clock className="w-3.5 h-3.5" /> {due.label}
               </span>
             )}
           </div>
         </div>
 
-        {/* Assignees */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <SectionLabel icon={Users}>Assignees</SectionLabel>
-            {assignees.length > 0 && (
-              <span className="text-[10px] font-semibold text-content-subtle bg-muted rounded-full px-1.5 py-0.5">{assignees.length}</span>
-            )}
-          </div>
-          {assignees.length > 0 ? (
-            <div className="flex flex-col gap-1 mt-0.5 max-h-28 overflow-y-auto pr-0.5">
-              {assignees.map((a) => (
-                <div key={a} className="flex items-center gap-2 min-w-0">
-                  <MemberAvatar label={labelFor(a)} src={photoFor(a)} size={22} />
-                  <span className="text-[12px] font-medium text-content truncate">{labelFor(a)}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <span className="text-[12px] text-content-subtle italic">No one assigned</span>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -201,7 +191,6 @@ function EditTab({ element, members, currentEmail, onUpdate, onClose }) {
   const patchItem = (id, patch) => set({ checklist: checklist.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
   const removeItem = (id) => set({ checklist: checklist.filter((c) => c.id !== id) });
   const labelFor = (email) => members.find((m) => m.email === email)?.name || email;
-  const photoFor = (email) => members.find((m) => m.email === email)?.profilePicture || '';
 
   const handleSave = () => {
     onUpdate({ ...draft, description: desc });
@@ -260,17 +249,17 @@ function EditTab({ element, members, currentEmail, onUpdate, onClose }) {
               <span className="text-[10px] font-semibold text-content-subtle bg-muted rounded-full px-1.5 py-0.5">{assignees.length}</span>
             )}
           </div>
-          <div className="flex flex-col gap-1 max-h-32 overflow-y-auto pr-0.5">
+          <div className="flex flex-wrap gap-1.5 mt-0.5">
             {assignees.map((a) => (
-              <div key={a} className="group/assignee flex items-center gap-2 min-w-0">
-                <MemberAvatar label={labelFor(a)} src={photoFor(a)} size={26} />
-                <span className="text-[13px] font-medium text-content flex-1 truncate">{labelFor(a)}</span>
+              <div key={a} className="group/assignee flex items-center gap-1.5 bg-muted rounded-full pl-1.5 pr-1 py-0.5">
+                <MemberAvatar label={labelFor(a)} email={a} size={18} />
+                <span className="text-[12px] font-medium text-content">{labelFor(a)}</span>
                 <button
                   onClick={() => toggleAssignee(a)}
-                  className="text-content-subtle hover:text-rose-500 p-0.5 rounded transition opacity-0 group-hover/assignee:opacity-100 shrink-0"
+                  className="text-content-subtle hover:text-rose-500 rounded-full transition opacity-0 group-hover/assignee:opacity-100 shrink-0"
                   title="Remove"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             ))}
@@ -286,7 +275,7 @@ function EditTab({ element, members, currentEmail, onUpdate, onClose }) {
               {members.length === 0 && <span className="text-[12px] text-content-subtle px-2 py-1">No members</span>}
               {members.map((m) => (
                 <button key={m.email} onClick={() => toggleAssignee(m.email)} className="flex items-center gap-2 p-1.5 hover:bg-hover rounded-lg text-left transition">
-                  <MemberAvatar label={m.name || m.email} src={m.profilePicture} size={22} />
+                  <MemberAvatar label={m.name || m.email} email={m.email} size={22} />
                   <span className="text-[13px] truncate flex-1 text-content">{m.name || m.email}</span>
                   {assignees.includes(m.email) && <Check className="w-4 h-4 text-blue-500" />}
                 </button>

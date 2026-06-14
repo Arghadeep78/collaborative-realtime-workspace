@@ -1,5 +1,6 @@
 import Whiteboard from '../models/whiteboard.model.js';
 import Workspace from '../models/workspace.model.js';
+import { resolveRole as _resolveRole } from '../utils/role.js';
 
 /**
  * Redis-backed cache for project access metadata.
@@ -112,18 +113,5 @@ export async function invalidateProjectMeta(projectId) {
  * @returns {'viewer'|'commenter'|'editor'|null}
  */
 export function resolveRole(meta, userEmail, shareRole = null) {
-  if (!meta) return null;
-  if (meta.owner === userEmail) return 'editor';
-  const collab = (meta.collaborators || []).find((c) => c.email === userEmail);
-  if (collab) return collab.role || 'editor';
-  // Explicitly removed by the owner: deny even the workspace-member viewer
-  // baseline, a still-valid share token, or public access. Named access
-  // (owner/collaborator) is checked first and wins, so re-inviting — which also
-  // clears revokedEmails — restores access immediately.
-  if (userEmail && (meta.revokedEmails || []).includes(userEmail)) return null;
-  if ((meta.workspaceMembers || []).includes(userEmail)) return 'viewer';
-  // Signed share link raises a link visitor above the public viewer baseline.
-  if (shareRole) return shareRole;
-  if (meta.isPublic) return meta.publicRole || 'viewer';
-  return null;
+  return _resolveRole(meta, userEmail, shareRole);
 }

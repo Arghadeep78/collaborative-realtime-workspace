@@ -22,7 +22,10 @@ const roleIcon = (r) => {
   return <Eye size={13} />;
 };
 
-export default function ShareModal({ boardId, board, workspace, onClose }) {
+// `readOnly` renders a view-only variant for non-owners: just the
+// "People with access" list (no invite, no role editing, no general-access /
+// link controls). Owners get the full management UI.
+export default function ShareModal({ boardId, board, workspace, onClose, readOnly = false }) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('editor');
 
@@ -60,7 +63,10 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
   const loadAccess = useCallback(async () => {
     setAccessLoading(true);
     try {
-      if (workspace?.id) {
+      // The /workspaces/:id/manage endpoint is owner-only, so the read-only
+      // (non-owner) variant always falls back to the public GET /projects/:id,
+      // which returns the collaborator list without requiring ownership.
+      if (workspace?.id && !readOnly) {
         const res = await fetch(`${BACKEND_URL}/workspaces/${workspace.id}/manage`, {
           headers: { Authorization: `Bearer ${token()}` },
         });
@@ -69,7 +75,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
         const ws = d.workspace || {};
         setOwner({ email: ws.owner, name: ws.ownerName || '', profilePicture: ws.ownerProfilePicture || '' });
         setMembers(ws.members || []);
-        const b = (d.boards || []).find((x) => x.id === boardId);
+        const b = (d.projects || []).find((x) => x.id === boardId);
         if (b?.collaborators) setCollabs(b.collaborators);
       } else {
         // No workspace: pull the latest collaborators straight from the board.
@@ -87,7 +93,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
     } finally {
       setAccessLoading(false);
     }
-  }, [workspace?.id, boardId]);
+  }, [workspace?.id, boardId, readOnly]);
 
   useEffect(() => { loadAccess(); }, [loadAccess]);
 
@@ -218,14 +224,15 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
       <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-130 overflow-hidden m-4">
         {/* Header */}
         <div className="px-6 py-5 border-b border-edge-subtle flex items-center justify-between bg-surface">
-          <h2 className="text-content font-semibold text-xl tracking-tight">Share "{board?.title || 'Project'}"</h2>
+          <h2 className="text-content font-semibold text-xl tracking-tight">{readOnly ? `People with access to "${board?.title || 'Project'}"` : `Share "${board?.title || 'Project'}"`}</h2>
           <button onClick={onClose} className="p-1.5 text-content-subtle hover:text-content hover:bg-hover rounded-full transition-colors cursor-pointer">
             <X size={20} />
           </button>
         </div>
 
         <div className="p-6 space-y-7 bg-surface">
-          {/* Invite Section */}
+          {/* Invite Section — owner only */}
+          {!readOnly && (
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               value={inviteEmail}
@@ -253,6 +260,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
               </button>
             </div>
           </div>
+          )}
 
           {/* People with access */}
           <div className="space-y-2">
@@ -300,33 +308,42 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="relative">
-                        <select
-                          value={p.role}
-                          onChange={(e) => setRole(p.email, e.target.value)}
-                          className={`appearance-none border rounded-lg pl-3 pr-7 py-1.5 text-xs font-bold tracking-wide uppercase focus:outline-none cursor-pointer transition-all ${roleColor(p.role)}`}
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r} className="text-black dark:text-white bg-white dark:bg-gray-800">
-                              {roleLabel(r)}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
+                      {readOnly ? (
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide ${roleColor(p.role)}`}>
+                          {roleIcon(p.role)}
+                          {roleLabel(p.role)}
                         </div>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <select
+                              value={p.role}
+                              onChange={(e) => setRole(p.email, e.target.value)}
+                              className={`appearance-none border rounded-lg pl-3 pr-7 py-1.5 text-xs font-bold tracking-wide uppercase focus:outline-none cursor-pointer transition-all ${roleColor(p.role)}`}
+                            >
+                              {ROLES.map((r) => (
+                                <option key={r} value={r} className="text-black dark:text-white bg-white dark:bg-gray-800">
+                                  {roleLabel(r)}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </div>
+                          </div>
 
-                      {p.source === 'board' && (
-                        <button
-                          onClick={() => handleRemove(p.email)}
-                          className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                          title="Remove from project"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                          {p.source === 'board' && (
+                            <button
+                              onClick={() => handleRemove(p.email)}
+                              className="p-1.5 text-content-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                              title="Remove from project"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -341,7 +358,8 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
             )}
           </div>
 
-          {/* General Access */}
+          {/* General Access — owner only */}
+          {!readOnly && (
           <div className="pt-5 border-t border-edge-subtle">
             <h3 className="text-sm font-semibold text-content mb-3">General access</h3>
             <div className="flex items-center gap-4 p-4 bg-muted rounded-xl border border-edge-subtle">
@@ -368,11 +386,13 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="px-6 py-4 bg-muted border-t border-edge-subtle flex items-center justify-end gap-2">
+          {!readOnly && (
+          <div className="flex items-center gap-2 mr-auto">
             <button
               onClick={copyLink}
               disabled={copying}
@@ -382,6 +402,7 @@ export default function ShareModal({ boardId, board, workspace, onClose }) {
               {copying ? 'Copying…' : 'Copy link'}
             </button>
           </div>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2.5 bg-content hover:opacity-90 text-app text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"

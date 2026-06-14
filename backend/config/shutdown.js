@@ -1,11 +1,9 @@
-export function registerShutdownHandlers({ server, pubClient, subClient, persistWorker, publishWorker, publishQueue, stopScheduler }) {
+export function registerShutdownHandlers({ server, pubClient, subClient, persistWorker, stopScheduler }) {
   const shutdown = async (signal) => {
     console.log(`🛑 Received ${signal}, shutting down...`);
     stopScheduler();
     await Promise.allSettled([
       persistWorker?.close(),
-      publishWorker?.close(),
-      publishQueue?.close(),
     ]);
     await Promise.allSettled([
       pubClient.quit(),

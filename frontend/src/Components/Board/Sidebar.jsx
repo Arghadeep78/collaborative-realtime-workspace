@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { UI } from './boardConstants.js';
+import { GENERAL_SECTION } from './taskConstants.js';
 
-const GENERAL_ID = '__general__';
+const GENERAL_ID = GENERAL_SECTION.id;
 
 // ── Icon helpers ───────────────────────────────────────────────────────────────
 const PlusIcon = ({ cls = 'w-3.5 h-3.5' }) => (
@@ -134,8 +135,8 @@ function PageBlock({
 
 // ── Main sidebar ──────────────────────────────────────────────────────────────
 export default function Sidebar({
-  pages, sections, activePageId, editable, collapsed, onToggleCollapse,
-  onSelectPage, onAddPage, onRenamePage, onDeletePage, onMovePage,
+  pages, sections = [], activePageId, editable, collapsed, onToggleCollapse,
+  onSelectPage, onAddPage, onRenamePage, onDeletePage, onMovePage, onMovePageToSection,
   onAddSection, onRenameSection, onDeleteSection,
 }) {
   const [editingPageId, setEditingPageId] = useState(null);
@@ -145,6 +146,7 @@ export default function Sidebar({
   const [isResizing, setIsResizing] = useState(false);
   const [draggedPageId, setDraggedPageId] = useState(null);
   const [dragOverPageId, setDragOverPageId] = useState(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState(null);
   const [collapsedSections, setCollapsedSections] = useState({});
 
   useEffect(() => {
@@ -168,15 +170,24 @@ export default function Sidebar({
   const toggleSection = (id) => setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const sectionGroups = (() => {
+    // "General" is now a real stored section (see useBoardSync.ensureFirstPage),
+    // so it comes through `sections` like any other — already sorted first by its
+    // order -1. We only synthesize a transient General bucket as a safety net for
+    // orphan pages whose sectionId is missing/invalid and no real General exists.
     const byId = new Map();
-    byId.set(GENERAL_ID, { id: GENERAL_ID, title: 'General', pages: [] });
     sections.forEach((s) => byId.set(s.id, { ...s, pages: [] }));
+    let orphanBucket = null;
     pages.forEach((p) => {
-      const key = p.sectionId && byId.has(p.sectionId) ? p.sectionId : GENERAL_ID;
-      byId.get(key).pages.push(p);
+      if (p.sectionId && byId.has(p.sectionId)) {
+        byId.get(p.sectionId).pages.push(p);
+      } else {
+        if (!orphanBucket) orphanBucket = { id: GENERAL_ID, title: GENERAL_SECTION.title, pages: [] };
+        orphanBucket.pages.push(p);
+      }
     });
-    const result = [byId.get(GENERAL_ID)];
-    sections.forEach((s) => result.push(byId.get(s.id)));
+    const result = sections.map((s) => byId.get(s.id));
+    // Prepend the orphan bucket only when it exists AND no real General is present.
+    if (orphanBucket && !byId.has(GENERAL_ID)) result.unshift(orphanBucket);
     return result;
   })();
 
@@ -233,13 +244,33 @@ export default function Sidebar({
           <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
             {sectionGroups.map((group) => {
               const isCollapsed = !!collapsedSections[group.id];
-              const isGeneral = group.id === GENERAL_ID;
+              // Real (stored) sections — including a real "General" — are fully
+              // editable. The only non-editable group is the transient orphan
+              // bucket, which exists solely when no stored General is present.
+              const isVirtual = !sections.some((s) => s.id === group.id);
+              const isGeneral = isVirtual;
               const sectionPages = group.pages;
 
               return (
                 <div key={group.id} className="px-2">
                   {/* ── Section header ── */}
-                  <div className="group/sec flex items-center gap-1 h-7 rounded-lg px-1 hover:bg-hover/60 transition">
+                  <div
+                    className={`group/sec flex items-center gap-1 h-7 rounded-lg px-1 hover:bg-hover/60 transition ${dragOverSectionId === group.id ? 'ring-1 ring-blue-400/60 bg-blue-500/5' : ''}`}
+                    onDragOver={(e) => {
+                      // Drop a dragged subsection onto a section header to move it
+                      // into that section (works for populated sections too).
+                      if (editable && draggedPageId) { e.preventDefault(); setDragOverSectionId(group.id); }
+                    }}
+                    onDragLeave={() => setDragOverSectionId(null)}
+                    onDrop={(e) => {
+                      if (!editable || !draggedPageId) return;
+                      e.preventDefault();
+                      onMovePageToSection(draggedPageId, isGeneral ? undefined : group.id);
+                      setDraggedPageId(null);
+                      setDragOverPageId(null);
+                      setDragOverSectionId(null);
+                    }}
+                  >
                     {/* Collapse chevron */}
                     <button
                       onClick={() => toggleSection(group.id)}
@@ -284,7 +315,7 @@ export default function Sidebar({
                             <IconBtn
                               danger
                               onClick={() => {
-                                if (window.confirm(`Delete section "${group.title}"? Subsections will move to General.`)) {
+                                if (window.confirm(`Delete section "${group.title}"? Subsections will move to ${GENERAL_SECTION.title}.`)) {
                                   onDeleteSection(group.id);
                                 }
                               }}
@@ -300,21 +331,22 @@ export default function Sidebar({
 
                   {/* ── Page blocks ── */}
                   {!isCollapsed && (
-                    <div className="pl-5 mt-0.5 space-y-0.5 mb-1">
-                      {sectionPages.length === 0 ? (
-                        <div className="flex items-center gap-1.5 px-2 py-1.5">
-                          <span className="text-[10px] text-content-subtle italic">Empty section</span>
-                          {editable && (
-                            <button
-                              onClick={() => onAddPage(isGeneral ? undefined : group.id)}
-                              className="text-[10px] font-semibold text-blue-500 hover:text-blue-600 dark:text-blue-400 hover:underline transition"
-                            >
-                              + Add
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        sectionPages.map((page) => {
+                    <div
+                      className="pl-5 mt-0.5 space-y-0.5 mb-1 min-h-1.5"
+                      onDragOver={(e) => {
+                        // Allow dropping onto an empty section's body to move a
+                        // subsection into it (cross-section move).
+                        if (editable && draggedPageId && sectionPages.length === 0) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        if (!editable || !draggedPageId || sectionPages.length !== 0) return;
+                        e.preventDefault();
+                        onMovePageToSection(draggedPageId, isGeneral ? undefined : group.id);
+                        setDraggedPageId(null);
+                        setDragOverPageId(null);
+                      }}
+                    >
+                      {sectionPages.map((page) => {
                           const idx = globalIdx++;
                           return (
                             <PageBlock
@@ -345,8 +377,7 @@ export default function Sidebar({
                               onDragEnd={() => { setDraggedPageId(null); setDragOverPageId(null); }}
                             />
                           );
-                        })
-                      )}
+                        })}
                     </div>
                   )}
                 </div>
