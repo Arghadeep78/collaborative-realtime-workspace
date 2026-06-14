@@ -61,7 +61,6 @@ graph TD
         DocMgr[DocumentManager<br/>in-memory Y.Doc lifecycle]
         Scheduler[Persistence Scheduler<br/>30s dirty-doc heartbeat]
         PersistWorker[BullMQ Persist Worker<br/>Y.Doc → MongoDB]
-        PublishWorker[BullMQ Publish Worker<br/>async board snapshot]
     end
 
     subgraph Data [Data Layer]
@@ -82,8 +81,6 @@ graph TD
     Redis -- cross-instance relay --> WSS
     API --> MongoDB
     API --> Redis
-    PublishWorker <--> Redis
-    PublishWorker --> MongoDB
 ```
 
 ---
@@ -252,7 +249,7 @@ These utilities exist in `backend/utils/resilience.js` but are **not currently w
 `/health` returns `{ status, redis, mongo }`. `/ready` returns the same plus `{ workers, persistBacklog, backpressure, activeBoards }`.
 
 `/ready` is Yjs-aware, not a boilerplate probe:
-- It checks the BullMQ persistence + publish workers are actually running — a node with a crashed worker is "live" but should not take traffic.
+- It checks the BullMQ persistence worker is actually running — a node with a crashed worker is "live" but should not take traffic.
 - It reads the `yjs-persist` queue's waiting-job count (`getWaitingCount`). A backlog above `PERSIST_BACKLOG_THRESHOLD` (100) means edits are being made faster than they flush to MongoDB; the node reports `not-ready` so an orchestrator stops piling on new load until it drains.
 - It reports `activeBoards` (`documentManager.docs.size`) — a snapshot of how many `Y.Doc`s are hot in memory.
 
@@ -269,10 +266,9 @@ Startup sequence (sequential, each step waits for the previous):
 5. Create distributed rate limiters (connect to Redis store).
 6. Connect to MongoDB.
 7. Attach Yjs WebSocket server to the HTTP server's upgrade event.
-8. Start BullMQ persistence worker + scheduler.
-9. Start BullMQ publish worker + queue.
-10. Mount REST API routers (boards, users, AI, workspaces, health).
-11. Register graceful shutdown handlers (`SIGTERM`, `SIGINT`, `SIGUSR2`).
+8. Start BullMQ persistence worker + scheduler (the only queue).
+9. Mount REST API routers (boards, users, publish, workspaces, health).
+10. Register graceful shutdown handlers (`SIGTERM`, `SIGINT`, `SIGUSR2`).
 
 ---
 
@@ -426,17 +422,15 @@ Cursor positions and user metadata are ephemeral — they live in the Yjs Awaren
 │   │   ├── DocumentManager.js       # In-memory Y.Doc lifecycle
 │   │   ├── persistenceScheduler.js  # 30s dirty-doc flush heartbeat
 │   │   └── persistenceWorker.js     # BullMQ → MongoDB persistence
-│   ├── jobs/
-│   │   ├── publish.queue.js
-│   │   └── publish.worker.js
 │   ├── cache/
 │   │   └── project.cache.js
 │   ├── middleware/
 │   │   ├── auth.middleware.js
-│   │   ├── cloudinary.middleware.js
+│   │   ├── multer.middleware.js     # multipart parsing (size cap + MIME filter)
 │   │   └── rate-limiters.middleware.js
 │   ├── utils/
-│   │   ├── jwt.js
+│   │   ├── jwt.js                   # access + refresh token helpers
+│   │   ├── cloudinary.js           # Cloudinary config + upload helper
 │   │   ├── role.js
 │   │   └── mailer.js
 │   ├── routes/

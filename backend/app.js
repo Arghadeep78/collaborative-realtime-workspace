@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cookieParser from "cookie-parser";
 import { createServer } from "http";
 
 import { connectToDatabase } from "./config/db.js";
@@ -18,7 +19,19 @@ import projectRoute from "./routes/project.routes.js";
 import publishRoute from "./routes/publish.routes.js";
 import workspaceRoute from "./routes/workspace.routes.js";
 
+const REQUIRED_ENV = [
+  'JWT_SECRET', 'JWT_REFRESH_SECRET',
+  'DB_CLUSTER_URL',
+  'REDIS_URL',
+  'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET',
+  'EMAIL_USER', 'EMAIL_PASS',
+  'FRONTEND_URL',
+];
+
 export const buildApp = async () => {
+  const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+  if (missing.length) throw new Error(`Missing required env vars: ${missing.join(', ')}`);
+
   const app = express();
   const server = createServer(app);
 
@@ -42,6 +55,7 @@ export const buildApp = async () => {
 
   // ── Global middleware ─────────────────────────────────────────────────────────
   app.use(createCorsMiddleware());
+  app.use(cookieParser());
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 

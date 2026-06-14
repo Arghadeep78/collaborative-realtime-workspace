@@ -3,11 +3,17 @@ import Workspace from '../models/workspace.model.js';
 import User from '../models/user.model.js';
 import { invalidateProjectMeta } from '../cache/project.cache.js';
 import { sendProjectInviteEmail } from '../utils/mailer.js';
-import { softDecodeEmail } from '../utils/jwt.js';
+import { verifyToken } from '../utils/jwt.js';
 import { isWorkspaceMember } from '../utils/role.js';
 
 function emailFromAuthHeader(req) {
-  return softDecodeEmail(req.header('Authorization')?.replace('Bearer ', ''));
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) return null;
+    return verifyToken(token).email || null;
+  } catch {
+    return null;
+  }
 }
 
 // ── createProject ─────────────────────────────────────────────────────────────
@@ -116,12 +122,29 @@ export const getProjectById = async (req, res) => {
       }
     }
 
+    // Resolve display names for owner + all workspace members in one query.
+    const wsMemberEmails = workspace ? [workspace.owner, ...(workspace.members || []).map(m => m.email)] : [project.owner];
+    const uniqueEmails = [...new Set(wsMemberEmails)];
+    const userDocs = await User.find({ email: { $in: uniqueEmails } }).select('email name profilePicture').lean();
+    const nameLookup = Object.fromEntries(userDocs.map(u => [u.email, u.name || u.email]));
+    const photoLookup = Object.fromEntries(userDocs.map(u => [u.email, u.profilePicture || '']));
+
+    const workspaceMembers = workspace
+      ? [workspace.owner, ...(workspace.members || []).map(m => m.email)].map(e => ({
+          email: e,
+          name: nameLookup[e] || e,
+          profilePicture: photoLookup[e] || '',
+        }))
+      : [];
+
     return res.status(200).json({
       ...project,
+      ownerName: nameLookup[project.owner] || project.owner,
       myRole,
       workspace: workspace
         ? { id: workspace.id, name: workspace.name, owner: workspace.owner }
         : null,
+      workspaceMembers,
     });
   } catch (err) {
     console.error('getProjectById error:', err);

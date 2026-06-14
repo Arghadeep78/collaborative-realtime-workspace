@@ -13,14 +13,14 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 - **Write-behind persistence** — a **BullMQ** scheduler marks dirty docs every 30 seconds and enqueues persist jobs; a dedicated worker (concurrency 5) encodes and writes `Y.Doc` state to MongoDB. The dirty flag clears only after the job is durably enqueued, preventing silent data loss on crash.
 - **History compaction** — Yjs docs grow monotonically (every erased shape leaves a tombstone; throttled drag writes leave per-key history chains), so `yjsState` bloats even at constant shape count. `DocumentManager` compacts on **room teardown** — when the last peer leaves — by replaying the doc's current logical values into a throwaway fresh doc and persisting *that* slim snapshot. Doing it at teardown means the rebuild never blocks a client's sync handshake (the room is empty) and the next cold load reads small, cheap-to-replay bytes. The savings on history-heavy docs are large — a synthetic board with a long per-key write chain compacted **68 KB → 5 KB (~93%)** in testing. Only persists the compacted form when it's ≤ 80% of the original; nested Y.Maps (votes, comments) are reconstructed rather than flattened so CRDT merge semantics survive a reload.
 - **Authorization at the trust boundary** — `viewer`/`commenter`/`editor` roles are enforced **per Yjs sync message**, so a viewer cannot mutate a board even over a raw WebSocket.
-- **Distributed rate limiting** — `express-rate-limit` + `rate-limit-redis` with shared Redis counters across instances, split into auth (50/15 min) / AI (40/15 min) / general (300/15 min) tiers.
+- **Distributed rate limiting** — `express-rate-limit` + `rate-limit-redis` with shared Redis counters across instances, split into auth (50/15 min) and general API (300/15 min) tiers.
 - **Board-metadata cache** — access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is Redis-cached (`board:meta:<id>`, 60 s TTL) with explicit invalidation on share / unshare / publish / delete / leave, removing a cold MongoDB read from every WebSocket connection.
 - **Self-service membership** — non-owner collaborators can leave a board (`DELETE /boards/leave/:id`) or a workspace (`DELETE /workspaces/:id/leave`, which also removes them from that workspace's boards); owners are rejected and must delete instead. Both paths invalidate the affected boards' metadata cache.
 - **External API resilience** — Gemini calls wrapped with a 10 s timeout, exponential-backoff retries (transient errors only), and a shared circuit breaker (5 failure threshold, 30 s cooldown).
 - **Health & readiness probes** — `GET /health` (MongoDB + Redis) and `GET /ready` (+ BullMQ workers running, persist-queue backpressure via `getWaitingCount`, and active-board count). `/ready` reports `not-ready` when the flush backlog exceeds the threshold so an orchestrator stops adding load until it drains.
-- **Async board publishing** — BullMQ queue + worker generate a read-only public snapshot off the request path.
+- **Board publishing (synchronous)** — `POST /publish/:id` flips `isPublic`/`publicRole` with a single indexed MongoDB write and a cache invalidation, served inline in the request (a few ms). A previous BullMQ queue + worker for this was removed: a single fast write doesn't justify a queue, and queueing it returned `200` before the board was actually public. The queue is reserved for the persistence path, which is heavy and batched.
 - **Graceful shutdown** — `SIGTERM`/`SIGINT`/`SIGUSR2` drain workers, close queues, and quit Redis clients before process exit.
-- **Auth** — email/password and Google OAuth 2.0, JWT access/refresh tokens. Each email is tied to exactly **one** method: an email already registered with a password can't later sign in with Google (and vice-versa). A custom-uploaded profile picture is never overwritten by a subsequent Google sign-in.
+- **Auth** — email/password and Google OAuth 2.0. **15-min JWT access tokens** (sent as `Authorization: Bearer`) are paired with **7-day refresh tokens** delivered in an `httpOnly`, `SameSite=Lax` cookie scoped to `/users`. Refresh tokens are persisted only as **SHA-256 hashes** (one entry per device) and signed with a **separate secret** from access tokens; `POST /users/refresh` verifies the cookie cryptographically *and* against the DB before minting a new access token, and `POST /users/logout` deletes the stored hash so the session is genuinely revoked. Each email is tied to exactly **one** method (password vs. Google); a custom-uploaded profile picture is never overwritten by a subsequent Google sign-in.
 - **Password reset** — `POST /users/forgot-password` emails a single-use link (SHA-256-hashed token, 15-min expiry, enumeration-safe generic response); `POST /users/reset-password/:token` verifies and sets the new password. Google-only accounts have no password, so they're excluded. Requires `EMAIL_USER`/`EMAIL_PASS` (Nodemailer/Gmail) and `FRONTEND_URL`.
 
 ---
@@ -30,9 +30,9 @@ The backend for the real-time collaborative workspace: a Node.js/Express service
 - **Server:** Node.js, Express.js
 - **Realtime:** Yjs (`y-protocols`, `y-websocket`, `lib0`), `ws` (native WebSocket), Redis pub/sub
 - **Database:** MongoDB + Mongoose
-- **Queues:** BullMQ + ioredis
+- **Queues:** BullMQ + ioredis (Yjs write-behind persistence only)
 - **AI:** ~~Google Gemini API~~ (removed)
-- **Auth:** bcryptjs, jsonwebtoken, google-auth-library
+- **Auth:** bcryptjs, jsonwebtoken, google-auth-library, cookie-parser
 - **Media:** Cloudinary, multer
 - **Email:** nodemailer
 
@@ -47,26 +47,24 @@ backend/
 │   ├── DocumentManager.js       # In-memory Y.Doc lifecycle: load, compaction, dirty tracking, GC
 │   ├── persistenceScheduler.js  # 30-second heartbeat that enqueues BullMQ persist jobs
 │   └── persistenceWorker.js     # BullMQ consumer: encodes Y.Doc → writes to MongoDB
-├── jobs/
-│   ├── publish.queue.js         # BullMQ queue factory for project publishing
-│   └── publish.worker.js        # Async project snapshot worker
 ├── cache/
 │   └── project.cache.js         # Redis board:meta:* cache + resolveRole helper
 ├── middleware/
-│   ├── auth.middleware.js        # JWT + Google OAuth verification
-│   ├── cloudinary.middleware.js  # Multer + Cloudinary upload handler
+│   ├── auth.middleware.js        # Access-token (JWT) verification → req.email
+│   ├── multer.middleware.js      # Multipart parsing: disk storage, 10 MB cap, MIME filter
 │   └── rate-limiters.middleware.js  # Redis-backed rate limiters
 ├── utils/
-│   ├── jwt.js                   # JWT sign/verify helpers
+│   ├── jwt.js                   # Access + refresh token sign/verify helpers
+│   ├── cloudinary.js            # Cloudinary SDK config + uploadToCloudinary() (temp-file cleanup)
 │   ├── role.js                  # resolveRole helper
 │   └── mailer.js                # Nodemailer: board invites & password-reset links
 ├── routes/
 │   ├── health.routes.js         # GET /health and GET /ready probe endpoints
 │   ├── project.routes.js
-│   ├── user.routes.js
-│   ├── publish.routes.js
+│   ├── user.routes.js           # auth, refresh/logout, profile, uploads
+│   ├── publish.routes.js        # synchronous publish/unpublish
 │   └── workspace.routes.js
-├── controllers/                 # Express route handlers
+├── controllers/                 # Express route handlers (incl. upload.controller.js)
 ├── models/                      # Mongoose schemas (user.model.js, whiteboard.model.js, workspace.model.js)
 └── index.js                     # Server bootstrap: HTTP + Yjs WS + workers + graceful shutdown
 ```
@@ -96,8 +94,10 @@ DB_CLUSTER_URL=cluster0.xxxxx.mongodb.net
 # Redis — Yjs pub/sub, board-metadata cache, rate-limit store, BullMQ
 REDIS_URL=redis://localhost:6379
 
-# Auth
+# Auth — JWT_SECRET signs access tokens; JWT_REFRESH_SECRET signs refresh tokens
+# (must be a DIFFERENT value so the two token types can't be swapped).
 JWT_SECRET=your-jwt-secret
+JWT_REFRESH_SECRET=your-separate-refresh-secret
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 
 # Gemini (AI brainstorming)

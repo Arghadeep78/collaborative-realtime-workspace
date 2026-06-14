@@ -1,7 +1,5 @@
 import { verifyToken } from '../utils/jwt.js';
 
-if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set — refusing to start without a real secret');
-
 const authMiddleware = (req, res, next) => {
     try {
         const authHeader = req.header('Authorization');

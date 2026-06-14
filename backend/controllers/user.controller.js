@@ -2,12 +2,41 @@ import userModel from "../models/user.model.js";
 import Whiteboard from "../models/whiteboard.model.js";
 import { OAuth2Client } from "google-auth-library";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
-import { verifyToken } from "../utils/jwt.js";
+import { verifyRefreshToken } from "../utils/jwt.js";
 
 // Generic reply shared by both forgot-password outcomes (found / not found) so
 // the endpoint never reveals whether an email is registered.
 const FORGOT_PASSWORD_REPLY =
   "If an account exists for that email, a password reset link has been sent.";
+
+// Name of the httpOnly cookie carrying the refresh token.
+const REFRESH_COOKIE = "refreshToken";
+const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// Scope the cookie to the /users routes — the browser attaches it only to
+// /users/refresh and /users/logout (the only endpoints that need it), shrinking
+// both its exposure and the CSRF surface vs. sending it on every request.
+const REFRESH_COOKIE_PATH = "/users";
+
+const refreshCookieOptions = () => ({
+  httpOnly: true,
+  // Secure must be on in production (HTTPS). Allow plain HTTP on localhost dev.
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: REFRESH_COOKIE_PATH,
+});
+
+const setRefreshCookie = (res, rawToken) => {
+  res.cookie(REFRESH_COOKIE, rawToken, {
+    ...refreshCookieOptions(),
+    maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+  });
+};
+
+const clearRefreshCookie = (res) => {
+  // clearCookie must be given the SAME path/options the cookie was set with,
+  // otherwise the browser won't match and remove it.
+  res.clearCookie(REFRESH_COOKIE, refreshCookieOptions());
+};
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -38,6 +67,8 @@ const registerUser = async (req, res) => {
     const { name, email, password, role } = req.body;
     const user = await userModel.register(name, email, password, role);
     const token = user.generateAccessToken();
+    const refreshToken = await user.generateRefreshToken();
+    setRefreshCookie(res, refreshToken);
 
     const projects = await fetchProjectsForUser(user.email);
     backfillCollaboratorPhoto(user.email, user.profilePicture);
@@ -53,7 +84,9 @@ const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res
+      .status(error.isOperational ? 400 : 500)
+      .json({ message: error.message });
   }
 };
 
@@ -63,6 +96,8 @@ const loginUser = async (req, res) => {
     const user = await userModel.login(email, password);
 
     const token = user.generateAccessToken();
+    const refreshToken = await user.generateRefreshToken();
+    setRefreshCookie(res, refreshToken);
 
     const projects = await fetchProjectsForUser(user.email);
     backfillCollaboratorPhoto(user.email, user.profilePicture);
@@ -78,7 +113,9 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(401).json({ message: error.message });
+    res
+      .status(error.isOperational ? (error.status ?? 401) : 500)
+      .json({ message: error.message });
   }
 };
 
@@ -105,6 +142,8 @@ const googleLogin = async (req, res) => {
 
     // Generate JWT token
     const token = user.generateAccessToken();
+    const refreshToken = await user.generateRefreshToken();
+    setRefreshCookie(res, refreshToken);
 
     // Fetch user's projects
     const projects = await fetchProjectsForUser(user.email);
@@ -129,43 +168,60 @@ const googleLogin = async (req, res) => {
   }
 };
 
-const renewToken = async (req, res) => {
+// Exchange the httpOnly refresh-token cookie for a fresh 15-min access token.
+// The refresh token is verified both cryptographically (signature + expiry) and
+// against the DB (so a revoked/logged-out token can't be replayed).
+const refreshAccessToken = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ message: "Authorization token is required" });
+    const rawToken = req.cookies?.[REFRESH_COOKIE];
+    if (!rawToken) {
+      return res.status(401).json({ message: "Refresh token is required" });
     }
 
-    const token = authHeader.split(" ")[1];
-
-    let decoded;
+    // Signature + expiry check first — cheap, and rejects forged/expired tokens
+    // before we touch the database. Decoded payload intentionally unused;
+    // findByRefreshToken does the user lookup via hash, not email from JWT.
     try {
-      decoded = verifyToken(token);
-    } catch (err) {
-      if (err.name === "TokenExpiredError") {
-        return res.status(401).json({ message: "Token expired, please log in again" });
-      }
-      return res.status(401).json({ message: "Invalid token" });
+      verifyRefreshToken(rawToken);
+    } catch {
+      clearRefreshCookie(res);
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
     }
 
-    if (!decoded || !decoded.email) {
-      return res.status(401).json({ message: "Invalid token payload" });
-    }
-
-    const user = await userModel.getUser(decoded.email);
+    // Must still be an active token for this user (not logged out / revoked).
+    const user = await userModel.findByRefreshToken(rawToken);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      clearRefreshCookie(res);
+      return res.status(401).json({ message: "Refresh token no longer valid" });
     }
 
-    const newtoken = user.generateAccessToken();
+    const token = user.generateAccessToken();
     res.status(200).json({
-      message: "Token renewed successfully",
-      token: newtoken,
+      message: "Token refreshed successfully",
+      token,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Revoke the current refresh token and clear the cookie. Idempotent: succeeds
+// even if the cookie is missing or already-revoked, so the client can always
+// complete logout locally.
+const logoutUser = async (req, res) => {
+  try {
+    const rawToken = req.cookies?.[REFRESH_COOKIE];
+    if (rawToken) {
+      // Single atomic revoke — pull the matching hash wherever it lives. No need
+      // to load the user first; a no-op if the token is unknown/already revoked.
+      await userModel.revokeRefreshToken(rawToken);
+    }
+    clearRefreshCookie(res);
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    // Even on error, clear the cookie so the client isn't stuck logged in.
+    clearRefreshCookie(res);
+    res.status(200).json({ message: "Logged out" });
   }
 };
 
@@ -224,12 +280,7 @@ const updateUserProfile = async (req, res) => {
 const updatePassword = async (req, res) => {
   try {
     const userEmail = req.email;
-    const { oldPassword, newPassword } = req.body;
-    if (!oldPassword || !newPassword) {
-      return res
-        .status(400)
-        .json({ message: "Old and new passwords are required" });
-    }
+    const { oldPassword, newPassword } = req.body; // presence/length checked by validate middleware
 
     const user = await userModel.updatenewPassword(
       userEmail,
@@ -242,16 +293,15 @@ const updatePassword = async (req, res) => {
 
     res.status(200).json({ message: "Password updated successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res
+      .status(error.isOperational ? 400 : 500)
+      .json({ message: error.message });
   }
 };
 
 const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
+    const { email } = req.body; // validated by validate middleware
 
     const result = await userModel.requestPasswordReset(email);
 
@@ -279,10 +329,7 @@ const forgotPassword = async (req, res) => {
 const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
-    const { password } = req.body;
-    if (!password) {
-      return res.status(400).json({ message: "New password is required" });
-    }
+    const { password } = req.body; // validated by validate middleware
 
     await userModel.resetPassword(token, password);
 
@@ -316,7 +363,8 @@ export {
   registerUser,
   loginUser,
   googleLogin,
-  renewToken,
+  refreshAccessToken,
+  logoutUser,
   getUserProfile,
   updateUserProfile,
   updatePassword,

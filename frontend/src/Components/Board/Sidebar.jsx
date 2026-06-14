@@ -197,7 +197,7 @@ export default function Sidebar({
   return (
     <aside
       className={`relative shrink-0 flex flex-col m-3 mr-0 rounded-2xl overflow-hidden ${UI.surface} ${!isResizing ? 'transition-[width,opacity] duration-300 ease-in-out' : ''} ${collapsed ? 'opacity-80' : 'opacity-100'}`}
-      style={{ width: collapsed ? 40 : customWidth }}
+      style={{ width: collapsed ? 44 : customWidth }}
     >
       {/* Resize handle */}
       {!collapsed && (
@@ -208,12 +208,22 @@ export default function Sidebar({
       )}
 
       {collapsed ? (
-        <div className="flex flex-col items-center py-2">
-          <button onClick={onToggleCollapse} className={UI.iconBtn} title="Show sections">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
+        <div className="flex flex-col items-center gap-4 py-3 h-full">
+          <button
+            onClick={onToggleCollapse}
+            title="Show sections"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-content-muted hover:bg-hover hover:text-content transition shrink-0"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
             </svg>
           </button>
+          <span
+            className="text-[9px] font-bold tracking-[0.2em] uppercase text-content-subtle select-none"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            Sections
+          </span>
         </div>
       ) : (
         <>

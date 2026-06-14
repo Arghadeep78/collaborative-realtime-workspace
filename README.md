@@ -23,12 +23,17 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 | **Authorization at the trust boundary** | Roles (`viewer`/`commenter`/`editor`) are enforced **per Yjs sync message**, not just at connect. A `viewer`'s write bytes are discarded before touching the shared doc — a hand-crafted WebSocket frame can't bypass the UI's read-only mode. |
 | **Distributed rate limiting** | `express-rate-limit` + `rate-limit-redis` with shared counters in Redis across all instances, split into auth (50/15 min) and general API (300/15 min) tiers (`backend/middleware/rateLimiters.js`). |
 | **Board-metadata cache** | Access metadata (`owner`, `collaborators`, `isPublic`, `publicRole`, workspace members) is cached in Redis (`board:meta:<id>`, 60 s TTL) and explicitly invalidated on share / unshare / publish / delete — removing a cold MongoDB read from every WebSocket connection (`backend/cache/boardCache.js`). |
-| **External API resilience** | `backend/utils/resilience.js` provides `withTimeout`, exponential-backoff `retry`, and an in-memory `CircuitBreaker` (5 failure threshold, 30 s cooldown). These are not currently wired to an active route — the AI feature was removed — but remain as production-grade utilities. |
+| **External API resilience (design reference)** | The codebase previously included a `utils/resilience.js` with `withTimeout`, exponential-backoff `retry`, and an in-memory `CircuitBreaker` (5-failure threshold, 30 s cooldown) wrapping the (now-removed) AI calls. The file was removed with that feature; the patterns are documented in [concepts.md](concepts.md) as a reference for hardening calls to flaky external services. |
 | **Health & readiness probes** | `GET /health` checks live MongoDB + Redis (`503` when down); `GET /ready` additionally verifies BullMQ workers are running, reports persist-queue backpressure (not-ready when the flush backlog exceeds a threshold), and the count of boards live in memory — concrete signals for load balancers and orchestrators. |
-| **Async publishing** | A BullMQ queue + worker produces a read-only public snapshot of a board off the request path (`backend/jobs/`). |
+| **Stateless auth with revocable sessions** | Short-lived **15-min JWT access tokens** (localStorage, `Authorization: Bearer`) paired with **7-day refresh tokens** in an `httpOnly`, `SameSite` cookie. Refresh tokens are stored only as **SHA-256 hashes** server-side and verified against the DB on every refresh, so logout is real revocation — a stolen access token dies in ≤15 min and can't be silently renewed (`backend/utils/jwt.js`, `POST /users/refresh` · `/logout`). |
 | **Graceful shutdown** | `SIGTERM`/`SIGINT` drain BullMQ workers, close queues, and quit Redis clients before process exit. |
 
 ---
+
+## Design Decisions
+
+- **A queue only where the work earns one.** BullMQ backs Yjs write-behind persistence — genuinely heavy work that is *batched* (one debounced job per board per 30 s) and must survive a crash. **Publishing a board is not queued**: it's a single indexed MongoDB write plus a cache invalidation (a few ms), so it runs **synchronously in the request** (`backend/routes/publish.routes.js`). An earlier version pushed it through a dedicated BullMQ queue + worker; that added Redis round-trips, a second process to operate, and eventual-consistency surprises (the client got `200` before the board was actually public) for no real gain — so it was removed. Reaching for a job queue per endpoint is the over-engineering trap; the queue is reserved for work that is slow, batchable, or must outlive the request.
+- **Upload pipeline split by concern.** File handling is three small modules rather than one: `middleware/multer.middleware.js` (multipart parsing + a 10 MB cap + an image/video/audio MIME filter), `utils/cloudinary.js` (SDK config + an `uploadToCloudinary` helper that also cleans up the temp file), and `controllers/upload.controller.js` (the route handlers). Multer is middleware, Cloudinary is an external-service client, and the handlers are HTTP glue — keeping them apart makes each unit-testable and reusable.
 
 ## Future Improvements
 
@@ -43,7 +48,7 @@ This project's emphasis is a backend that is safe to scale across multiple insta
 - **Live presence:** real-time teammate cursors with name tags and a laser pointer, broadcast via Yjs Awareness.
 - **Comments & voting** on elements for async decision-making.
 - **Role-based sharing** (Viewer / Commenter / Editor) and public board publishing. Non-owners can leave a board or workspace; owners delete instead.
-- **Secure auth** with email/password and Google OAuth 2.0 (JWT access/refresh). Each email uses one method only, and password reset is via a single-use, enumeration-safe email link.
+- **Secure auth** with email/password and Google OAuth 2.0 — short-lived JWT access tokens with `httpOnly`-cookie refresh tokens (revocable on logout). Each email uses one method only, and password reset is via a single-use, enumeration-safe email link.
 
 ---
 
@@ -66,7 +71,7 @@ graph TD
     subgraph Server [Backend — Node.js/Express]
         API[Express REST API]
         YjsServer[Yjs WebSocket Server<br/>WSServer.js]
-        Workers[BullMQ Workers<br/>persistence + publish]
+        Workers[BullMQ Worker<br/>Yjs write-behind persistence]
     end
 
     subgraph Data [Data Layer]

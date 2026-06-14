@@ -106,9 +106,19 @@ export function useYjsBoard(boardId) {
 
     // Handle status changes (connection/disconnection)
     const onStatus = ({ status }) => {
-      if (status === 'disconnected' && !hasSyncedOnceRef.current) {
-        // Only show loading if we've never synced at all (first connection attempt)
-        setSynced(false);
+      if (status === 'disconnected') {
+        // The access token is short-lived (15m) and may have been refreshed
+        // (App.jsx) since this provider was created with the original token in
+        // its closure. y-websocket rebuilds the URL from `prov.params` on every
+        // reconnect, so refresh the token here — before the next reconnect — to
+        // avoid reconnecting with a now-expired token (server would 4401 it).
+        const latest = localStorage.getItem('token');
+        if (latest) prov.params.token = latest;
+
+        if (!hasSyncedOnceRef.current) {
+          // Only show loading if we've never synced at all (first connection attempt)
+          setSynced(false);
+        }
       }
       // If we've synced before, keep synced=true so the canvas stays mounted
     };

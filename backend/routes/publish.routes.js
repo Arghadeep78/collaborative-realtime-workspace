@@ -2,11 +2,12 @@ import express from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
 import Whiteboard from '../models/whiteboard.model.js';
 import { invalidateProjectMeta } from '../cache/project.cache.js';
+import { validate, fields, optional } from '../middleware/validate.middleware.js';
 
 const router = express.Router();
 
 // POST /publish/:projectId
-router.post('/:projectId', authMiddleware, async (req, res) => {
+router.post('/:projectId', authMiddleware, validate({ role: optional(fields.shareRole) }), async (req, res) => {
   try {
     const { projectId } = req.params;
     const { role = 'viewer' } = req.body || {};

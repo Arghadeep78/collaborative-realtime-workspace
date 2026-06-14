@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import validator from "validator";
-import { signToken } from "../utils/jwt.js";
+import { signToken, signRefreshToken, getTokenExpiry } from "../utils/jwt.js";
 
 // How long a password-reset link stays valid.
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
@@ -11,11 +11,31 @@ const RESET_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const PASSWORD_POLICY =
   /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]{8,}$/;
 
-// Reset tokens are looked up by value, so they must hash DETERMINISTICALLY
-// (unlike passwords, which use salted bcrypt). SHA-256 of the raw token is
-// what we store; the raw token only ever lives in the emailed link.
-const hashResetToken = (rawToken) =>
+// Reset & refresh tokens are looked up by value, so they must hash
+// DETERMINISTICALLY (unlike passwords, which use salted bcrypt). We store the
+// SHA-256 of the raw token; the raw token only ever lives in the emailed link
+// (reset) or the httpOnly cookie (refresh).
+const hashToken = (rawToken) =>
   crypto.createHash("sha256").update(rawToken).digest("hex");
+
+// Errors we deliberately throw to inform the user (bad input, "already exists",
+// wrong password, …) are SAFE to surface. Mark them so the catch blocks below
+// can re-throw them untouched, while genericizing everything else.
+const operationalError = (message, status = null) => {
+  const err = new Error(message);
+  err.isOperational = true;
+  if (status) err.status = status;
+  return err;
+};
+
+// Use in a model catch block: pass through our intentional messages; for any
+// unexpected failure (DB/driver/bcrypt), log the real cause server-side and
+// throw a generic message so internals never reach the client.
+const rethrow = (context, error) => {
+  if (error?.isOperational) throw error;
+  console.error(`${context}:`, error);
+  throw new Error(`${context}. Please try again.`);
+};
 
 // Define schema
 const userSchema = new mongoose.Schema(
@@ -67,6 +87,19 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
+    // Active refresh tokens (one per logged-in device/tab). We store only the
+    // SHA-256 hash of each token, never the raw value, so a DB leak can't be
+    // used to mint new sessions. select:false so they never ship to the client.
+    refreshTokens: {
+      type: [
+        {
+          tokenHash: { type: String, required: true },
+          expiresAt: { type: Date, required: true },
+        },
+      ],
+      default: [],
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -92,17 +125,83 @@ userSchema.methods.generateAccessToken = function () {
   return signToken(this.email);
 };
 
+// Instance method: issue a new refresh token. Signs the JWT, persists only its
+// hash + (token-derived) expiry, prunes any already-expired entries, and returns
+// the RAW token (which only ever lives in the httpOnly cookie).
+//
+// We use an atomic updateOne aggregation pipeline ($set with $filter to drop
+// expired entries + $concatArrays to append the new one) rather than
+// read-modify-save: refreshTokens is select:false and is usually NOT loaded on
+// `this`, so a save() would clobber tokens from the user's other devices. The
+// atomic update also makes concurrent logins safe (no lost writes).
+userSchema.methods.generateRefreshToken = async function () {
+  const rawToken = signRefreshToken(this.email);
+  // Read expiry straight from the token's own exp claim so the DB record and
+  // the signed JWT can never drift apart, whatever JWT_REFRESH_EXPIRES_IN is.
+  const expiresAt = getTokenExpiry(rawToken);
+  const now = new Date();
+  await this.constructor.updateOne({ _id: this._id }, [
+    {
+      $set: {
+        refreshTokens: {
+          // Keep only still-valid entries, then append the new one.
+          $concatArrays: [
+            {
+              $filter: {
+                input: { $ifNull: ["$refreshTokens", []] },
+                cond: { $gt: ["$$this.expiresAt", now] },
+              },
+            },
+            [
+              {
+                tokenHash: hashToken(rawToken),
+                expiresAt,
+              },
+            ],
+          ],
+        },
+      },
+    },
+  ]);
+  return rawToken;
+};
+
+// STATIC METHOD: revoke a refresh token by value in a single atomic write,
+// without loading the user document first (used on logout). No-op if the token
+// is unknown or already revoked.
+userSchema.statics.revokeRefreshToken = async function (rawToken) {
+  if (!rawToken) return;
+  const tokenHash = hashToken(rawToken);
+  await this.updateOne(
+    { "refreshTokens.tokenHash": tokenHash },
+    { $pull: { refreshTokens: { tokenHash } } }
+  );
+};
+
+// STATIC METHOD: find the user who holds this refresh token, provided the
+// stored entry hasn't expired. The refreshTokens field is select:false, so ask
+// for it explicitly. Returns null when no live match exists.
+userSchema.statics.findByRefreshToken = async function (rawToken) {
+  if (!rawToken) return null;
+  const tokenHash = hashToken(rawToken);
+  return this.findOne({
+    refreshTokens: {
+      $elemMatch: { tokenHash, expiresAt: { $gt: new Date() } },
+    },
+  }).select("+refreshTokens");
+};
+
 // STATIC METHOD: register a new user
 userSchema.statics.register = async function (name, email, password, role) {
   try {
     if (!validator.isEmail(email)) {
-      throw new Error("Invalid email format.");
+      throw operationalError("Invalid email format.");
     }
     if (role !== "admin" && role !== "user") {
-      throw new Error("Invalid role. Role must be either 'admin' or 'user'.");
+      throw operationalError("Invalid role. Role must be either 'admin' or 'user'.");
     }
     if (!PASSWORD_POLICY.test(password)) {
-      throw new Error(
+      throw operationalError(
         "Password must be at least 8 characters long and include one letter, one number, and one special character."
       );
     }
@@ -110,10 +209,10 @@ userSchema.statics.register = async function (name, email, password, role) {
     // An email is tied to exactly ONE auth method.
     const existingUser = await this.findOne({ email });
     if (existingUser && existingUser.password) {
-      throw new Error("User already exists with this email.");
+      throw operationalError("User already exists with this email.");
     }
     if (existingUser && existingUser.googleId) {
-      throw new Error(
+      throw operationalError(
         "This email is already registered with Google. Please sign in with Google instead."
       );
     }
@@ -127,7 +226,7 @@ userSchema.statics.register = async function (name, email, password, role) {
     }).save();
     return newUser;
   } catch (error) {
-    throw new Error("Error registering user: " + error.message);
+    rethrow("Error registering user", error);
   }
 };
 
@@ -140,19 +239,19 @@ userSchema.statics.updatenewPassword = async function (
   try {
     // Validate new password
     if (!PASSWORD_POLICY.test(newPassword)) {
-      throw new Error(
+      throw operationalError(
         "New password must be at least 8 characters long and include one letter, one number, and one special character."
       );
     }
 
     const user = await this.findOne({ email: userEmail });
     if (!user) {
-      throw new Error("User not found.");
+      throw operationalError("User not found.");
     }
 
     // If user registered with Google but trying to update password
     if (user.authProvider === "google" && !user.password) {
-      throw new Error(
+      throw operationalError(
         "This account is linked with Google. Please use Google Sign-in."
       );
     }
@@ -160,14 +259,14 @@ userSchema.statics.updatenewPassword = async function (
     // Check old password
     const isMatch = await user.comparePassword(oldPassword);
     if (!isMatch) {
-      throw new Error("Old password is incorrect.");
+      throw operationalError("Old password is incorrect.");
     }
 
     user.password = newPassword;
 
     return await user.save();
   } catch (error) {
-    throw new Error("Error updating password: " + error.message);
+    rethrow("Error updating password", error);
   }
 };
 
@@ -185,7 +284,7 @@ userSchema.statics.requestPasswordReset = async function (email) {
   if (user.authProvider === "google" && !user.password) return null;
 
   const rawToken = crypto.randomBytes(32).toString("hex"); // 256 bits of entropy
-  user.resetPasswordToken = hashResetToken(rawToken);
+  user.resetPasswordToken = hashToken(rawToken);
   user.resetPasswordExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
   await user.save();
 
@@ -208,7 +307,7 @@ userSchema.statics.resetPassword = async function (rawToken, newPassword) {
 
   // The token fields are select:false, so ask for them explicitly here.
   const user = await this.findOne({
-    resetPasswordToken: hashResetToken(rawToken),
+    resetPasswordToken: hashToken(rawToken),
     resetPasswordExpires: { $gt: new Date() },
   }).select("+resetPasswordToken +resetPasswordExpires");
 
@@ -251,7 +350,7 @@ userSchema.statics.googleAuth = async function (
     // googleId lookup above, so they still log in fine.)
     user = await this.findOne({ email });
     if (user) {
-      throw new Error(
+      throw operationalError(
         "This email is already registered with a password. Please sign in with your email and password instead."
       );
     }
@@ -269,7 +368,7 @@ userSchema.statics.googleAuth = async function (
     const newUser = await user.save();
     return newUser;
   } catch (error) {
-    throw new Error("Error with Google authentication: " + error.message);
+    rethrow("Error with Google authentication", error);
   }
 };
 
@@ -282,24 +381,25 @@ userSchema.statics.login = async function (email, password) {
   try {
     const user = await this.findOne({ email });
     if (!user) {
-      throw new Error("Invalid email or password.");
+      throw operationalError("Invalid email or password.");
     }
 
     // If user registered with Google but trying to login with password
     if (user.authProvider === "google" && !user.password) {
-      throw new Error(
-        "This account is linked with Google. Please use Google Sign-in."
+      throw operationalError(
+        "This account is linked with Google. Please use Google Sign-in.",
+        400
       );
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      throw new Error("Invalid email or password.");
+      throw operationalError("Invalid email or password.");
     }
 
     return user;
   } catch (error) {
-    throw new Error("Error logging in: " + error.message);
+    rethrow("Error logging in", error);
   }
 };
 

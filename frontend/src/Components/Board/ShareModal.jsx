@@ -78,7 +78,7 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         const b = (d.projects || []).find((x) => x.id === boardId);
         if (b?.collaborators) setCollabs(b.collaborators);
       } else {
-        // No workspace: pull the latest collaborators straight from the board.
+        // Non-owner or no workspace: pull the latest board data.
         const res = await fetch(`${BACKEND_URL}/projects/${boardId}`, {
           headers: { Authorization: `Bearer ${token()}` },
         });
@@ -87,6 +87,9 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
         if (Array.isArray(b.collaborators)) setCollabs(b.collaborators);
         if (typeof b.isPublic === 'boolean') setIsPublic(b.isPublic);
         if (b.publicRole) setPublicRole(b.publicRole);
+        // workspaceMembers is now embedded in the board response with resolved names.
+        if (b.owner) setOwner({ email: b.owner, name: b.ownerName || b.owner, profilePicture: '' });
+        if (Array.isArray(b.workspaceMembers)) setMembers(b.workspaceMembers);
       }
     } catch (e) {
       toast.error(e.message);
@@ -100,14 +103,17 @@ export default function ShareModal({ boardId, board, workspace, onClose, readOnl
   const memberEmails = new Set(members.map((m) => m.email));
 
   // Merge workspace members (viewer baseline) with explicit collaborators.
+  // Exclude the owner — they are already rendered in their own dedicated row.
   const participants = (() => {
     const map = new Map();
-    members.forEach((m) =>
-      map.set(m.email, { email: m.email, name: m.name || '', profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' })
-    );
-    collaborators.forEach((c) =>
-      map.set(c.email, { email: c.email, name: c.name || '', profilePicture: c.profilePicture || '', role: c.role, source: 'board' })
-    );
+    members.forEach((m) => {
+      if (m.email === owner?.email) return;
+      map.set(m.email, { email: m.email, name: m.name || '', profilePicture: m.profilePicture || '', role: 'viewer', source: 'workspace' });
+    });
+    collaborators.forEach((c) => {
+      if (c.email === owner?.email) return;
+      map.set(c.email, { email: c.email, name: c.name || '', profilePicture: c.profilePicture || '', role: c.role, source: 'board' });
+    });
     return [...map.values()];
   })();
 

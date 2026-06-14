@@ -27,6 +27,14 @@ import { primePhotoCache } from './hooks/usePhotoResolver.js';
 
 // Logout function
 const logout = () => {
+  // Revoke the server-side refresh token (clears the httpOnly cookie too).
+  // Fire-and-forget — local state is cleared regardless of the result so the
+  // user is never stuck logged in if the request fails.
+  fetch(`${BACKEND_URL}/users/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  }).catch(() => { /* ignore — clear local state anyway */ });
+
   localStorage.removeItem('token');
   localStorage.removeItem('userData');
   window.location.href = '/';
@@ -99,16 +107,15 @@ function App() {
           const currentToken = localStorage.getItem('token');
           let response;
           try {
-            response = await fetch(`${BACKEND_URL}/users/renew-token`, {
+            // The refresh token rides in an httpOnly cookie — credentials:'include'
+            // sends it. No Authorization header: the access token is irrelevant here.
+            response = await fetch(`${BACKEND_URL}/users/refresh`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`,
-              },
+              credentials: 'include',
             });
           } catch (error) {
             // Network error (backend down / restarting) — don't log out, retry.
-            console.warn('Token renewal request failed, will retry:', error);
+            console.warn('Token refresh request failed, will retry:', error);
             retryRenewal(currentToken);
             return;
           }

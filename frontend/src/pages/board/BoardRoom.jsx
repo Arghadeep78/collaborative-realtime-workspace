@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import { useYjsBoard } from '../../crdt/useYjsBoard.js';
 import { useBoardHistory } from '../../crdt/useBoardHistory.js';
 import { useBoardSync } from '../../components/board/useBoardSync.js';
-import { convertLegacyBoard } from '../../components/board/convertLegacyBoard.js';
 import { arrangeElements } from '../../components/board/layout.js';
 import { BACKEND_URL } from '../../constants/apiConfig.js';
 import { useTheme } from '../../contexts/ThemeContext.jsx';
@@ -220,7 +219,7 @@ export default function BoardRoom() {
         if (!email || map.has(email)) return;
         map.set(email, { email, name: name || email });
       };
-      add(board.owner, board.owner === userData.email ? userData.name : board.owner);
+      add(board.owner, board.ownerName || (board.owner === userData.email ? userData.name : board.owner));
       (board.collaborators || []).forEach((c) => {
         add(c.email, c.name);
         if (c.profilePicture) primePhotoCache({ [c.email]: c.profilePicture });
@@ -228,33 +227,20 @@ export default function BoardRoom() {
       setMembers([...map.values()]);
     };
 
-    if (board.workspace?.id) {
-      // Workspace boards still need this fetch to *enumerate* members (they aren't
-      // on board.collaborators) and resolve their display names.
-      fetch(`${BACKEND_URL}/workspaces/${board.workspace.id}/manage`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((r) => r.ok ? r.json() : null)
-        .then((d) => {
-          if (!d) { buildFromBoardOnly(); return; }
-          const ws = d.workspace || {};
-          const map = new Map();
-          const seed = {};
-          const add = (email, name, profilePicture) => {
-            if (!email) return;
-            if (profilePicture) seed[email] = profilePicture;
-            if (map.has(email)) return;
-            map.set(email, { email, name: name || email });
-          };
-          add(ws.owner, ws.ownerName || '', ws.ownerProfilePicture || '');
-          (ws.members || []).forEach((m) => add(m.email, m.name, m.profilePicture || ''));
-          const b = (d.projects || []).find((x) => x.id === boardId);
-          (b?.collaborators || board.collaborators || []).forEach((c) =>
-            add(c.email, c.name, c.profilePicture || ''));
-          primePhotoCache(seed);
-          setMembers([...map.values()]);
-        })
-        .catch(() => buildFromBoardOnly());
+    if (board.workspace?.id && board.workspaceMembers?.length) {
+      // workspaceMembers is now embedded in the board response (resolved names + photos).
+      const map = new Map();
+      const seed = {};
+      const add = (email, name, profilePicture) => {
+        if (!email) return;
+        if (profilePicture) seed[email] = profilePicture;
+        if (map.has(email)) return;
+        map.set(email, { email, name: name || email });
+      };
+      board.workspaceMembers.forEach((m) => add(m.email, m.name, m.profilePicture || ''));
+      (board.collaborators || []).forEach((c) => add(c.email, c.name, c.profilePicture || ''));
+      primePhotoCache(seed);
+      setMembers([...map.values()]);
     } else {
       buildFromBoardOnly();
     }
@@ -358,20 +344,15 @@ export default function BoardRoom() {
     sysTitleSeededRef.current = true;
   }, [ydoc, synced, board?.title]);
 
-  // ── On first sync: migrate a legacy tldraw board, else seed a first slide ──
+  // ── On first sync: seed a first slide if board is empty ──
   const seededRef = useRef(false);
   useEffect(() => {
     if (!synced || !ydoc || seededRef.current) return;
-    if (editable) {
-      const migrated = convertLegacyBoard(ydoc, userData.email || userData.name || 'import');
-      if (migrated) {
-        toast.success(`Imported ${migrated.migrated} item${migrated.migrated === 1 ? '' : 's'} from the old board`);
-      } else if (pages.length === 0) {
-        ensureFirstPage();
-      }
+    if (editable && pages.length === 0) {
+      ensureFirstPage();
     }
     seededRef.current = true;
-  }, [synced, ydoc, editable, pages.length, ensureFirstPage, userData.email, userData.name]);
+  }, [synced, ydoc, editable, pages.length, ensureFirstPage]);
 
   // ── Keep an active slide selected ─────────────────────────────────────────
   useEffect(() => {
